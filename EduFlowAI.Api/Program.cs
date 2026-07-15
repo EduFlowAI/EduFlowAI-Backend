@@ -24,8 +24,17 @@ namespace EduFlowAI.Api
            
             builder.Services.AddOpenApi();
 
-            builder.Services.AddDbContext<EduFlowAIDbContext>(opt =>
-                opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+            // Register EduFlowAIDbContext with Npgsql provider
+            builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
+            {
+                options.UseNpgsql(
+                    builder.Configuration.GetConnectionString("DefaultConnection"),
+                    npgsqlOptions =>
+                    {
+                        // Enable vector operations for Npgsql
+                        npgsqlOptions.UseVector();
+                    });
+            });
 
             // register modules
             builder.Services.AddIdentityModule();

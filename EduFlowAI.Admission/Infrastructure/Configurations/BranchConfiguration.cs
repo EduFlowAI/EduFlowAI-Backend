@@ -1,0 +1,25 @@
+﻿
+
+using EduFlowAI.Admission.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace EduFlowAI.Admission.Infrastructure.Configurations
+{
+    public class BranchConfiguration : IEntityTypeConfiguration<Branch>
+    {
+        public void Configure(EntityTypeBuilder<Branch> builder)
+        {
+            builder.HasKey(x => x.Id);
+
+            builder.Property(x => x.Name)
+                .HasMaxLength(200).IsRequired();
+
+            builder.Property(x => x.Governorate)
+                .HasMaxLength(100);
+
+            builder.Property(x => x.IsActive)
+                .HasDefaultValue(true);
+        }
+    }
+}
