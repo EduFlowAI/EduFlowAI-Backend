@@ -12,7 +12,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Pgvector" Version="0.3.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,9 +22,6 @@
     <Folder Include="Application\Interfaces\" />
     <Folder Include="Application\Services\" />
     <Folder Include="Application\Validators\" />
-    <Folder Include="Domain\Entities\" />
-    <Folder Include="Domain\Enums\" />
-    <Folder Include="Infrastructure\Configurations\" />
     <Folder Include="Infrastructure\ExternalServices\" />
     <Folder Include="Presentation\Controllers\" />
   </ItemGroup>

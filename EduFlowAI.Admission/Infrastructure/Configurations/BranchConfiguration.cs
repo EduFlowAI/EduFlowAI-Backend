@@ -10,6 +10,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<Branch> builder)
         {
+            builder.ToTable("Branches", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Name)

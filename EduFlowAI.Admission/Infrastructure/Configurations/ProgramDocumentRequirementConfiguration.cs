@@ -9,6 +9,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<ProgramDocumentRequirement> builder)
         {
+            builder.ToTable("ProgramDocumentRequirements", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.DocumentType).HasConversion<string>().HasMaxLength(30).IsRequired();

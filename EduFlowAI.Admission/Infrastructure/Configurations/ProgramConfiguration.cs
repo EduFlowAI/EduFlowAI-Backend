@@ -8,6 +8,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<Program> builder)
         {
+            builder.ToTable("Programs", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Name)

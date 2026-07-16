@@ -8,6 +8,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<AdmissionCycle> builder)
         {
+            builder.ToTable("AdmissionCycles", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Label).HasMaxLength(200).IsRequired();

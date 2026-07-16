@@ -11,7 +11,7 @@ namespace EduFlowAI.Identity.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<ApplicantProfile> builder)
         {
-            builder.ToTable("ApplicantProfile");
+            builder.ToTable("ApplicantProfiles", "identity");
 
             builder.HasKey(x => x.Id);
 

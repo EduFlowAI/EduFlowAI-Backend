@@ -1,4 +1,3 @@
-
 using EduFlowAI.Admission;
 using EduFlowAI.AI;
 using EduFlowAI.Communication;
@@ -37,11 +36,13 @@ namespace EduFlowAI.Api
             });
 
             // register modules
-            builder.Services.AddIdentityModule();
+            var identityBuilder = builder.Services.AddIdentityModule();
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
             builder.Services.AddAIModule();
             builder.Services.AddCommunicationModule();
+
+            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
 
             var app = builder.Build();
 
@@ -52,7 +53,7 @@ namespace EduFlowAI.Api
             }
 
             app.UseHttpsRedirection();
-
+            app.UseAuthentication();
             app.UseAuthorization();
 
 

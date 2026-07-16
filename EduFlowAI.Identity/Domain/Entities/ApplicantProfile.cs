@@ -12,13 +12,13 @@ namespace EduFlowAI.Identity.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
         // Foreign Key
-        public Guid UserId { get; set; }
+        public string UserId { get; set; }
         public string FullNameEn { get; set; } = null!;
         public string FullNameAr { get; set; } = null!;
         public string NationalId { get; set; } = null!;
         public string Nationality { get; set; } = null!;
 
-        public DateTime DateOfBirth { get; set; }
+        public DateOnly DateOfBirth { get; set; }
 
         // Using Enums for strict type safety in code
         public Gender Gender { get; set; }

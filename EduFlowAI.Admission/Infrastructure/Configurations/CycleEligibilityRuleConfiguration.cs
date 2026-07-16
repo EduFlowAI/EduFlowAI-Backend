@@ -8,6 +8,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<CycleEligibilityRule> builder)
         {
+            builder.ToTable("CycleEligibilityRules", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.RequiredNationality).HasMaxLength(5).IsRequired();

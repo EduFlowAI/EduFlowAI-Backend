@@ -11,6 +11,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<Track> builder)
         {
+            builder.ToTable("Tracks", "admissions");
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Name).HasMaxLength(200).IsRequired();

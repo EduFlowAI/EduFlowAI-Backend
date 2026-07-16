@@ -10,7 +10,7 @@ namespace EduFlowAI.Admission.Domain.Entities
         public Guid Id { get; set; }
         public Guid ProgramId { get; set; }
         public string Label { get; set; } = null!;
-        public DateTime StartDate { get; set; }
+        public DateTimeOffset StartDate { get; set; }
         public DateTimeOffset DeadlineUtc { get; set; }
         public CycleStatus Status { get; set; }
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

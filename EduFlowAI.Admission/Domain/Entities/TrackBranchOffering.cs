@@ -17,5 +17,6 @@ namespace EduFlowAI.Admission.Domain.Entities
         public AdmissionCycle Cycle { get; set; } = null!;
         public Track Track { get; set; } = null!;
         public Branch Branch { get; set; } = null!;
+        public ICollection<ApplicationPreference> ApplicationPreferences { get; set; } = new List<ApplicationPreference>();
     }
 }

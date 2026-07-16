@@ -8,6 +8,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<TrackBranchOffering> builder)
         {
+            builder.ToTable("TrackBranchOfferings", "admissions");
             builder.HasKey(x => x.Id);
 
             // Capacity must be valid
