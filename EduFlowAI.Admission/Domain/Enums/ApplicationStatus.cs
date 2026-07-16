@@ -6,6 +6,7 @@ namespace EduFlowAI.Admission.Domain.Enums
 {
     public enum ApplicationStatus
     {
+        None = 0,
         Draft = 1,
         DocumentsRequired = 2,
         EligibilityFailed = 3,

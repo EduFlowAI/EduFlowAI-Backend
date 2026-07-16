@@ -19,8 +19,10 @@ namespace EduFlowAI.Admission.Domain.Entities
 
         public uint RowVersion { get; set; }
 
+        // Navigation properties
         public AdmissionCycle Cycle { get; set; } = null!;
         public ICollection<ApplicationPreference> Preferences { get; set; } = new List<ApplicationPreference>();
         public EligibilityResult? EligibilityResult { get; set; }
+        public ICollection<SimulatedStageResult> SimulatedStageResults { get; set; } = new List<SimulatedStageResult>();
     }
 }

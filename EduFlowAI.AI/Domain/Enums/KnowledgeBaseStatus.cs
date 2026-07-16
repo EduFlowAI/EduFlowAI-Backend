@@ -6,6 +6,7 @@ namespace EduFlowAI.AI.Domain.Enums
 {
     public enum KnowledgeBaseStatus
     {
+        None = 0,
         Pending = 1,
         Indexing = 2,
         Indexed = 3,

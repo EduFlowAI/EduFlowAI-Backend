@@ -21,12 +21,16 @@ namespace EduFlowAI.Documents.Infrastructure.Configurations
 
             builder.HasKey(r => r.Id);
 
-            builder.Property(r => r.Reason).HasColumnType("text").IsRequired();
-            builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+            builder.Property(r => r.Reason)
+                .HasColumnType("text").IsRequired();
+
+            builder.Property(r => r.Status)
+                .HasConversion<string>().HasMaxLength(20).IsRequired();
+
             builder.Property(x => x.Status)
                 .HasConversion<string>()
                 .HasMaxLength(20)
-                .HasDefaultValue(ReplacementRequestStatus.Open)
+                //.HasDefaultValue(ReplacementRequestStatus.Open)
                 .IsRequired();
 
             builder.Property(x => x.RequestedAt)
@@ -36,8 +40,8 @@ namespace EduFlowAI.Documents.Infrastructure.Configurations
                 .HasFilter("\"Status\" = 'Open'")
                 .HasDatabaseName("UX_DocumentReplacementRequest_OneOpen");
 
-            builder.HasOne<ApplicantDocument>()
-                .WithMany()
+            builder.HasOne(r => r.Document)
+                .WithMany(d => d.ReplacementRequests)
                 .HasForeignKey(r => r.DocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
 

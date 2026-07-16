@@ -19,7 +19,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(a => a.Status)
                 .HasConversion<string>()
                 .HasMaxLength(30)
-                .HasDefaultValue(ApplicationStatus.Draft)
+                //.HasDefaultValue(ApplicationStatus.Draft)
                 .IsRequired();
 
             builder.Property(x => x.RowVersion)

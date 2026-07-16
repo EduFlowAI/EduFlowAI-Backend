@@ -1,4 +1,5 @@
-﻿using EduFlowAI.Documents.Domain.Enums;
+﻿using EduFlowAI.Admission.Domain.Entities;
+using EduFlowAI.Documents.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -20,6 +21,8 @@ namespace EduFlowAI.Documents.Domain.Entities
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
+        // Navigation Properties
+        public Application Application { get; set; }
         public ICollection<DocumentReplacementRequest> ReplacementRequests { get; set; } = new List<DocumentReplacementRequest>();
     }
 }

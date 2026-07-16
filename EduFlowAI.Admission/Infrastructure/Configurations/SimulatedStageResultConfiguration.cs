@@ -30,8 +30,8 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
 
             builder.HasIndex(s => new { s.ApplicationId, s.Stage }).IsUnique();
 
-            builder.HasOne<Application>()
-                .WithMany()
+            builder.HasOne(s => s.Application)
+                .WithMany(a => a.SimulatedStageResults)
                 .HasForeignKey(s => s.ApplicationId)
                 .OnDelete(DeleteBehavior.Cascade);
         }

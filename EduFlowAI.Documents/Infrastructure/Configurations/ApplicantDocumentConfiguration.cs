@@ -40,7 +40,7 @@ namespace EduFlowAI.Documents.Infrastructure.Configurations
 
             builder.HasIndex(d => new { d.ApplicationId, d.DocumentType }).IsUnique();
 
-            builder.HasOne<Application>()
+            builder.HasOne(d => d.Application)
                 .WithMany()
                 .HasForeignKey(d => d.ApplicationId)
                 .OnDelete(DeleteBehavior.Cascade);

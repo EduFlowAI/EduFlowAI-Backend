@@ -6,6 +6,7 @@ namespace EduFlowAI.Documents.Domain.Enums
 {
     public enum DocumentStatus
     {
+        None = 0,
         Uploaded = 1,
         Verifying = 2,
         Approved = 3,

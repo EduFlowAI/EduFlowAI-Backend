@@ -20,7 +20,7 @@ namespace EduFlowAI.Communication.Infrastructure.Configurations
             builder.Property(n => n.GmailStatus)
                 .HasConversion<string>()
                 .HasMaxLength(20)
-                .HasDefaultValue(GmailStatus.NotRequested)
+                //.HasDefaultValue(GmailStatus.NotRequested)
                 .IsRequired();
             builder.Property(n => n.CreatedAt).HasDefaultValueSql("now()");
             builder.Property(x => x.IsRead)

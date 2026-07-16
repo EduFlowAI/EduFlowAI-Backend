@@ -6,6 +6,7 @@ namespace EduFlowAI.Admission.Domain.Enums
 {
     public enum StageResult
     {
+        None = 0,
         Pending = 1,
         Passed = 2,
         NotPassed = 3

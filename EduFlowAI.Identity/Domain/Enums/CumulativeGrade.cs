@@ -3,6 +3,7 @@
     // Ordinal grades for the eligibility rules
     public enum CumulativeGrade
     {
+        None = 0,
         Acceptable = 1,
         Good = 2,
         VeryGood = 3,

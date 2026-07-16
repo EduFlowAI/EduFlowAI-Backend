@@ -26,13 +26,13 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.HasIndex(p => new { p.ApplicationId, p.Rank }).IsUnique();
             builder.HasIndex(p => new { p.ApplicationId, p.TrackBranchOfferingId }).IsUnique();
 
-            builder.HasOne<Application>()
+            builder.HasOne(p => p.Application)
                 .WithMany(a => a.Preferences)
                 .HasForeignKey(p => p.ApplicationId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            builder.HasOne<TrackBranchOffering>()
-                .WithMany()
+            builder.HasOne(p => p.TrackBranchOffering)
+                .WithMany(t => t.ApplicationPreferences)
                 .HasForeignKey(p => p.TrackBranchOfferingId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
