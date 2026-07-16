@@ -4,7 +4,9 @@ using EduFlowAI.Communication;
 using EduFlowAI.Documents;
 using EduFlowAI.Identity;
 using EduFlowAI.Persistence;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 namespace EduFlowAI.Api
 {
@@ -22,6 +24,7 @@ namespace EduFlowAI.Api
                 .AddApplicationPart(typeof(CommunicationModule).Assembly);
            
             builder.Services.AddOpenApi();
+            builder.Services.AddEndpointsApiExplorer();
 
             // Register EduFlowAIDbContext with Npgsql provider
             builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
@@ -44,12 +47,39 @@ namespace EduFlowAI.Api
 
             identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
 
+            #region Swagger
+            builder.Services.AddSwaggerGen(options =>
+                {
+                    options.SwaggerDoc("v1", new OpenApiInfo
+                    {
+                        Title = "EduFlowAI API",
+                        Version = "v1"
+                    });
+                    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                    {
+                        Name = "Authorization",
+                        Description = "Please enter a valid token (without writing bearer)",
+                        In = ParameterLocation.Header,
+                        Type = SecuritySchemeType.Http,
+                        Scheme = JwtBearerDefaults.AuthenticationScheme,
+                        BearerFormat = "JWT"
+                    });
+                    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
+                    });
+                }); 
+            #endregion
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 app.MapOpenApi();
+
+                app.UseSwagger();
+                app.UseSwaggerUI();
             }
 
             app.UseHttpsRedirection();
