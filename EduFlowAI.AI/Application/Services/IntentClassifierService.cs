@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
-using EduFlowAI.AI.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
@@ -23,17 +19,12 @@ public class IntentClassifierService : IIntentClassifier
 
     private static readonly string[] ValidIntents = { "knowledge", "status", "recommendation" };
 
-    private readonly HttpClient _httpClient;
-    private readonly GeminiOptions _options;
+    private readonly IGeminiChatClient _chatClient;
     private readonly ILogger<IntentClassifierService> _logger;
 
-    public IntentClassifierService(
-        HttpClient httpClient,
-        IOptions<GeminiOptions> options,
-        ILogger<IntentClassifierService> logger)
+    public IntentClassifierService(IGeminiChatClient chatClient, ILogger<IntentClassifierService> logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -72,21 +63,7 @@ Current question: {userQuestion}
 Classify this question. Respond ONLY with JSON.
 ";
 
-        var requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/models/gemini-2.5-flash:generateContent?key={_options.ApiKey}";
-
-        var payload = new GeminiChatRequestDto
-        {
-            Contents = new[] { new GeminiContentDto { Parts = new[] { new GeminiPartDto { Text = userMessage } } } },
-            SystemInstruction = new GeminiSystemInstructionDto { Parts = new[] { new GeminiPartDto { Text = systemPrompt } } }
-        };
-
-        var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        var result = await response.Content.ReadFromJsonAsync<GeminiChatResponseDto>(cancellationToken: cancellationToken);
-
-        // FirstOrDefault guards against an empty candidates/parts array (avoids IndexOutOfRange).
-        var responseText = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+        var responseText = await _chatClient.GenerateAsync(systemPrompt, userMessage, cancellationToken);
 
         if (!TryParseIntentResponse(responseText, out var classification))
         {
@@ -181,44 +158,4 @@ Classify this question. Respond ONLY with JSON.
 
         return t.Substring(start, end - start + 1);
     }
-}
-
-// DTOs for Gemini API calls (raw request/response shape Gemini expects)
-public class GeminiChatRequestDto
-{
-    [JsonPropertyName("system_instruction")]
-    public GeminiSystemInstructionDto? SystemInstruction { get; set; }
-
-    [JsonPropertyName("contents")]
-    public GeminiContentDto[]? Contents { get; set; }
-}
-
-public class GeminiSystemInstructionDto
-{
-    [JsonPropertyName("parts")]
-    public GeminiPartDto[]? Parts { get; set; }
-}
-
-public class GeminiContentDto
-{
-    [JsonPropertyName("parts")]
-    public GeminiPartDto[]? Parts { get; set; }
-}
-
-public class GeminiPartDto
-{
-    [JsonPropertyName("text")]
-    public string Text { get; set; } = string.Empty;
-}
-
-public class GeminiChatResponseDto
-{
-    [JsonPropertyName("candidates")]
-    public GeminiCandidateDto[]? Candidates { get; set; }
-}
-
-public class GeminiCandidateDto
-{
-    [JsonPropertyName("content")]
-    public GeminiContentDto? Content { get; set; }
 }

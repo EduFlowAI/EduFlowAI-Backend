@@ -23,6 +23,9 @@ public static class AIModule
 
         services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
 
+        // Single Gemini generateContent client shared by the RAG service and the intent classifier.
+        services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
+
         services.AddScoped<KnowledgeBaseService>();
         services.AddScoped<KnowledgeBaseRetrievalService>();
         services.AddScoped<AiChatService>();
@@ -31,7 +34,8 @@ public static class AIModule
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
 
-        services.AddHttpClient<IIntentClassifier, IntentClassifierService>();
+        // No longer a typed HttpClient — it depends on IGeminiChatClient now.
+        services.AddScoped<IIntentClassifier, IntentClassifierService>();
 
         services.AddSingleton<EmbeddingCacheService>();
 

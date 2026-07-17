@@ -36,11 +36,11 @@ public class GeminiEmbeddingService : IAiEmbeddingService
         }
 
         // Build the Gemini API endpoint url with the API Key query parameter
-        string requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/{_options.Model}:embedContent?key={_options.ApiKey}";
+        string requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/{_options.EmbeddingModel}:embedContent?key={_options.ApiKey}";
 
         var payload = new
         {
-            model = _options.Model,
+            model = _options.EmbeddingModel,
             content = new
             {
                 parts = new[]
