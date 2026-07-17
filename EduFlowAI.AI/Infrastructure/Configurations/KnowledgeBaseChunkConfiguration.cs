@@ -21,8 +21,15 @@ namespace EduFlowAI.AI.Infrastructure.Configurations
 
             builder.Property(c => c.Embedding).HasColumnType("vector(768)").IsRequired();
 
-            builder.HasOne<KnowledgeBaseDocument>()
-                .WithMany()
+            // Bind the relationship to the actual navigation properties
+            // (KnowledgeBaseChunk.Document <-> KnowledgeBaseDocument.Chunks) so EF maps a
+            // SINGLE foreign key on KnowledgeBaseDocumentId. Using the anonymous
+            // HasOne<KnowledgeBaseDocument>().WithMany() form leaves those navigations
+            // unmapped, and EF then discovers them as a second relationship with a shadow
+            // "DocumentId" FK column — the duplicate-FK drift that caused insert failures
+            // (Npgsql 23502: null value in column "KnowledgeBaseDocumentId").
+            builder.HasOne(c => c.Document)
+                .WithMany(d => d.Chunks)
                 .HasForeignKey(c => c.KnowledgeBaseDocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
