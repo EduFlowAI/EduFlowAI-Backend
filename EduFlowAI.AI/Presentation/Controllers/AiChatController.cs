@@ -57,7 +57,7 @@ public class AiChatController : ControllerBase
 
         var session = _sessionManager.GetSession(sessionId);
         if (session == null)
-            return BadRequest("Invalid session ID");
+            return BadRequest("Session not found or expired. Create a new session.");
 
         var history = _sessionManager.GetHistory(sessionId, lastN: 3);
 
@@ -105,7 +105,7 @@ public class AiChatController : ControllerBase
     {
         var session = _sessionManager.GetSession(sessionId);
         if (session == null)
-            return BadRequest("Invalid session ID");
+            return BadRequest("Session not found or expired. Create a new session.");
 
         _sessionManager.EndSession(sessionId);
         return Ok(new { message = "Session ended successfully" });
@@ -117,7 +117,7 @@ public class AiChatController : ControllerBase
     {
         var session = _sessionManager.GetSession(sessionId);
         if (session == null)
-            return BadRequest("Invalid session ID");
+            return BadRequest("Session not found or expired. Create a new session.");
 
         var history = _sessionManager.GetHistory(sessionId, lastN: 100); // effectively "all turns"
 

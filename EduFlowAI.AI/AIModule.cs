@@ -7,6 +7,7 @@ using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace EduFlowAI.AI;
 
@@ -24,6 +25,12 @@ public static class AIModule
 
         services.AddOptions<FileStorageOptions>()
             .BindConfiguration(FileStorageOptions.SectionName);
+
+        services.AddOptions<ChatSessionOptions>()
+            .BindConfiguration(ChatSessionOptions.SectionName);
+
+        // Clock abstraction so session expiry is testable with a fake time provider.
+        services.TryAddSingleton(TimeProvider.System);
 
         // Protected local file storage for uploaded PDFs (swappable for cloud storage later).
         services.AddSingleton<IFileStorageService, LocalFileStorageService>();

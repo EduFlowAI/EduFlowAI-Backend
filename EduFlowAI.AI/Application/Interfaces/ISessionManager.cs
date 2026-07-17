@@ -8,7 +8,10 @@ public interface ISessionManager
 {
     ChatSessionDto CreateSession(Guid userId);
     ChatSessionDto? GetSession(string sessionId);
-    void AddTurn(string sessionId, ConversationTurnDto turn);
+
+    /// <summary>Appends a turn. Returns false if the session is missing or expired (safe no-op).</summary>
+    bool AddTurn(string sessionId, ConversationTurnDto turn);
+
     List<ConversationTurnDto> GetHistory(string sessionId, int lastN = 3);
     void EndSession(string sessionId);
 }
