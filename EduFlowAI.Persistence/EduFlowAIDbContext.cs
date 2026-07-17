@@ -1,12 +1,17 @@
-﻿using EduFlowAI.Admission.Domain.Entities;
+﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Infrastructure.Configurations;
+using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.AI.Domain.Entities;
 using EduFlowAI.AI.Infrastructure.Configurations;
+using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Communication.Domain.Entities;
 using EduFlowAI.Communication.Infrastructure.Configurations;
 using EduFlowAI.Documents;
+using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Domain.Entities;
 using EduFlowAI.Documents.Infrastructure.Configurations;
+using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Identity.Infrastructure.Configurations;
 using Microsoft.AspNetCore.Identity;
@@ -19,7 +24,8 @@ using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence
 {
-    public class EduFlowAIDbContext : IdentityDbContext<AppUser>
+    public class EduFlowAIDbContext : IdentityDbContext<AppUser>, IAdmissionDbContext, IAIDbContext
+        , ICommunicationDbContext, IDocumentDbContext, IIdentityDbContext
     {
         public EduFlowAIDbContext(DbContextOptions<EduFlowAIDbContext> options) : base(options) { }
 
