@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -17,71 +17,68 @@ public class PdfProcessingService
         if (pdfStream == null || pdfStream.Length == 0)
             throw new ArgumentException("The provided PDF file stream is empty or null.");
 
-        
-        string fullText = ExtractRawText(pdfStream);
+        var fullText = ExtractRawText(pdfStream);
 
-        if (string.IsNullOrWhiteSpace(fullText))
-            return new List<string>();
-
-        // 2. Slice the extracted full text into overlapping chunks
-        return SliceTextIntoChunks(fullText, chunkSize, chunkOverlap);
+        return SliceIntoChunks(fullText, chunkSize, chunkOverlap);
     }
 
-    private string ExtractRawText(Stream pdfStream)
+    private static string ExtractRawText(Stream pdfStream)
     {
         var textBuilder = new StringBuilder();
 
-        // Ensure the stream is pointing back to the beginning before reading
         if (pdfStream.CanSeek)
-        {
             pdfStream.Position = 0;
-        }
 
         using var pdfReader = new PdfReader(pdfStream);
         using var pdfDocument = new PdfDocument(pdfReader);
 
-        int pageCount = pdfDocument.GetNumberOfPages();
+        var pageCount = pdfDocument.GetNumberOfPages();
 
-        for (int pageNum = 1; pageNum <= pageCount; pageNum++)
+        for (var pageNum = 1; pageNum <= pageCount; pageNum++)
         {
             var page = pdfDocument.GetPage(pageNum);
-            // Extracts all structural text lines from the specific page layout
-            string pageText = PdfTextExtractor.GetTextFromPage(page);
+            var pageText = PdfTextExtractor.GetTextFromPage(page);
 
             if (!string.IsNullOrWhiteSpace(pageText))
-            {
                 textBuilder.AppendLine(pageText);
-            }
         }
 
         return textBuilder.ToString();
     }
 
-    private List<string> SliceTextIntoChunks(string text, int size, int overlap)
+    /// <summary>
+    /// Splits text into overlapping windows. Pure and side-effect free so it is unit-testable.
+    /// Whitespace-only windows are dropped (an embedding call on empty text throws, and the DB
+    /// enforces a non-empty Content check), and a bad overlap can never stall the loop.
+    /// </summary>
+    internal static List<string> SliceIntoChunks(string text, int size = 1000, int overlap = 200)
     {
         var chunks = new List<string>();
 
-        // Clean up multi-line spaces or carriage returns to make text flow cleanly
-        string normalizedText = text.Replace("\r\n", " ").Replace("\n", " ");
-        int textLength = normalizedText.Length;
-        int startIndex = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return chunks;
 
-        while (startIndex < textLength)
+        if (size <= 0)
+            size = 1000;
+
+        // Overlap must be smaller than the window, otherwise the advance step is non-positive.
+        if (overlap < 0 || overlap >= size)
+            overlap = Math.Min(200, size - 1);
+
+        var normalized = text.Replace("\r\n", " ").Replace("\n", " ");
+        var length = normalized.Length;
+        var step = size - overlap; // guaranteed > 0
+
+        var start = 0;
+        while (start < length)
         {
-            // Calculate how long this chunk should be
-            int currentChunkLength = Math.Min(size, textLength - startIndex);
-            string chunkContent = normalizedText.Substring(startIndex, currentChunkLength);
+            var windowLength = Math.Min(size, length - start);
+            var chunk = normalized.Substring(start, windowLength).Trim();
 
-            chunks.Add(chunkContent.Trim());
+            if (chunk.Length > 0)
+                chunks.Add(chunk);
 
-            // Move the window forward by subtracting the overlap
-            startIndex += (size - overlap);
-
-            
-            if (size <= overlap)
-            {
-                startIndex += size;
-            }
+            start += step;
         }
 
         return chunks;

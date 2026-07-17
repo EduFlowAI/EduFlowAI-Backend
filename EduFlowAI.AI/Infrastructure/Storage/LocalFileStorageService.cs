@@ -1,0 +1,75 @@
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using EduFlowAI.AI.Application.Interfaces;
+using Microsoft.Extensions.Options;
+
+namespace EduFlowAI.AI.Infrastructure.Storage;
+
+/// <summary>
+/// Local-disk implementation of <see cref="IFileStorageService"/>. Files live under a configured
+/// root folder; relative keys are validated so they cannot escape that root (path-traversal guard).
+/// </summary>
+public class LocalFileStorageService : IFileStorageService
+{
+    private readonly string _root;
+
+    public LocalFileStorageService(IOptions<FileStorageOptions> options)
+    {
+        var configured = options?.Value?.Root;
+        if (string.IsNullOrWhiteSpace(configured))
+            configured = "protected-files";
+
+        _root = Path.IsPathRooted(configured)
+            ? Path.GetFullPath(configured)
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
+    }
+
+    public async Task<string> SaveAsync(Stream content, string relativeKey, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Resolve(relativeKey);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+        await using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        if (content.CanSeek)
+            content.Position = 0;
+        await content.CopyToAsync(fs, cancellationToken);
+
+        return relativeKey;
+    }
+
+    public Task<Stream> OpenReadAsync(string relativeKey, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Resolve(relativeKey);
+        Stream stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return Task.FromResult(stream);
+    }
+
+    public Task DeleteAsync(string relativeKey, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Resolve(relativeKey);
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
+        return Task.CompletedTask;
+    }
+
+    public bool Exists(string relativeKey) => File.Exists(Resolve(relativeKey));
+
+    private string Resolve(string relativeKey)
+    {
+        if (string.IsNullOrWhiteSpace(relativeKey))
+            throw new ArgumentException("Storage key cannot be null or empty.", nameof(relativeKey));
+
+        var combined = Path.GetFullPath(Path.Combine(_root, relativeKey));
+
+        // Guard against keys like "../../secret" escaping the storage root.
+        var rootWithSep = _root.EndsWith(Path.DirectorySeparatorChar)
+            ? _root
+            : _root + Path.DirectorySeparatorChar;
+        if (!combined.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Resolved storage path escapes the storage root.");
+
+        return combined;
+    }
+}

@@ -48,6 +48,12 @@ public class KnowledgeRepository : IKnowledgeRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<int> GetChunkCountAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Set<KnowledgeBaseChunk>()
+            .CountAsync(c => c.KnowledgeBaseDocumentId == documentId, cancellationToken);
+    }
+
     public async Task<List<string>> SearchChunksByEmbeddingAsync(
         Pgvector.Vector embedding,
         int limit = 5,

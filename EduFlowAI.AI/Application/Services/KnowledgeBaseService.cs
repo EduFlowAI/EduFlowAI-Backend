@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.Interfaces;
@@ -15,20 +14,27 @@ public class KnowledgeBaseService
     private readonly PdfProcessingService _pdfProcessor;
     private readonly IAiEmbeddingService _embeddingService;
     private readonly IKnowledgeRepository _repository;
+    private readonly IFileStorageService _fileStorage;
 
     public KnowledgeBaseService(
         PdfProcessingService pdfProcessor,
         IAiEmbeddingService embeddingService,
-        IKnowledgeRepository repository)
+        IKnowledgeRepository repository,
+        IFileStorageService fileStorage)
     {
         _pdfProcessor = pdfProcessor ?? throw new ArgumentNullException(nameof(pdfProcessor));
         _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
     }
 
-    public async Task IngestDocumentAsync(Guid documentId, Stream pdfStream, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Extracts, chunks, embeds and stores a previously-uploaded document. The physical PDF is
+    /// read from protected storage using the document's StorageKey, so this can be re-run during
+    /// a knowledge-base re-sync without the original HTTP upload stream.
+    /// </summary>
+    public async Task IngestDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        
         var document = await _repository.GetDocumentByIdAsync(documentId, cancellationToken);
 
         if (document == null)
@@ -36,37 +42,31 @@ public class KnowledgeBaseService
 
         try
         {
-            // Flip status to Indexing to notify the UI
             document.Status = KnowledgeBaseStatus.Indexing;
             await _repository.UpdateDocumentAsync(document, cancellationToken);
 
-            // Extract text and slice into clean overlapping chunks
-            var rawTextChunks = _pdfProcessor.ExtractChunksFromPdf(pdfStream);
-
-            if (rawTextChunks.Count == 0)
+            List<string> rawTextChunks;
+            await using (var pdfStream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken))
             {
-                throw new InvalidOperationException("The uploaded PDF did not yield any readable text lines.");
+                rawTextChunks = _pdfProcessor.ExtractChunksFromPdf(pdfStream);
             }
 
-            var embeddedChunks = new List<KnowledgeBaseChunk>();
+            if (rawTextChunks.Count == 0)
+                throw new InvalidOperationException("The uploaded PDF did not yield any readable text lines.");
 
-            // Process each text block sequentially through Google's vector space
+            var embeddedChunks = new List<KnowledgeBaseChunk>();
             foreach (var textContent in rawTextChunks)
             {
-                float[] coordinateArray = await _embeddingService.GenerateEmbeddingAsync(textContent, cancellationToken);
-                var vectorWrapper = new Pgvector.Vector(coordinateArray);
+                var coordinateArray = await _embeddingService.GenerateEmbeddingAsync(textContent, cancellationToken);
 
-                var chunkEntity = new KnowledgeBaseChunk
+                embeddedChunks.Add(new KnowledgeBaseChunk
                 {
                     KnowledgeBaseDocumentId = document.Id,
                     Content = textContent,
-                    Embedding = vectorWrapper
-                };
-
-                embeddedChunks.Add(chunkEntity);
+                    Embedding = new Pgvector.Vector(coordinateArray)
+                });
             }
 
-            // Bulk insert all vectorized text chunks into PostgreSQL
             await _repository.AddChunksAsync(embeddedChunks, cancellationToken);
 
             document.Status = KnowledgeBaseStatus.Indexed;
@@ -74,7 +74,7 @@ public class KnowledgeBaseService
         }
         catch (Exception ex)
         {
-            // Fail-safe: capture system or network failure logs directly inside the document record
+            // Capture the failure reason on the document so the status endpoint can surface it.
             document.Status = KnowledgeBaseStatus.Failed;
             document.ErrorMessage = ex.Message;
             await _repository.UpdateDocumentAsync(document, cancellationToken);

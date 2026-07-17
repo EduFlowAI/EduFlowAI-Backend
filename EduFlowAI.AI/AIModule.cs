@@ -5,6 +5,7 @@ using EduFlowAI.AI.Infrastructure.ExternalServices;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Services;
+using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EduFlowAI.AI;
@@ -20,6 +21,12 @@ public static class AIModule
 
         services.AddOptions<GeminiOptions>()
             .BindConfiguration(GeminiOptions.SectionName);
+
+        services.AddOptions<FileStorageOptions>()
+            .BindConfiguration(FileStorageOptions.SectionName);
+
+        // Protected local file storage for uploaded PDFs (swappable for cloud storage later).
+        services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
         services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
 
