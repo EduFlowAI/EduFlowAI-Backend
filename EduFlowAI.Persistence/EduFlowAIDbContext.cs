@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence
 {
@@ -58,8 +59,10 @@ namespace EduFlowAI.Persistence
             // Enable pgvector extension for PostgreSQL to support AI embeddings
             modelBuilder.HasPostgresExtension("vector");
 
-            // 3. Module entity configs applied here (The Modular Monolith Way)
-            // Note: We will replace 'IdentityModule' with an actual Entity class name (e.g., AppUser) once created.       
+            // mapping Wolverine messaging storage
+            modelBuilder.MapWolverineEnvelopeStorage();
+
+            // Module entity configs applied here (The Modular Monolith Way)
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppUserConfiguration).Assembly);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ProgramConfiguration).Assembly);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicantDocumentConfiguration).Assembly);
