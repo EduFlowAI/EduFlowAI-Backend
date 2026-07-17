@@ -38,6 +38,11 @@ namespace EduFlowAI.Api
                     });
             });
 
+            // Expose the shared context as the base DbContext type so the AI module's
+            // repository/controller can depend on DbContext without referencing
+            // EduFlowAI.Persistence (which would create a circular project reference).
+            builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<EduFlowAIDbContext>());
+
             // register modules
             var identityBuilder = builder.Services.AddIdentityModule();
             builder.Services.AddAdmissionModule();
