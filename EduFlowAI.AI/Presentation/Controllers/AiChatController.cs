@@ -55,53 +55,48 @@ public class AiChatController : ControllerBase
         if (string.IsNullOrWhiteSpace(sessionId))
             return BadRequest("Session ID is required");
 
-        try
+        var session = _sessionManager.GetSession(sessionId);
+        if (session == null)
+            return BadRequest("Invalid session ID");
+
+        var history = _sessionManager.GetHistory(sessionId, lastN: 3);
+
+        var classification = await _intentClassifier.ClassifyAsync(
+            request.Question,
+            history,
+            cancellationToken);
+
+        var language = LanguageDetectionService.DetectLanguage(request.Question);
+
+        // Unhandled failures (e.g. a Gemini outage) propagate to the global exception handler,
+        // which returns a safe 502/500 ProblemDetails instead of leaking the exception message.
+        string answer = classification.RoutedTo switch
         {
-            var session = _sessionManager.GetSession(sessionId);
-            if (session == null)
-                return BadRequest("Invalid session ID");
+            "knowledge_rag" => await _chatService.AnswerWithContextAsync(request.Question, language, cancellationToken),
+            "status_agent" => MockAgentService.GetStatusAgentResponse(request.Question),
+            "recommendations_agent" => MockAgentService.GetRecommendationsAgentResponse(request.Question),
+            _ => "Unable to process your question at this time."
+        };
 
-            var history = _sessionManager.GetHistory(sessionId, lastN: 3);
-
-            var classification = await _intentClassifier.ClassifyAsync(
-                request.Question,
-                history,
-                cancellationToken);
-
-            var language = LanguageDetectionService.DetectLanguage(request.Question);
-
-            string answer = classification.RoutedTo switch
-            {
-                "knowledge_rag" => await _chatService.AnswerWithContextAsync(request.Question, language, cancellationToken),
-                "status_agent" => MockAgentService.GetStatusAgentResponse(request.Question),
-                "recommendations_agent" => MockAgentService.GetRecommendationsAgentResponse(request.Question),
-                _ => "Unable to process your question at this time."
-            };
-
-            var turn = new ConversationTurnDto
-            {
-                Question = request.Question,
-                Intent = classification.PrimaryIntent,
-                RoutedTo = classification.RoutedTo,
-                Answer = answer,
-                Timestamp = DateTimeOffset.UtcNow
-            };
-            _sessionManager.AddTurn(sessionId, turn);
-
-            return Ok(new
-            {
-                answer,
-                intent = classification.PrimaryIntent,
-                confidence = classification.Confidence,
-                requiresClarification = classification.RequiresClarification,
-                routedTo = classification.RoutedTo,
-                language
-            });
-        }
-        catch (Exception ex)
+        var turn = new ConversationTurnDto
         {
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
-        }
+            Question = request.Question,
+            Intent = classification.PrimaryIntent,
+            RoutedTo = classification.RoutedTo,
+            Answer = answer,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+        _sessionManager.AddTurn(sessionId, turn);
+
+        return Ok(new
+        {
+            answer,
+            intent = classification.PrimaryIntent,
+            confidence = classification.Confidence,
+            requiresClarification = classification.RequiresClarification,
+            routedTo = classification.RoutedTo,
+            language
+        });
     }
 
     [HttpPost("session/{sessionId}/end")]

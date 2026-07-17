@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.AI\EduFlowAI.AI.csproj" />
+    <!-- For testing the API host's global exception handler. -->
+    <ProjectReference Include="..\EduFlowAI.Api\EduFlowAI.Api.csproj" />
   </ItemGroup>
 
 </Project>

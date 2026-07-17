@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
@@ -16,12 +17,14 @@ public class GeminiEmbeddingService : IAiEmbeddingService
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;
     private readonly EmbeddingCacheService _cache;
+    private readonly ILogger<GeminiEmbeddingService> _logger;
 
-    public GeminiEmbeddingService(HttpClient httpClient, IOptions<GeminiOptions> options, EmbeddingCacheService cache)
+    public GeminiEmbeddingService(HttpClient httpClient, IOptions<GeminiOptions> options, EmbeddingCacheService cache, ILogger<GeminiEmbeddingService> logger)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken = default)
@@ -80,7 +83,7 @@ public class GeminiEmbeddingService : IAiEmbeddingService
             {
                 // Likely a transient DNS/network blip — wait and retry
                 lastException = ex;
-                Console.WriteLine($"[DEBUG] Attempt {attempt} failed ({ex.Message}), retrying in {attempt * 2}s...");
+                _logger.LogWarning(ex, "Embedding attempt {Attempt} failed; retrying in {DelaySeconds}s", attempt, attempt * 2);
                 await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
             }
         }

@@ -1,5 +1,6 @@
 using EduFlowAI.Admission;
 using EduFlowAI.AI;
+using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
 using EduFlowAI.Documents;
 using EduFlowAI.Identity;
@@ -25,6 +26,10 @@ namespace EduFlowAI.Api
            
             builder.Services.AddOpenApi();
             builder.Services.AddEndpointsApiExplorer();
+
+            // Global exception handling: unhandled exceptions become safe ProblemDetails responses.
+            builder.Services.AddExceptionHandler<ExceptionHandler>();
+            builder.Services.AddProblemDetails();
 
             // Register EduFlowAIDbContext with Npgsql provider
             builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
@@ -77,6 +82,9 @@ namespace EduFlowAI.Api
             #endregion
 
             var app = builder.Build();
+
+            // Must be first so it wraps the whole pipeline and catches downstream exceptions.
+            app.UseExceptionHandler();
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
