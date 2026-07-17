@@ -27,6 +27,9 @@ public class GeminiChatClient : IGeminiChatClient
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
+    // Transient statuses worth retrying: 429 (rate limit) and any 5xx (e.g. 503 "high demand").
+    private const int MaxAttempts = 3;
+
     public async Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken cancellationToken = default)
     {
         var requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/models/{_options.ChatModel}:generateContent?key={_options.ApiKey}";
@@ -37,14 +40,34 @@ public class GeminiChatClient : IGeminiChatClient
             Contents = new[] { new GeminiContent { Parts = new[] { new GeminiPart { Text = userMessage } } } }
         };
 
-        var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        for (var attempt = 1; ; attempt++)
+        {
+            var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
 
-        var body = await response.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken: cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken: cancellationToken);
 
-        // FirstOrDefault guards against an empty candidates/parts array (avoids IndexOutOfRange).
-        // An empty string is a valid "no answer" signal the caller decides how to handle.
-        return body?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+                // FirstOrDefault guards against an empty candidates/parts array (avoids IndexOutOfRange).
+                // An empty string is a valid "no answer" signal the caller decides how to handle.
+                return body?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+            }
+
+            var status = (int)response.StatusCode;
+            var isTransient = status == 429 || status >= 500;
+
+            if (isTransient && attempt < MaxAttempts)
+            {
+                // Back off (2s, 4s) to ride out a rate-limit window or a demand spike.
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
+                continue;
+            }
+
+            var detail = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (detail.Length > 300)
+                detail = detail.Substring(0, 300);
+            throw new HttpRequestException($"Gemini generateContent failed with HTTP {status} for model '{_options.ChatModel}'. {detail}");
+        }
     }
 }
 
