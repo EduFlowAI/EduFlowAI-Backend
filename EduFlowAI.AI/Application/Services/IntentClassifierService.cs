@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Json;
@@ -9,19 +9,32 @@ using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Infrastructure.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
 public class IntentClassifierService : IIntentClassifier
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static readonly string[] ValidIntents = { "knowledge", "status", "recommendation" };
+
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;
+    private readonly ILogger<IntentClassifierService> _logger;
 
-    public IntentClassifierService(HttpClient httpClient, IOptions<GeminiOptions> options)
+    public IntentClassifierService(
+        HttpClient httpClient,
+        IOptions<GeminiOptions> options,
+        ILogger<IntentClassifierService> logger)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<IntentClassificationDto> ClassifyAsync(
@@ -71,35 +84,102 @@ Classify this question. Respond ONLY with JSON.
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<GeminiChatResponseDto>(cancellationToken: cancellationToken);
-        var responseText = result?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? string.Empty;
 
+        // FirstOrDefault guards against an empty candidates/parts array (avoids IndexOutOfRange).
+        var responseText = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+
+        if (!TryParseIntentResponse(responseText, out var classification))
+        {
+            _logger.LogWarning(
+                "Intent classifier could not parse a valid intent from the model response; " +
+                "falling back to 'knowledge'. Raw response: {RawResponse}",
+                responseText);
+        }
+
+        return classification;
+    }
+
+    /// <summary>
+    /// Parses the model's raw text into an intent classification. Tolerates Markdown code
+    /// fences and surrounding prose, matches JSON property names case-insensitively, validates
+    /// the intent value, clamps confidence to [0,1], and derives RoutedTo. Returns false (with a
+    /// safe 'knowledge' fallback in <paramref name="result"/>) when no valid intent can be read.
+    /// </summary>
+    internal static bool TryParseIntentResponse(string? responseText, out IntentClassificationDto result)
+    {
+        result = KnowledgeFallback();
+
+        var json = ExtractJsonObject(responseText);
+        if (json is null)
+            return false;
+
+        IntentClassificationDto? parsed;
         try
         {
-            var classification = JsonSerializer.Deserialize<IntentClassificationDto>(responseText);
-            if (classification == null)
-                throw new InvalidOperationException("Failed to deserialize intent classification");
-
-            classification.RoutedTo = classification.PrimaryIntent switch
-            {
-                "knowledge" => "knowledge_rag",
-                "status" => "status_agent",
-                "recommendation" => "recommendations_agent",
-                _ => "knowledge_rag"
-            };
-
-            return classification;
+            parsed = JsonSerializer.Deserialize<IntentClassificationDto>(json, JsonOptions);
         }
-        catch
+        catch (JsonException)
         {
-            // Fallback: assume knowledge question if Gemini's response wasn't valid JSON
-            return new IntentClassificationDto
-            {
-                PrimaryIntent = "knowledge",
-                Confidence = 0.5m,
-                RoutedTo = "knowledge_rag",
-                RequiresClarification = true
-            };
+            return false;
         }
+
+        if (parsed is null)
+            return false;
+
+        var intent = (parsed.PrimaryIntent ?? string.Empty).Trim().ToLowerInvariant();
+        if (Array.IndexOf(ValidIntents, intent) < 0)
+            return false;
+
+        parsed.PrimaryIntent = intent;
+        parsed.Confidence = Math.Clamp(parsed.Confidence, 0m, 1m);
+        parsed.RoutedTo = RouteFor(intent);
+        result = parsed;
+        return true;
+    }
+
+    private static string RouteFor(string intent) => intent switch
+    {
+        "status" => "status_agent",
+        "recommendation" => "recommendations_agent",
+        _ => "knowledge_rag"
+    };
+
+    private static IntentClassificationDto KnowledgeFallback() => new()
+    {
+        PrimaryIntent = "knowledge",
+        Confidence = 0.5m,
+        RoutedTo = "knowledge_rag",
+        RequiresClarification = true
+    };
+
+    /// <summary>Extracts the outermost JSON object from text that may include code fences or prose.</summary>
+    private static string? ExtractJsonObject(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var t = text.Trim();
+
+        // Strip a leading ```json / ``` fence and its closing ``` if present.
+        if (t.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstNewline = t.IndexOf('\n');
+            if (firstNewline >= 0)
+                t = t.Substring(firstNewline + 1);
+
+            var closingFence = t.LastIndexOf("```", StringComparison.Ordinal);
+            if (closingFence >= 0)
+                t = t.Substring(0, closingFence);
+
+            t = t.Trim();
+        }
+
+        var start = t.IndexOf('{');
+        var end = t.LastIndexOf('}');
+        if (start < 0 || end <= start)
+            return null;
+
+        return t.Substring(start, end - start + 1);
     }
 }
 

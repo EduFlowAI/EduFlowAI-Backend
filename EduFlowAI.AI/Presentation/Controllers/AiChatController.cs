@@ -93,6 +93,7 @@ public class AiChatController : ControllerBase
                 answer,
                 intent = classification.PrimaryIntent,
                 confidence = classification.Confidence,
+                requiresClarification = classification.RequiresClarification,
                 routedTo = classification.RoutedTo,
                 language
             });
