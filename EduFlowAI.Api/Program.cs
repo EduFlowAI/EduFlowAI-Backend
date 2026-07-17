@@ -1,9 +1,15 @@
 using EduFlowAI.Admission;
+using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.AI;
+using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.Communication;
+using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Documents;
+using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Identity;
+using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Persistence;
+using EduFlowAI.Persistence.Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -26,26 +32,16 @@ namespace EduFlowAI.Api
             builder.Services.AddOpenApi();
             builder.Services.AddEndpointsApiExplorer();
 
-            // Register EduFlowAIDbContext with Npgsql provider
-            builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
-            {
-                options.UseNpgsql(
-                    builder.Configuration.GetConnectionString("DefaultConnection"),
-                    npgsqlOptions =>
-                    {
-                        // Enable vector operations for Npgsql
-                        npgsqlOptions.UseVector();
-                    });
-            });
+            // Register EduFlowAIDbContext with Npgsql provider, and DbContext interfaces
+            builder.Services.AddPersistence(builder.Configuration);
 
             // register modules
             var identityBuilder = builder.Services.AddIdentityModule();
+            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
             builder.Services.AddAIModule();
             builder.Services.AddCommunicationModule();
-
-            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
 
             #region Swagger
             builder.Services.AddSwaggerGen(options =>

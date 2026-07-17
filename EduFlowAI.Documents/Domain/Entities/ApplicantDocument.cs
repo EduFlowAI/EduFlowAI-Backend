@@ -22,7 +22,6 @@ namespace EduFlowAI.Documents.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; }
 
         // Navigation Properties
-        public Application Application { get; set; }
         public ICollection<DocumentReplacementRequest> ReplacementRequests { get; set; } = new List<DocumentReplacementRequest>();
     }
 }

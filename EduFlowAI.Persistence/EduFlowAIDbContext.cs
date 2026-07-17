@@ -1,12 +1,17 @@
-﻿using EduFlowAI.Admission.Domain.Entities;
+﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Infrastructure.Configurations;
+using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.AI.Domain.Entities;
 using EduFlowAI.AI.Infrastructure.Configurations;
+using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Communication.Domain.Entities;
 using EduFlowAI.Communication.Infrastructure.Configurations;
 using EduFlowAI.Documents;
+using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Domain.Entities;
 using EduFlowAI.Documents.Infrastructure.Configurations;
+using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Identity.Infrastructure.Configurations;
 using Microsoft.AspNetCore.Identity;
@@ -15,10 +20,12 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence
 {
-    public class EduFlowAIDbContext : IdentityDbContext<AppUser>
+    public class EduFlowAIDbContext : IdentityDbContext<AppUser>, IAdmissionDbContext, IAIDbContext
+        , ICommunicationDbContext, IDocumentDbContext, IIdentityDbContext
     {
         public EduFlowAIDbContext(DbContextOptions<EduFlowAIDbContext> options) : base(options) { }
 
@@ -58,8 +65,10 @@ namespace EduFlowAI.Persistence
             // Enable pgvector extension for PostgreSQL to support AI embeddings
             modelBuilder.HasPostgresExtension("vector");
 
-            // 3. Module entity configs applied here (The Modular Monolith Way)
-            // Note: We will replace 'IdentityModule' with an actual Entity class name (e.g., AppUser) once created.       
+            // mapping Wolverine messaging storage
+            modelBuilder.MapWolverineEnvelopeStorage();
+
+            // Module entity configs applied here (The Modular Monolith Way)
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppUserConfiguration).Assembly);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ProgramConfiguration).Assembly);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicantDocumentConfiguration).Assembly);
