@@ -19,6 +19,10 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
 
             builder.HasIndex(x => x.Code).IsUnique();
 
+            builder.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
             // Prevent zero or negative duration
             builder.ToTable(t => t.HasCheckConstraint("CK_Program_Duration", "\"DurationMonths\" > 0"));
 
