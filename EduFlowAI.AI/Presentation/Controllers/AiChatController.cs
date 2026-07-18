@@ -76,26 +76,33 @@ public class AiChatController : ControllerBase
 
         var history = _sessionManager.GetHistory(sessionId, lastN: 3);
 
+        // Detect language from the ORIGINAL text: masking replaces digits with an English token,
+        // which could otherwise flip an Arabic question to "en".
+        var language = LanguageDetectionService.DetectLanguage(request.Question);
+
+        // Everything sent outbound to Gemini uses the masked text.
+        var sanitizedQuestion = InputSanitizerService.MaskSensitiveNumbers(request.Question);
+
         var classification = await _intentClassifier.ClassifyAsync(
-            request.Question,
+            sanitizedQuestion,
             history,
             cancellationToken);
-
-        var language = LanguageDetectionService.DetectLanguage(request.Question);
 
         // Unhandled failures (e.g. a Gemini outage) propagate to the global exception handler,
         // which returns a safe 502/500 ProblemDetails instead of leaking the exception message.
         string answer = classification.RoutedTo switch
         {
-            "knowledge_rag" => await _chatService.AnswerWithContextAsync(request.Question, language, cancellationToken),
-            "status_agent" => await _statusAgent.GetResponseAsync(request.Question, language, cancellationToken),
-            "recommendations_agent" => await _recommendationsAgent.GetResponseAsync(request.Question, language, cancellationToken),
+            "knowledge_rag" => await _chatService.AnswerWithContextAsync(sanitizedQuestion, language, cancellationToken),
+            "status_agent" => await _statusAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken),
+            "recommendations_agent" => await _recommendationsAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken),
             _ => "Unable to process your question at this time."
         };
 
+        // Store the masked text: history is replayed to the classifier as context on later turns,
+        // so keeping the raw value here would send it to Gemini anyway.
         var turn = new ConversationTurnDto
         {
-            Question = request.Question,
+            Question = sanitizedQuestion,
             Intent = classification.PrimaryIntent,
             RoutedTo = classification.RoutedTo,
             Answer = answer,
