@@ -31,6 +31,16 @@ namespace EduFlowAI.Api
             builder.Services.AddExceptionHandler<ExceptionHandler>();
             builder.Services.AddProblemDetails();
 
+            // Local manual-testing dashboard runs from a file:// page (Origin "null") or an
+            // arbitrary localhost port. Applied in Development only - never in production.
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("LocalDevTesting", policy => policy
+                    .SetIsOriginAllowed(_ => true)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
+            });
+
             // Register EduFlowAIDbContext with Npgsql provider
             builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
             {
@@ -89,6 +99,9 @@ namespace EduFlowAI.Api
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
+                // Must run before endpoint routing so preflight requests get CORS headers.
+                app.UseCors("LocalDevTesting");
+
                 app.MapOpenApi();
 
                 app.UseSwagger();

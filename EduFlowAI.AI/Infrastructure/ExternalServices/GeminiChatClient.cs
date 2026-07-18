@@ -12,14 +12,17 @@ using Microsoft.Extensions.Options;
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
 /// <summary>
-/// Single Gemini generateContent client shared by the RAG answer service and the intent
-/// classifier. Builds the endpoint from <see cref="GeminiOptions"/> (BaseUrl + ChatModel), so
-/// changing configuration re-points every generation call in one place.
+/// Single Gemini generateContent client shared by the RAG answer service, the intent classifier
+/// and document transcription. Builds the endpoint from <see cref="GeminiOptions"/> (BaseUrl +
+/// ChatModel), so changing configuration re-points every generation call in one place.
 /// </summary>
 public class GeminiChatClient : IGeminiChatClient
 {
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;
+
+    // Transient statuses worth retrying: 429 (rate limit) and any 5xx (e.g. 503 "high demand").
+    private const int MaxAttempts = 3;
 
     public GeminiChatClient(HttpClient httpClient, IOptions<GeminiOptions> options)
     {
@@ -27,18 +30,63 @@ public class GeminiChatClient : IGeminiChatClient
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
-    // Transient statuses worth retrying: 429 (rate limit) and any 5xx (e.g. 503 "high demand").
-    private const int MaxAttempts = 3;
+    public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken cancellationToken = default)
+    {
+        var request = new GeminiGenerateRequest
+        {
+            SystemInstruction = new GeminiContent { Parts = new[] { GeminiPart.FromText(systemPrompt) } },
+            Contents = new[] { new GeminiContent { Parts = new[] { GeminiPart.FromText(userMessage) } } },
+            GenerationConfig = new GeminiGenerationConfig { Temperature = _options.ChatTemperature }
+        };
 
-    public async Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken cancellationToken = default)
+        return SendAsync(request, cancellationToken);
+    }
+
+    public Task<string> GenerateJsonAsync(string systemPrompt, string userMessage, object responseSchema, CancellationToken cancellationToken = default)
+    {
+        var request = new GeminiGenerateRequest
+        {
+            SystemInstruction = new GeminiContent { Parts = new[] { GeminiPart.FromText(systemPrompt) } },
+            Contents = new[] { new GeminiContent { Parts = new[] { GeminiPart.FromText(userMessage) } } },
+            GenerationConfig = new GeminiGenerationConfig
+            {
+                // Classification must be deterministic: the same question always routes the same way.
+                Temperature = 0,
+                ResponseMimeType = "application/json",
+                ResponseSchema = responseSchema
+            }
+        };
+
+        return SendAsync(request, cancellationToken);
+    }
+
+    public Task<string> GenerateFromDocumentAsync(string instruction, byte[] document, string mimeType, CancellationToken cancellationToken = default)
+    {
+        if (document == null || document.Length == 0)
+            throw new ArgumentException("Document content cannot be empty.", nameof(document));
+
+        var request = new GeminiGenerateRequest
+        {
+            Contents = new[]
+            {
+                new GeminiContent
+                {
+                    Parts = new[]
+                    {
+                        GeminiPart.FromInlineData(mimeType, Convert.ToBase64String(document)),
+                        GeminiPart.FromText(instruction)
+                    }
+                }
+            },
+            GenerationConfig = new GeminiGenerationConfig { Temperature = 0 }
+        };
+
+        return SendAsync(request, cancellationToken);
+    }
+
+    private async Task<string> SendAsync(GeminiGenerateRequest payload, CancellationToken cancellationToken)
     {
         var requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/models/{_options.ChatModel}:generateContent?key={_options.ApiKey}";
-
-        var payload = new GeminiGenerateRequest
-        {
-            SystemInstruction = new GeminiContent { Parts = new[] { new GeminiPart { Text = systemPrompt } } },
-            Contents = new[] { new GeminiContent { Parts = new[] { new GeminiPart { Text = userMessage } } } }
-        };
 
         for (var attempt = 1; ; attempt++)
         {
@@ -73,34 +121,73 @@ public class GeminiChatClient : IGeminiChatClient
 
 // --- Gemini generateContent request/response contract (single definition for the whole module) ---
 
-file sealed class GeminiGenerateRequest
+internal sealed class GeminiGenerateRequest
 {
     [JsonPropertyName("system_instruction")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public GeminiContent? SystemInstruction { get; set; }
 
     [JsonPropertyName("contents")]
     public GeminiContent[] Contents { get; set; } = Array.Empty<GeminiContent>();
+
+    [JsonPropertyName("generationConfig")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GeminiGenerationConfig? GenerationConfig { get; set; }
 }
 
-file sealed class GeminiContent
+internal sealed class GeminiGenerationConfig
+{
+    [JsonPropertyName("temperature")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Temperature { get; set; }
+
+    [JsonPropertyName("responseMimeType")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResponseMimeType { get; set; }
+
+    [JsonPropertyName("responseSchema")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public object? ResponseSchema { get; set; }
+}
+
+internal sealed class GeminiContent
 {
     [JsonPropertyName("parts")]
     public GeminiPart[] Parts { get; set; } = Array.Empty<GeminiPart>();
 }
 
-file sealed class GeminiPart
+internal sealed class GeminiPart
 {
     [JsonPropertyName("text")]
-    public string Text { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Text { get; set; }
+
+    [JsonPropertyName("inline_data")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GeminiInlineData? InlineData { get; set; }
+
+    public static GeminiPart FromText(string text) => new() { Text = text };
+
+    public static GeminiPart FromInlineData(string mimeType, string base64Data)
+        => new() { InlineData = new GeminiInlineData { MimeType = mimeType, Data = base64Data } };
 }
 
-file sealed class GeminiGenerateResponse
+internal sealed class GeminiInlineData
+{
+    [JsonPropertyName("mime_type")]
+    public string MimeType { get; set; } = string.Empty;
+
+    [JsonPropertyName("data")]
+    public string Data { get; set; } = string.Empty;
+}
+
+internal sealed class GeminiGenerateResponse
 {
     [JsonPropertyName("candidates")]
     public GeminiCandidate[]? Candidates { get; set; }
 }
 
-file sealed class GeminiCandidate
+internal sealed class GeminiCandidate
 {
     [JsonPropertyName("content")]
     public GeminiContent? Content { get; set; }

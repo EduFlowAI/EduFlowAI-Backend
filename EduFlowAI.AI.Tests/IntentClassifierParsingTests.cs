@@ -108,7 +108,11 @@ public class IntentClassifierParsingTests
         Assert.False(ok);
         Assert.Equal("knowledge", dto.PrimaryIntent);
         Assert.Equal("knowledge_rag", dto.RoutedTo);
-        Assert.True(dto.RequiresClarification);
+
+        // A parse failure is our defect, not the user's ambiguity: answer from the knowledge base
+        // rather than pushing them into a clarification loop. Clarification is reserved for a
+        // successful classification whose confidence is below the configured threshold.
+        Assert.False(dto.RequiresClarification);
     }
 
     [Fact]

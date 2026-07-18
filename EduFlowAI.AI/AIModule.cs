@@ -29,6 +29,9 @@ public static class AIModule
         services.AddOptions<ChatSessionOptions>()
             .BindConfiguration(ChatSessionOptions.SectionName);
 
+        services.AddOptions<IntentClassificationOptions>()
+            .BindConfiguration(IntentClassificationOptions.SectionName);
+
         // Clock abstraction so session expiry is testable with a fake time provider.
         services.TryAddSingleton(TimeProvider.System);
 

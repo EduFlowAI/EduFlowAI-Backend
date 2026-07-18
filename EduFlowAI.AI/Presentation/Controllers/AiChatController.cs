@@ -88,6 +88,31 @@ public class AiChatController : ControllerBase
             history,
             cancellationToken);
 
+        // Too ambiguous to route confidently: ask rather than risk answering from the wrong agent.
+        if (classification.RequiresClarification)
+        {
+            var clarification = ClarificationPrompt(language);
+
+            _sessionManager.AddTurn(sessionId, new ConversationTurnDto
+            {
+                Question = sanitizedQuestion,
+                Intent = classification.PrimaryIntent,
+                RoutedTo = "clarification",
+                Answer = clarification,
+                Timestamp = DateTimeOffset.UtcNow
+            });
+
+            return Ok(new
+            {
+                answer = clarification,
+                intent = classification.PrimaryIntent,
+                confidence = classification.Confidence,
+                requiresClarification = true,
+                routedTo = "clarification",
+                language
+            });
+        }
+
         // Unhandled failures (e.g. a Gemini outage) propagate to the global exception handler,
         // which returns a safe 502/500 ProblemDetails instead of leaking the exception message.
         string answer = classification.RoutedTo switch
@@ -120,6 +145,42 @@ public class AiChatController : ControllerBase
             language
         });
     }
+
+    /// <summary>
+    /// Diagnostic: classifies a message and reports where it would be routed, without creating a
+    /// session or dispatching to an agent. One model call instead of two or three, which makes
+    /// verifying routing accuracy cheap.
+    /// </summary>
+    [HttpPost("classify")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Classify([FromBody] ChatQueryRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Question))
+            return BadRequest("Question cannot be empty");
+
+        var language = LanguageDetectionService.DetectLanguage(request.Question);
+        var sanitizedQuestion = InputSanitizerService.MaskSensitiveNumbers(request.Question);
+
+        var classification = await _intentClassifier.ClassifyAsync(
+            sanitizedQuestion,
+            new List<ConversationTurnDto>(),
+            cancellationToken);
+
+        return Ok(new
+        {
+            intent = classification.PrimaryIntent,
+            confidence = classification.Confidence,
+            routedTo = classification.RequiresClarification ? "clarification" : classification.RoutedTo,
+            requiresClarification = classification.RequiresClarification,
+            language
+        });
+    }
+
+    // Shown when the router is not confident enough to pick an intent.
+    private static string ClarificationPrompt(string language) => language == "ar"
+        ? "لم أتأكد تماماً من سؤالك. هل تسأل عن معلومات عامة عن المعهد والمسارات، أم عن حالة طلبك أنت، أم تريد ترشيح المسار المناسب لك؟"
+        : "I'm not sure I understood. Are you asking about general information on ITI and its tracks, about the status of your own application, or for a recommendation on which track suits you?";
 
     [HttpPost("session/{sessionId}/end")]
     [ProducesResponseType(StatusCodes.Status200OK)]

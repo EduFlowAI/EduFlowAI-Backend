@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
@@ -19,12 +21,74 @@ public class IntentClassifierService : IIntentClassifier
 
     private static readonly string[] ValidIntents = { "knowledge", "status", "recommendation" };
 
+    /// <summary>
+    /// Response schema sent to Gemini. Constraining primaryIntent to an enum makes an
+    /// out-of-vocabulary intent impossible, and JSON mode removes code-fence/prose parsing risk.
+    /// </summary>
+    private static readonly object ResponseSchema = new
+    {
+        type = "OBJECT",
+        properties = new
+        {
+            primaryIntent = new { type = "STRING", @enum = new[] { "knowledge", "status", "recommendation" } },
+            confidence = new { type = "NUMBER" },
+            reason = new { type = "STRING" }
+        },
+        required = new[] { "primaryIntent", "confidence" }
+    };
+
+    // Classification is decided by what the user WANTS, not by which nouns appear. The explicit
+    // tracks rule exists because "Which are available tracks?" (a factual listing) was previously
+    // classified as a recommendation purely because it contains the word "track".
+    private const string SystemPrompt = """
+You are the intent router for the Information Technology Institute (ITI) admission assistant.
+Classify the user's message into exactly one intent.
+
+Decide by what the user WANTS, never by which keywords appear:
+
+knowledge - objective, public facts about ITI: programs, which tracks exist, what a track covers,
+admission requirements, eligibility, grades, fees, dates, locations, the selection process and how
+to apply. The answer is identical for every applicant and comes from official documents. Listing,
+describing or explaining things belongs here.
+
+status - the state of THIS user's own application or records: whether they were accepted, how far
+their application has progressed, whether their documents were received.
+
+recommendation - asks the assistant to CHOOSE or ADVISE which option suits THIS user personally,
+based on their background, interests, skills or preferences.
+
+Critical rule: asking WHICH TRACKS EXIST is knowledge. Asking WHICH TRACK SUITS ME is
+recommendation. The word "track" never decides the intent by itself - the user's goal does.
+
+Set confidence honestly. Use a low value when the message is vague, very short, or could
+reasonably belong to more than one intent.
+
+Examples:
+"Which are available tracks?" -> knowledge
+"What tracks does ITI offer?" -> knowledge
+"ما هي المسارات المتاحة؟" -> knowledge
+"Tell me about the .NET track" -> knowledge
+"What is the minimum graduation grade?" -> knowledge
+"How do I apply?" -> knowledge
+"Which track should I choose?" -> recommendation
+"Which track fits someone with a design background?" -> recommendation
+"ما هو المسار المناسب لي؟" -> recommendation
+"What is my application status?" -> status
+"هل تم قبولي؟" -> status
+"Did you receive my documents?" -> status
+""";
+
     private readonly IGeminiChatClient _chatClient;
+    private readonly IntentClassificationOptions _options;
     private readonly ILogger<IntentClassifierService> _logger;
 
-    public IntentClassifierService(IGeminiChatClient chatClient, ILogger<IntentClassifierService> logger)
+    public IntentClassifierService(
+        IGeminiChatClient chatClient,
+        IOptions<IntentClassificationOptions> options,
+        ILogger<IntentClassifierService> logger)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        _options = options?.Value ?? new IntentClassificationOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -37,50 +101,42 @@ public class IntentClassifierService : IIntentClassifier
             ? string.Join("\n", context.TakeLast(3).Select(t => $"Q: {t.Question}\nA: {t.Answer}"))
             : "No prior conversation history.";
 
-        var systemPrompt = @"
-You are an intent classifier for Information Technology Institute chatbot:
-Classify the user's question into ONE of these categories:
-1. 'knowledge' - Questions about admission requirements, eligibility, processes, timelines, FAQs
-2. 'status' - Questions about application status, admission decisions, progress
-3. 'recommendation' - Questions about program recommendations, track suggestions
-
-Respond ONLY with valid JSON in this exact format:
-{
-  ""primaryIntent"": ""knowledge"" | ""status"" | ""recommendation"",
-  ""confidence"": 0.95,
-  ""requiresClarification"": false
-}
-
-Confidence should be 0.0 to 1.0.
-";
-
-        var userMessage = $@"
-Conversation context:
+        var userMessage = $"""
+Conversation so far:
 {contextText}
 
-Current question: {userQuestion}
+Message to classify:
+{userQuestion}
+""";
 
-Classify this question. Respond ONLY with JSON.
-";
-
-        var responseText = await _chatClient.GenerateAsync(systemPrompt, userMessage, cancellationToken);
+        var responseText = await _chatClient.GenerateJsonAsync(SystemPrompt, userMessage, ResponseSchema, cancellationToken);
 
         if (!TryParseIntentResponse(responseText, out var classification))
         {
+            // Our problem, not the user's: answer from the knowledge base rather than forcing a
+            // clarification loop. The warning makes the silent fallback visible in logs.
             _logger.LogWarning(
-                "Intent classifier could not parse a valid intent from the model response; " +
-                "falling back to 'knowledge'. Raw response: {RawResponse}",
+                "Intent classifier could not parse a valid intent; falling back to 'knowledge'. Raw response: {RawResponse}",
                 responseText);
+            return classification;
+        }
+
+        if (classification.Confidence < _options.MinConfidence)
+        {
+            _logger.LogInformation(
+                "Intent '{Intent}' below confidence threshold ({Confidence} < {Threshold}); asking the user to clarify.",
+                classification.PrimaryIntent, classification.Confidence, _options.MinConfidence);
+            classification.RequiresClarification = true;
         }
 
         return classification;
     }
 
     /// <summary>
-    /// Parses the model's raw text into an intent classification. Tolerates Markdown code
-    /// fences and surrounding prose, matches JSON property names case-insensitively, validates
-    /// the intent value, clamps confidence to [0,1], and derives RoutedTo. Returns false (with a
-    /// safe 'knowledge' fallback in <paramref name="result"/>) when no valid intent can be read.
+    /// Parses the model's response into a classification. JSON mode makes the happy path trivial,
+    /// but this stays tolerant of Markdown fences and surrounding prose so a model that ignores
+    /// the schema degrades instead of failing. Returns false (with a safe 'knowledge' fallback in
+    /// <paramref name="result"/>) when no valid intent can be read.
     /// </summary>
     internal static bool TryParseIntentResponse(string? responseText, out IntentClassificationDto result)
     {
@@ -110,6 +166,7 @@ Classify this question. Respond ONLY with JSON.
         parsed.PrimaryIntent = intent;
         parsed.Confidence = Math.Clamp(parsed.Confidence, 0m, 1m);
         parsed.RoutedTo = RouteFor(intent);
+        parsed.RequiresClarification = false;
         result = parsed;
         return true;
     }
@@ -126,7 +183,7 @@ Classify this question. Respond ONLY with JSON.
         PrimaryIntent = "knowledge",
         Confidence = 0.5m,
         RoutedTo = "knowledge_rag",
-        RequiresClarification = true
+        RequiresClarification = false
     };
 
     /// <summary>Extracts the outermost JSON object from text that may include code fences or prose.</summary>
