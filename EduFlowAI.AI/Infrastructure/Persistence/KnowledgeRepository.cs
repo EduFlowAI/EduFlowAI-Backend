@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Pgvector.EntityFrameworkCore;
+using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Domain.Entities;
 
@@ -66,15 +67,21 @@ public class KnowledgeRepository : IKnowledgeRepository
             .CountAsync(c => c.KnowledgeBaseDocumentId == documentId, cancellationToken);
     }
 
-    public async Task<List<string>> SearchChunksByEmbeddingAsync(
+    public async Task<List<RetrievedChunkDto>> SearchChunksByEmbeddingAsync(
         Pgvector.Vector embedding,
         int limit = 5,
         CancellationToken cancellationToken = default)
     {
+        // Join to the parent document so each chunk carries its source title.
         return await _context.Set<KnowledgeBaseChunk>()
             .OrderBy(c => c.Embedding.CosineDistance(embedding))
             .Take(limit)
-            .Select(c => c.Content)
+            .Select(c => new RetrievedChunkDto
+            {
+                Content = c.Content,
+                DocumentId = c.KnowledgeBaseDocumentId,
+                SourceTitle = c.Document.FileName
+            })
             .ToListAsync(cancellationToken);
     }
 }

@@ -115,13 +115,26 @@ public class AiChatController : ControllerBase
 
         // Unhandled failures (e.g. a Gemini outage) propagate to the global exception handler,
         // which returns a safe 502/500 ProblemDetails instead of leaking the exception message.
-        string answer = classification.RoutedTo switch
+        string answer;
+        var sources = new List<string>();
+
+        switch (classification.RoutedTo)
         {
-            "knowledge_rag" => await _chatService.AnswerWithContextAsync(sanitizedQuestion, language, cancellationToken),
-            "status_agent" => await _statusAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken),
-            "recommendations_agent" => await _recommendationsAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken),
-            _ => "Unable to process your question at this time."
-        };
+            case "knowledge_rag":
+                var rag = await _chatService.AnswerWithContextAsync(sanitizedQuestion, language, cancellationToken);
+                answer = rag.Answer;
+                sources = rag.Sources; // documents the answer drew on
+                break;
+            case "status_agent":
+                answer = await _statusAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken);
+                break;
+            case "recommendations_agent":
+                answer = await _recommendationsAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken);
+                break;
+            default:
+                answer = "Unable to process your question at this time.";
+                break;
+        }
 
         // Store the masked text: history is replayed to the classifier as context on later turns,
         // so keeping the raw value here would send it to Gemini anyway.
@@ -142,7 +155,8 @@ public class AiChatController : ControllerBase
             confidence = classification.Confidence,
             requiresClarification = classification.RequiresClarification,
             routedTo = classification.RoutedTo,
-            language
+            language,
+            sources
         });
     }
 
