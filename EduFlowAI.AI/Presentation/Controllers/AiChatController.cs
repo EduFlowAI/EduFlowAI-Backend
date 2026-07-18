@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
-using EduFlowAI.AI.Infrastructure.ExternalServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,15 +17,21 @@ public class AiChatController : ControllerBase
     private readonly ISessionManager _sessionManager;
     private readonly IIntentClassifier _intentClassifier;
     private readonly AiChatService _chatService;
+    private readonly IStatusAgent _statusAgent;
+    private readonly IRecommendationsAgent _recommendationsAgent;
 
     public AiChatController(
         ISessionManager sessionManager,
         IIntentClassifier intentClassifier,
-        AiChatService chatService)
+        AiChatService chatService,
+        IStatusAgent statusAgent,
+        IRecommendationsAgent recommendationsAgent)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _intentClassifier = intentClassifier ?? throw new ArgumentNullException(nameof(intentClassifier));
         _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
+        _statusAgent = statusAgent ?? throw new ArgumentNullException(nameof(statusAgent));
+        _recommendationsAgent = recommendationsAgent ?? throw new ArgumentNullException(nameof(recommendationsAgent));
     }
 
     [HttpPost("session/create")]
@@ -73,8 +78,8 @@ public class AiChatController : ControllerBase
         string answer = classification.RoutedTo switch
         {
             "knowledge_rag" => await _chatService.AnswerWithContextAsync(request.Question, language, cancellationToken),
-            "status_agent" => MockAgentService.GetStatusAgentResponse(request.Question),
-            "recommendations_agent" => MockAgentService.GetRecommendationsAgentResponse(request.Question),
+            "status_agent" => await _statusAgent.GetResponseAsync(request.Question, language, cancellationToken),
+            "recommendations_agent" => await _recommendationsAgent.GetResponseAsync(request.Question, language, cancellationToken),
             _ => "Unable to process your question at this time."
         };
 

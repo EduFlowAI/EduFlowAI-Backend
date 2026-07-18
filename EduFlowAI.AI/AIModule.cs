@@ -48,6 +48,11 @@ public static class AIModule
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
 
+        // Placeholder agents behind interfaces: the Applications / Agents module owners swap in
+        // their real implementations by changing only these two registrations.
+        services.AddScoped<IStatusAgent, MockStatusAgent>();
+        services.AddScoped<IRecommendationsAgent, MockRecommendationsAgent>();
+
         // No longer a typed HttpClient — it depends on IGeminiChatClient now.
         services.AddScoped<IIntentClassifier, IntentClassifierService>();
 
