@@ -18,7 +18,7 @@ namespace EduFlowAI.Worker
 
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
-            builder.Services.AddAIModule();
+            builder.Services.AddAIModule(builder.Configuration);
             builder.Services.AddCommunicationModule();
 
             // we will add consumers later
