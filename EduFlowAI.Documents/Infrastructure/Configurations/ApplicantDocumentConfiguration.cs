@@ -39,11 +39,6 @@ namespace EduFlowAI.Documents.Infrastructure.Configurations
             .HasDatabaseName("IX_ApplicantDocument_ReviewQueue");
 
             builder.HasIndex(d => new { d.ApplicationId, d.DocumentType }).IsUnique();
-
-            builder.HasOne(d => d.Application)
-                .WithMany()
-                .HasForeignKey(d => d.ApplicationId)
-                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

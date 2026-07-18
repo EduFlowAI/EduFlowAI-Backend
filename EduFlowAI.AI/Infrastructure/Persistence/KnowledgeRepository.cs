@@ -1,69 +1,77 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Pgvector.EntityFrameworkCore;
+using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Domain.Entities;
 
 namespace EduFlowAI.AI.Infrastructure.Persistence;
 
+/// <summary>
+/// Data access for the knowledge base, via the module's own <see cref="IAIDbContext"/> contract
+/// rather than the concrete EduFlowAIDbContext. EduFlowAI.Persistence already references this
+/// project, so depending on the concrete context would create a circular project reference; the
+/// interface (implemented by the shared context and registered in AddPersistence) avoids that
+/// while still exposing only this module's tables.
+/// </summary>
 public class KnowledgeRepository : IKnowledgeRepository
 {
-    private readonly DbContext _context;
+    private readonly IAIDbContext _context;
 
-    public KnowledgeRepository(DbContext context)
+    public KnowledgeRepository(IAIDbContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public async Task<KnowledgeBaseDocument?> GetDocumentByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.Set<KnowledgeBaseDocument>()
+        return await _context.KnowledgeBaseDocuments
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
     }
 
     public async Task<List<KnowledgeBaseDocument>> GetAllDocumentsAsync(CancellationToken cancellationToken = default)
     {
-        return await _context.Set<KnowledgeBaseDocument>().ToListAsync(cancellationToken);
+        return await _context.KnowledgeBaseDocuments.ToListAsync(cancellationToken);
     }
 
     public async Task AddDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken = default)
     {
-        await _context.Set<KnowledgeBaseDocument>().AddAsync(document, cancellationToken);
+        await _context.KnowledgeBaseDocuments.AddAsync(document, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken = default)
     {
-        _context.Set<KnowledgeBaseDocument>().Update(document);
+        _context.KnowledgeBaseDocuments.Update(document);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken = default)
     {
         // Chunks are removed by the FK cascade configured on KnowledgeBaseChunk.
-        _context.Set<KnowledgeBaseDocument>().Remove(document);
+        _context.KnowledgeBaseDocuments.Remove(document);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteAllChunksAsync(CancellationToken cancellationToken = default)
     {
-        await _context.Set<KnowledgeBaseChunk>().ExecuteDeleteAsync(cancellationToken);
+        await _context.KnowledgeBaseChunks.ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task AddChunksAsync(List<KnowledgeBaseChunk> chunks, CancellationToken cancellationToken = default)
     {
-        await _context.Set<KnowledgeBaseChunk>().AddRangeAsync(chunks, cancellationToken);
+        await _context.KnowledgeBaseChunks.AddRangeAsync(chunks, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> GetChunkCountAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        return await _context.Set<KnowledgeBaseChunk>()
+        return await _context.KnowledgeBaseChunks
             .CountAsync(c => c.KnowledgeBaseDocumentId == documentId, cancellationToken);
     }
 
@@ -73,7 +81,7 @@ public class KnowledgeRepository : IKnowledgeRepository
         CancellationToken cancellationToken = default)
     {
         // Join to the parent document so each chunk carries its source title.
-        return await _context.Set<KnowledgeBaseChunk>()
+        return await _context.KnowledgeBaseChunks
             .OrderBy(c => c.Embedding.CosineDistance(embedding))
             .Take(limit)
             .Select(c => new RetrievedChunkDto

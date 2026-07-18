@@ -1,10 +1,16 @@
 using EduFlowAI.Admission;
+using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.AI;
+using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
+using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Documents;
+using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Identity;
+using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Persistence;
+using EduFlowAI.Persistence.Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -23,7 +29,7 @@ namespace EduFlowAI.Api
                 .AddApplicationPart(typeof(DocumentsModule).Assembly)
                 .AddApplicationPart(typeof(AIModule).Assembly)
                 .AddApplicationPart(typeof(CommunicationModule).Assembly);
-           
+
             builder.Services.AddOpenApi();
             builder.Services.AddEndpointsApiExplorer();
 
@@ -41,31 +47,19 @@ namespace EduFlowAI.Api
                     .AllowAnyMethod());
             });
 
-            // Register EduFlowAIDbContext with Npgsql provider
-            builder.Services.AddDbContext<EduFlowAIDbContext>(options =>
-            {
-                options.UseNpgsql(
-                    builder.Configuration.GetConnectionString("DefaultConnection"),
-                    npgsqlOptions =>
-                    {
-                        // Enable vector operations for Npgsql
-                        npgsqlOptions.UseVector();
-                    });
-            });
-
-            // Expose the shared context as the base DbContext type so the AI module's
-            // repository/controller can depend on DbContext without referencing
-            // EduFlowAI.Persistence (which would create a circular project reference).
-            builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<EduFlowAIDbContext>());
+            // Registers EduFlowAIDbContext with Npgsql/pgvector and maps each module's DbContext
+            // interface (IAIDbContext, IDocumentDbContext, ...) onto it. The AI module depends on
+            // IAIDbContext rather than the concrete context, which avoids a circular project
+            // reference back to EduFlowAI.Persistence.
+            builder.Services.AddPersistence(builder.Configuration);
 
             // register modules
             var identityBuilder = builder.Services.AddIdentityModule();
+            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
             builder.Services.AddAIModule();
             builder.Services.AddCommunicationModule();
-
-            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
 
             #region Swagger
             builder.Services.AddSwaggerGen(options =>
@@ -88,7 +82,7 @@ namespace EduFlowAI.Api
                     {
                         [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
                     });
-                }); 
+                });
             #endregion
 
             var app = builder.Build();

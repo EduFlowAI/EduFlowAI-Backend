@@ -9,6 +9,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+    <PackageReference Include="WolverineFx" Version="6.19.0" />
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.19.0" />
+    <PackageReference Include="WolverineFx.Postgresql" Version="6.19.0" />
+    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.19.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,4 +10,8 @@
     <Folder Include="Events\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" Version="6.19.0" />
+  </ItemGroup>
+
 </Project>

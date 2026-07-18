@@ -8,9 +8,9 @@ using System.Text;
 
 namespace EduFlowAI.Admission.Infrastructure.Configurations
 {
-    public class ApplicationConfiguration : IEntityTypeConfiguration<Application>
+    public class ApplicationConfiguration : IEntityTypeConfiguration<Domain.Entities.Application>
     {
-        public void Configure(EntityTypeBuilder<Application> builder)
+        public void Configure(EntityTypeBuilder<Domain.Entities.Application> builder)
         {
             builder.ToTable("Applications", schema: "admissions");
 
