@@ -48,6 +48,9 @@ public static class AIModule
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
 
+        // Shared flag so the chat endpoint can report unavailability during a KB re-sync.
+        services.AddSingleton<KnowledgeBaseSyncState>();
+
         // Placeholder agents behind interfaces: the Applications / Agents module owners swap in
         // their real implementations by changing only these two registrations.
         services.AddScoped<IStatusAgent, MockStatusAgent>();

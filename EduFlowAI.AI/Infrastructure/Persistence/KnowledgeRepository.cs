@@ -42,6 +42,18 @@ public class KnowledgeRepository : IKnowledgeRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken = default)
+    {
+        // Chunks are removed by the FK cascade configured on KnowledgeBaseChunk.
+        _context.Set<KnowledgeBaseDocument>().Remove(document);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAllChunksAsync(CancellationToken cancellationToken = default)
+    {
+        await _context.Set<KnowledgeBaseChunk>().ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task AddChunksAsync(List<KnowledgeBaseChunk> chunks, CancellationToken cancellationToken = default)
     {
         await _context.Set<KnowledgeBaseChunk>().AddRangeAsync(chunks, cancellationToken);

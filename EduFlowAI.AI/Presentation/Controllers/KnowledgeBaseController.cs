@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.Interfaces;
@@ -6,6 +7,7 @@ using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Domain.Entities;
 using EduFlowAI.AI.Domain.Enums;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,15 +22,18 @@ public class KnowledgeBaseController : ControllerBase
     private readonly KnowledgeBaseService _knowledgeBaseService;
     private readonly IKnowledgeRepository _repository;
     private readonly IFileStorageService _fileStorage;
+    private readonly KnowledgeBaseSyncState _syncState;
 
     public KnowledgeBaseController(
         KnowledgeBaseService knowledgeBaseService,
         IKnowledgeRepository repository,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        KnowledgeBaseSyncState syncState)
     {
         _knowledgeBaseService = knowledgeBaseService ?? throw new ArgumentNullException(nameof(knowledgeBaseService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
+        _syncState = syncState ?? throw new ArgumentNullException(nameof(syncState));
     }
 
     /// <summary>
@@ -111,5 +116,68 @@ public class KnowledgeBaseController : ControllerBase
             chunkCount,
             createdAt = document.CreatedAt
         });
+    }
+
+    /// <summary>Lists all knowledge-base documents. SuperAdmin-only once Identity is wired (Task 11).</summary>
+    [HttpGet("documents")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListDocuments(CancellationToken cancellationToken)
+    {
+        var documents = await _repository.GetAllDocumentsAsync(cancellationToken);
+
+        return Ok(documents.Select(d => new
+        {
+            documentId = d.Id,
+            fileName = d.FileName,
+            status = d.Status.ToString(),
+            errorMessage = d.ErrorMessage,
+            createdAt = d.CreatedAt
+        }));
+    }
+
+    /// <summary>Deletes a document, its chunks (cascade), and its stored PDF.</summary>
+    [HttpDelete("{documentId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteDocument(Guid documentId, CancellationToken cancellationToken)
+    {
+        // Deleting mid-sync would race the rebuild that is currently writing chunks.
+        if (_syncState.IsSyncing)
+            return Conflict("A knowledge-base sync is in progress. Try again once it completes.");
+
+        var deleted = await _knowledgeBaseService.DeleteDocumentAsync(documentId, cancellationToken);
+        if (!deleted)
+            return NotFound($"No document found with ID {documentId}.");
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Rebuilds every embedding from the stored PDFs (team plan Part 8). All chunks are deleted
+    /// and regenerated; the chat endpoint reports the assistant as unavailable while this runs.
+    /// </summary>
+    [HttpPost("sync")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Sync(CancellationToken cancellationToken)
+    {
+        if (!_syncState.TryBeginSync())
+            return Conflict("A knowledge-base sync is already in progress.");
+
+        try
+        {
+            var result = await _knowledgeBaseService.ResyncAllAsync(cancellationToken);
+            return Ok(new
+            {
+                totalDocuments = result.TotalDocuments,
+                indexed = result.Indexed,
+                failed = result.Failed
+            });
+        }
+        finally
+        {
+            _syncState.EndSync();
+        }
     }
 }

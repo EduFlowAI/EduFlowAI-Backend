@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
+using EduFlowAI.AI.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,19 +20,22 @@ public class AiChatController : ControllerBase
     private readonly AiChatService _chatService;
     private readonly IStatusAgent _statusAgent;
     private readonly IRecommendationsAgent _recommendationsAgent;
+    private readonly KnowledgeBaseSyncState _syncState;
 
     public AiChatController(
         ISessionManager sessionManager,
         IIntentClassifier intentClassifier,
         AiChatService chatService,
         IStatusAgent statusAgent,
-        IRecommendationsAgent recommendationsAgent)
+        IRecommendationsAgent recommendationsAgent,
+        KnowledgeBaseSyncState syncState)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _intentClassifier = intentClassifier ?? throw new ArgumentNullException(nameof(intentClassifier));
         _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
         _statusAgent = statusAgent ?? throw new ArgumentNullException(nameof(statusAgent));
         _recommendationsAgent = recommendationsAgent ?? throw new ArgumentNullException(nameof(recommendationsAgent));
+        _syncState = syncState ?? throw new ArgumentNullException(nameof(syncState));
     }
 
     [HttpPost("session/create")]
@@ -59,6 +63,12 @@ public class AiChatController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(sessionId))
             return BadRequest("Session ID is required");
+
+        // Retrieval would return partial results while the knowledge base is being rebuilt.
+        if (_syncState.IsSyncing)
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                "The assistant is briefly unavailable while the knowledge base is being updated. Please try again shortly.");
 
         var session = _sessionManager.GetSession(sessionId);
         if (session == null)
