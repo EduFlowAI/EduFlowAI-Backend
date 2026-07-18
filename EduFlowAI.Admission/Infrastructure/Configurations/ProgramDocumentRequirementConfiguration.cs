@@ -28,6 +28,14 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .HasFilter("\"RequiredForGender\" IS NOT NULL")
                 .IsUnique();
 
+            builder.Property(x => x.CreatedAt)
+                 .HasDefaultValueSql("now()")
+                 .IsRequired();
+
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
             // Relationship: Program -> DocumentRequirements (Cascade delete)
             builder.HasOne(x => x.Program)
                 .WithMany(x => x.DocumentRequirements)

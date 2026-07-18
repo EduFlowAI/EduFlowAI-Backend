@@ -19,6 +19,11 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(x => x.Governorate)
                 .HasMaxLength(100);
 
+            builder.Property(x => x.CreatedAt)
+               .HasDefaultValueSql("now()")
+               .IsRequired();
+
+
             builder.Property(x => x.IsActive)
                 .HasDefaultValue(true);
         }

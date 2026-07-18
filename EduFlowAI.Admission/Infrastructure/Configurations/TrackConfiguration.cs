@@ -22,6 +22,14 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .HasColumnType("jsonb")
                 .IsRequired();
 
+            builder.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
             // Relationship: Program -> Tracks (Restrict delete)
             builder.HasOne(x => x.Program)
                 .WithMany(x => x.Tracks)

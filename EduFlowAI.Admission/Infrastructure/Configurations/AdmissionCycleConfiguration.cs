@@ -22,6 +22,27 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             // Only allow Draft, Active, Closed
             builder.ToTable(t => t.HasCheckConstraint("CK_AdmissionCycle_Status", "\"Status\" IN ('Draft', 'Active', 'Closed')"));
 
+
+            builder.Property(x => x.StartDate)
+                 .HasColumnType("date")
+                 .IsRequired();
+
+            builder.Property(x => x.DeadlineUtc)
+                .HasColumnType("timestamp with time zone")
+                .IsRequired();
+
+            builder.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.Property(x => x.ClosedAt)
+                .HasColumnType("timestamp with time zone");
+
+
             // Guarantee exactly one Active cycle at a time globally
             builder.HasIndex(x => x.Status)
                 .HasDatabaseName("uq_cycle_active")
