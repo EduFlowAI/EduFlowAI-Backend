@@ -27,16 +27,32 @@ public class IntentClassifierService : IIntentRouter
         type = "OBJECT",
         properties = new
         {
-            primaryIntent = new { type = "STRING", @enum = new[] { "knowledge", "status", "recommendation" } },
-            confidence = new { type = "NUMBER" },
-            reason = new { type = "STRING" }
+            intents = new
+            {
+                type = "ARRAY",
+                items = new
+                {
+                    type = "OBJECT",
+                    properties = new
+                    {
+                        intent = new { type = "STRING", @enum = new[] { "knowledge", "status", "recommendation" } },
+                        confidence = new { type = "NUMBER" },
+                        reason = new { type = "STRING" }
+                    },
+                    required = new[] { "intent", "confidence" }
+                }
+            }
         },
-        required = new[] { "primaryIntent", "confidence" }
+        required = new[] { "intents" }
     };
 
     private const string SystemPrompt = """
 You are the intent router for the Information Technology Institute (ITI) admission assistant.
-Classify the user's message into exactly one intent.
+Identify every intent the user's message asks for, ranked with the most likely one first.
+
+Most messages contain exactly one intent - return a list of one. Only return more than one when the
+message genuinely asks for separate things that need separate answers. Never invent an intent the
+user did not ask for, and never repeat the same intent twice.
 
 Decide by what the user WANTS, never by which keywords appear:
 
@@ -54,8 +70,10 @@ based on their background, interests, skills or preferences.
 Critical rule: asking WHICH TRACKS EXIST is knowledge. Asking WHICH TRACK SUITS ME is
 recommendation. The word "track" never decides the intent by itself - the user's goal does.
 
-Set confidence honestly. Use a low value when the message is vague, very short, or could
-reasonably belong to more than one intent.
+Set each confidence honestly. Use a low value when the message is vague, very short, or when you
+cannot tell which intent it belongs to. A message that is ambiguous between two intents is NOT a
+multi-intent message - it is one intent with low confidence. Only list several intents when the user
+clearly asks for several things.
 
 Examples:
 "Which are available tracks?" -> knowledge
@@ -70,6 +88,11 @@ Examples:
 "What is my application status?" -> status
 "هل تم قبولي؟" -> status
 "Did you receive my documents?" -> status
+
+Multi-intent examples:
+"What is my application status, and which track should I choose?" -> status, recommendation
+"ما هي المسارات المتاحة وهل تم قبولي؟" -> knowledge, status
+"Tell me the admission requirements and whether my documents arrived" -> knowledge, status
 """;
 
     private readonly IGeminiChatClient _chatClient;
@@ -122,10 +145,13 @@ Message to classify:
             classification.RequiresClarification = true;
         }
 
+        DropWeakSecondaryIntents(classification);
+
         return classification;
     }
 
-    // Tolerates Markdown fences and stray prose in case a model ignores the schema.
+    // Tolerates Markdown fences and stray prose in case a model ignores the schema, and still
+    // accepts the older single-intent shape.
     internal static bool TryParseIntentResponse(string? responseText, out IntentClassificationDto result)
     {
         result = KnowledgeFallback();
@@ -134,10 +160,10 @@ Message to classify:
         if (json is null)
             return false;
 
-        IntentClassificationDto? parsed;
+        RawIntentResponse? parsed;
         try
         {
-            parsed = JsonSerializer.Deserialize<IntentClassificationDto>(json, JsonOptions);
+            parsed = JsonSerializer.Deserialize<RawIntentResponse>(json, JsonOptions);
         }
         catch (JsonException)
         {
@@ -147,16 +173,62 @@ Message to classify:
         if (parsed is null)
             return false;
 
-        var intent = (parsed.PrimaryIntent ?? string.Empty).Trim().ToLowerInvariant();
-        if (Array.IndexOf(ValidIntents, intent) < 0)
+        var candidates = parsed.Intents ?? new List<RawDetectedIntent>();
+
+        // A model that ignored the array schema may still have answered the old way.
+        if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(parsed.PrimaryIntent))
+            candidates.Add(new RawDetectedIntent { Intent = parsed.PrimaryIntent, Confidence = parsed.Confidence });
+
+        var intents = candidates
+            .Select(c => new DetectedIntentDto
+            {
+                Intent = (c.Intent ?? string.Empty).Trim().ToLowerInvariant(),
+                Confidence = Math.Clamp(c.Confidence, 0m, 1m)
+            })
+            .Where(c => Array.IndexOf(ValidIntents, c.Intent) >= 0)
+            // The same intent twice is meaningless; keep the most confident.
+            .GroupBy(c => c.Intent)
+            .Select(g => g.OrderByDescending(c => c.Confidence).First())
+            .OrderByDescending(c => c.Confidence)
+            .ToList();
+
+        if (intents.Count == 0)
             return false;
 
-        parsed.PrimaryIntent = intent;
-        parsed.Confidence = Math.Clamp(parsed.Confidence, 0m, 1m);
-        parsed.RoutedTo = RouteFor(intent);
-        parsed.RequiresClarification = false;
-        result = parsed;
+        foreach (var intent in intents)
+            intent.RoutedTo = RouteFor(intent.Intent);
+
+        result = new IntentClassificationDto
+        {
+            Intents = intents,
+            PrimaryIntent = intents[0].Intent,
+            Confidence = intents[0].Confidence,
+            RoutedTo = intents[0].RoutedTo,
+            RequiresClarification = false
+        };
+
         return true;
+    }
+
+    // Dispatching a barely-detected second intent costs an extra call and answers something the
+    // user did not ask. The primary is always kept, however weak - clarification covers that case.
+    private void DropWeakSecondaryIntents(IntentClassificationDto classification)
+    {
+        if (classification.Intents.Count < 2)
+            return;
+
+        var kept = classification.Intents
+            .Take(1)
+            .Concat(classification.Intents.Skip(1).Where(i => i.Confidence >= _options.MinConfidence))
+            .ToList();
+
+        if (kept.Count != classification.Intents.Count)
+        {
+            _logger.LogInformation(
+                "Dropped {Count} secondary intent(s) below the confidence threshold of {Threshold}.",
+                classification.Intents.Count - kept.Count, _options.MinConfidence);
+            classification.Intents = kept;
+        }
     }
 
     private static string RouteFor(string intent) => intent switch
@@ -168,11 +240,32 @@ Message to classify:
 
     private static IntentClassificationDto KnowledgeFallback() => new()
     {
+        Intents = new List<DetectedIntentDto>
+        {
+            new() { Intent = "knowledge", Confidence = 0.5m, RoutedTo = "knowledge_rag" }
+        },
         PrimaryIntent = "knowledge",
         Confidence = 0.5m,
         RoutedTo = "knowledge_rag",
         RequiresClarification = false
     };
+
+    private sealed class RawIntentResponse
+    {
+        public List<RawDetectedIntent>? Intents { get; set; }
+
+        // Only present when a model answered in the pre-multi-intent shape.
+        public string? PrimaryIntent { get; set; }
+
+        public decimal Confidence { get; set; }
+    }
+
+    private sealed class RawDetectedIntent
+    {
+        public string? Intent { get; set; }
+
+        public decimal Confidence { get; set; }
+    }
 
     private static string? ExtractJsonObject(string? text)
     {

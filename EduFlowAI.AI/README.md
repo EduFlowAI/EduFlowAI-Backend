@@ -52,6 +52,9 @@ Verified end to end against a local PostgreSQL + pgvector database using a real 
   language, with the source documents returned alongside.
 - Intent routing is deterministic — the same question always routes the same way — and asks the user
   to clarify instead of guessing when confidence is below the configured threshold.
+- **Multi-intent:** *"What is my application status, and which track should I choose?"* returns both
+  intents, ranked most likely first, so the caller can dispatch each and combine the replies.
+  `PrimaryIntent` stays the top-ranked entry, so single-intent callers are unaffected.
 - Knowledge base management: list, delete, and a full re-sync that rebuilds every embedding from the
   stored originals.
 - Long digit runs (National ID) are masked before any text leaves for the model.
@@ -99,10 +102,6 @@ Config worth knowing: `Gemini:ChatModel`, `Gemini:EmbeddingModel`, `Gemini:Embed
 ---
 
 ## What's left
-
-**Multi-intent detection.** The task list asks for one *or more* intents per message; the router
-currently returns exactly one. The response DTO and Kamel's "combine multiple results" task both
-depend on this, so it is the next thing I'll build.
 
 **Evaluation datasets.** RAG and router evaluation sets are on my task list and don't exist yet.
 Routing has been checked against a hand-written golden set, but retrieval quality has not been

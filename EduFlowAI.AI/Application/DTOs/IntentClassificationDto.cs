@@ -1,9 +1,16 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace EduFlowAI.AI.Application.DTOs;
 
 public class IntentClassificationDto
 {
+    // Every intent found in the message, ranked most likely first. A single-intent message
+    // is a list of one, so callers can always iterate this.
+    [JsonPropertyName("intents")]
+    public List<DetectedIntentDto> Intents { get; set; } = new();
+
+    // The top-ranked intent. Kept so a caller that handles one intent still works.
     [JsonPropertyName("primaryIntent")]
     public string PrimaryIntent { get; set; } = string.Empty;  // "knowledge", "status", "recommendation"
 
