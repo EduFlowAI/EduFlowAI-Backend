@@ -4,6 +4,7 @@ using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
+using EduFlowAI.AI.Infrastructure.Processing;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,13 @@ public static class AIModule
 
         services.AddOptions<IntentClassificationOptions>()
             .BindConfiguration(IntentClassificationOptions.SectionName);
+
+        services.AddOptions<IngestionOptions>()
+            .BindConfiguration(IngestionOptions.SectionName);
+
+        // Prefers AI transcription (accurate ligatures, reading order, tables) and falls back to
+        // local iText extraction for oversized files or transcription failures.
+        services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 
         // Clock abstraction so session expiry is testable with a fake time provider.
         services.TryAddSingleton(TimeProvider.System);

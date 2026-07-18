@@ -51,7 +51,7 @@ public class GeminiEmbeddingService : IAiEmbeddingService
                     new { text = text }
                 }
             },
-            outputDimensionality = 768
+            outputDimensionality = _options.EmbeddingDimensions
         };
 
         // Retry up to 3 times with increasing delay — protects against transient

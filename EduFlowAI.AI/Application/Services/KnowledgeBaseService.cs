@@ -1,42 +1,48 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Domain.Entities;
 using EduFlowAI.AI.Domain.Enums;
-using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.Options;
+using EduFlowAI.AI.Infrastructure.Processing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
 public class KnowledgeBaseService
 {
-    private readonly PdfProcessingService _pdfProcessor;
+    private readonly IDocumentTextExtractor _textExtractor;
     private readonly IAiEmbeddingService _embeddingService;
     private readonly IKnowledgeRepository _repository;
     private readonly IFileStorageService _fileStorage;
+    private readonly IngestionOptions _ingestionOptions;
     private readonly ILogger<KnowledgeBaseService> _logger;
 
     public KnowledgeBaseService(
-        PdfProcessingService pdfProcessor,
+        IDocumentTextExtractor textExtractor,
         IAiEmbeddingService embeddingService,
         IKnowledgeRepository repository,
         IFileStorageService fileStorage,
+        IOptions<IngestionOptions> ingestionOptions,
         ILogger<KnowledgeBaseService> logger)
     {
-        _pdfProcessor = pdfProcessor ?? throw new ArgumentNullException(nameof(pdfProcessor));
+        _textExtractor = textExtractor ?? throw new ArgumentNullException(nameof(textExtractor));
         _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
+        _ingestionOptions = ingestionOptions?.Value ?? new IngestionOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
-    /// Extracts, chunks, embeds and stores a previously-uploaded document. The physical PDF is
-    /// read from protected storage using the document's StorageKey, so this can be re-run during
-    /// a knowledge-base re-sync without the original HTTP upload stream.
+    /// Extracts, chunks, embeds and stores a previously-uploaded document. The file is read from
+    /// protected storage using the document's StorageKey, so this can be re-run during a
+    /// knowledge-base re-sync without the original HTTP upload stream.
     /// </summary>
     public async Task IngestDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
@@ -58,8 +64,8 @@ public class KnowledgeBaseService
 
     /// <summary>
     /// Rebuilds the whole knowledge base: deletes every chunk, then re-indexes each stored
-    /// document from its PDF. A document whose file is missing or unreadable is marked Failed and
-    /// the rest continue (team plan Part 8).
+    /// document from its source file. A document whose file is missing or unreadable is marked
+    /// Failed and the rest continue (team plan Part 8).
     /// </summary>
     public async Task<KnowledgeBaseSyncResultDto> ResyncAllAsync(CancellationToken cancellationToken = default)
     {
@@ -116,24 +122,30 @@ public class KnowledgeBaseService
         document.Status = KnowledgeBaseStatus.Indexing;
         await _repository.UpdateDocumentAsync(document, cancellationToken);
 
-        List<string> rawTextChunks;
-        await using (var pdfStream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken))
+        byte[] content;
+        await using (var stored = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken))
         {
-            rawTextChunks = _pdfProcessor.ExtractChunksFromPdf(pdfStream);
+            using var buffer = new MemoryStream();
+            await stored.CopyToAsync(buffer, cancellationToken);
+            content = buffer.ToArray();
         }
 
-        if (rawTextChunks.Count == 0)
-            throw new InvalidOperationException("The uploaded PDF did not yield any readable text lines.");
+        var text = await _textExtractor.ExtractTextAsync(content, document.FileName, cancellationToken);
+
+        var chunks = TextChunker.Split(text, _ingestionOptions.MaxChunkChars, _ingestionOptions.ChunkOverlapChars);
+
+        if (chunks.Count == 0)
+            throw new InvalidOperationException("The document did not yield any readable text.");
 
         var embeddedChunks = new List<KnowledgeBaseChunk>();
-        foreach (var textContent in rawTextChunks)
+        foreach (var chunkText in chunks)
         {
-            var coordinateArray = await _embeddingService.GenerateEmbeddingAsync(textContent, cancellationToken);
+            var coordinateArray = await _embeddingService.GenerateEmbeddingAsync(chunkText, cancellationToken);
 
             embeddedChunks.Add(new KnowledgeBaseChunk
             {
                 KnowledgeBaseDocumentId = document.Id,
-                Content = textContent,
+                Content = chunkText,
                 Embedding = new Pgvector.Vector(coordinateArray)
             });
         }
@@ -143,6 +155,8 @@ public class KnowledgeBaseService
         document.Status = KnowledgeBaseStatus.Indexed;
         document.ErrorMessage = null;
         await _repository.UpdateDocumentAsync(document, cancellationToken);
+
+        _logger.LogInformation("Indexed {FileName} into {ChunkCount} chunks.", document.FileName, embeddedChunks.Count);
     }
 
     private async Task MarkFailedAsync(KnowledgeBaseDocument document, Exception ex, CancellationToken cancellationToken)

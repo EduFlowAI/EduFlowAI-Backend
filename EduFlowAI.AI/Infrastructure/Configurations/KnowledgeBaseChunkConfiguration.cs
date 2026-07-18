@@ -19,7 +19,11 @@ namespace EduFlowAI.AI.Infrastructure.Configurations
 
             builder.Property(c => c.Content).HasColumnType("text").IsRequired();
 
-            builder.Property(c => c.Embedding).HasColumnType("vector(768)").IsRequired();
+            // Must match Gemini:EmbeddingDimensions. 1536 retains far more of the embedding
+            // model's 3072-dimension signal than 768 while staying under pgvector's 2000-dimension
+            // ANN index limit, so an HNSW/IVFFlat index remains possible if the corpus grows.
+            // Changing this requires a migration plus a full re-sync (vectors change width).
+            builder.Property(c => c.Embedding).HasColumnType("vector(1536)").IsRequired();
 
             // Bind the relationship to the actual navigation properties
             // (KnowledgeBaseChunk.Document <-> KnowledgeBaseDocument.Chunks) so EF maps a

@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.Interfaces;
@@ -7,6 +9,7 @@ using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Domain.Entities;
 using EduFlowAI.AI.Domain.Enums;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.Processing;
 using EduFlowAI.AI.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -53,16 +56,22 @@ public class KnowledgeBaseController : ControllerBase
         if (file.Length > MaxUploadBytes)
             return StatusCode(StatusCodes.Status413PayloadTooLarge, "The uploaded file exceeds the 20 MB limit.");
 
-        // Content-based validation: a real PDF starts with "%PDF". This cannot be spoofed by
-        // simply renaming a non-PDF to .pdf, and it prevents iText from throwing on junk input.
-        await using (var probeStream = file.OpenReadStream())
+        var isPlainText = DocumentTextExtractor.IsPlainText(file.FileName);
+
+        // Content-based validation for PDFs: a real PDF starts with "%PDF". This cannot be spoofed
+        // by renaming a non-PDF to .pdf, and it prevents the parser from throwing on junk input.
+        if (!isPlainText)
         {
+            await using var probeStream = file.OpenReadStream();
             if (!await PdfFileValidation.HasPdfHeaderAsync(probeStream, cancellationToken))
-                return BadRequest("Invalid format. Only standard PDF (.pdf) documents are supported.");
+                return BadRequest("Unsupported file. Upload a PDF, or a .txt / .md text file.");
         }
 
         var documentId = Guid.NewGuid();
-        var storageKey = $"knowledge-base/{documentId}.pdf";
+        var extension = isPlainText ? Path.GetExtension(file.FileName).ToLowerInvariant() : ".pdf";
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = ".txt";
+        var storageKey = $"knowledge-base/{documentId}{extension}";
 
         await using (var uploadStream = file.OpenReadStream())
         {
@@ -115,6 +124,51 @@ public class KnowledgeBaseController : ControllerBase
             errorMessage = document.ErrorMessage,
             chunkCount,
             createdAt = document.CreatedAt
+        });
+    }
+
+    /// <summary>
+    /// Adds knowledge by pasting text directly — faster than authoring a document for short FAQs
+    /// or policy notes. The text is persisted to protected storage like any upload, so re-sync
+    /// rebuilds it identically.
+    /// </summary>
+    [HttpPost("text")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddText([FromBody] AddTextRequest request, CancellationToken cancellationToken)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest("Content cannot be empty.");
+
+        var title = string.IsNullOrWhiteSpace(request.Title) ? "Pasted note" : request.Title.Trim();
+
+        var documentId = Guid.NewGuid();
+        var storageKey = $"knowledge-base/{documentId}.txt";
+
+        using (var buffer = new MemoryStream(Encoding.UTF8.GetBytes(request.Content)))
+        {
+            await _fileStorage.SaveAsync(buffer, storageKey, cancellationToken);
+        }
+
+        var documentRecord = new KnowledgeBaseDocument
+        {
+            Id = documentId,
+            // The .txt suffix is what tells the extractor to decode rather than transcribe.
+            FileName = title.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? title : $"{title}.txt",
+            StorageKey = storageKey,
+            // TODO(Task 11 / Identity): use the authenticated SuperAdmin's id from JWT claims.
+            UploadedByUserId = "system-seed",
+            Status = KnowledgeBaseStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        await _repository.AddDocumentAsync(documentRecord, cancellationToken);
+        await _knowledgeBaseService.IngestDocumentAsync(documentId, cancellationToken);
+
+        return Ok(new
+        {
+            DocumentId = documentId,
+            Message = "Text added to the knowledge base."
         });
     }
 
@@ -180,4 +234,12 @@ public class KnowledgeBaseController : ControllerBase
             _syncState.EndSync();
         }
     }
+}
+
+public class AddTextRequest
+{
+    /// <summary>Short label shown in the document list (e.g. "Refund policy").</summary>
+    public string? Title { get; set; }
+
+    public string Content { get; set; } = string.Empty;
 }
