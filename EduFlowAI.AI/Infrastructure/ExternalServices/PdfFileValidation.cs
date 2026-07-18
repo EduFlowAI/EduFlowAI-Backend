@@ -5,14 +5,10 @@ using System.Threading.Tasks;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
-/// <summary>
-/// Content-based PDF validation. A real PDF starts with the bytes "%PDF"; checking the magic
-/// header is authoritative and cannot be spoofed by renaming a non-PDF to ".pdf".
-/// </summary>
+// Checks the magic header, which renaming a file to .pdf cannot fake.
 public static class PdfFileValidation
 {
-    // "%PDF"
-    private static readonly byte[] PdfMagic = { 0x25, 0x50, 0x44, 0x46 };
+    private static readonly byte[] PdfMagic = { 0x25, 0x50, 0x44, 0x46 }; // "%PDF"
 
     public static bool HasPdfHeader(ReadOnlySpan<byte> header)
     {

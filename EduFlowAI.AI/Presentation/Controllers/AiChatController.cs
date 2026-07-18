@@ -64,7 +64,7 @@ public class AiChatController : ControllerBase
         if (string.IsNullOrWhiteSpace(sessionId))
             return BadRequest("Session ID is required");
 
-        // Retrieval would return partial results while the knowledge base is being rebuilt.
+        // Retrieval would hit a half-rebuilt index.
         if (_syncState.IsSyncing)
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
@@ -76,11 +76,9 @@ public class AiChatController : ControllerBase
 
         var history = _sessionManager.GetHistory(sessionId, lastN: 3);
 
-        // Detect language from the ORIGINAL text: masking replaces digits with an English token,
-        // which could otherwise flip an Arabic question to "en".
+        // From the original text - the mask token is English and would skew a short Arabic question.
         var language = LanguageDetectionService.DetectLanguage(request.Question);
 
-        // Everything sent outbound to Gemini uses the masked text.
         var sanitizedQuestion = InputSanitizerService.MaskSensitiveNumbers(request.Question);
 
         var classification = await _intentClassifier.ClassifyAsync(
@@ -88,7 +86,7 @@ public class AiChatController : ControllerBase
             history,
             cancellationToken);
 
-        // Too ambiguous to route confidently: ask rather than risk answering from the wrong agent.
+        // Too ambiguous to route: ask rather than answer from the wrong agent.
         if (classification.RequiresClarification)
         {
             var clarification = ClarificationPrompt(language);
@@ -113,8 +111,6 @@ public class AiChatController : ControllerBase
             });
         }
 
-        // Unhandled failures (e.g. a Gemini outage) propagate to the global exception handler,
-        // which returns a safe 502/500 ProblemDetails instead of leaking the exception message.
         string answer;
         var sources = new List<string>();
 
@@ -123,7 +119,7 @@ public class AiChatController : ControllerBase
             case "knowledge_rag":
                 var rag = await _chatService.AnswerWithContextAsync(sanitizedQuestion, language, cancellationToken);
                 answer = rag.Answer;
-                sources = rag.Sources; // documents the answer drew on
+                sources = rag.Sources;
                 break;
             case "status_agent":
                 answer = await _statusAgent.GetResponseAsync(sanitizedQuestion, language, cancellationToken);
@@ -136,8 +132,7 @@ public class AiChatController : ControllerBase
                 break;
         }
 
-        // Store the masked text: history is replayed to the classifier as context on later turns,
-        // so keeping the raw value here would send it to Gemini anyway.
+        // Masked, because history is replayed to the classifier on later turns.
         var turn = new ConversationTurnDto
         {
             Question = sanitizedQuestion,
@@ -160,11 +155,7 @@ public class AiChatController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Diagnostic: classifies a message and reports where it would be routed, without creating a
-    /// session or dispatching to an agent. One model call instead of two or three, which makes
-    /// verifying routing accuracy cheap.
-    /// </summary>
+    // Diagnostic: reports where a message would route, without a session or a dispatch.
     [HttpPost("classify")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -191,7 +182,6 @@ public class AiChatController : ControllerBase
         });
     }
 
-    // Shown when the router is not confident enough to pick an intent.
     private static string ClarificationPrompt(string language) => language == "ar"
         ? "لم أتأكد تماماً من سؤالك. هل تسأل عن معلومات عامة عن المعهد والمسارات، أم عن حالة طلبك أنت، أم تريد ترشيح المسار المناسب لك؟"
         : "I'm not sure I understood. Are you asking about general information on ITI and its tracks, about the status of your own application, or for a recommendation on which track suits you?";

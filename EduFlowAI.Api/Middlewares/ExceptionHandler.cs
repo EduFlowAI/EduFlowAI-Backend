@@ -10,11 +10,6 @@ using Microsoft.Extensions.Logging;
 
 namespace EduFlowAI.Api.Middlewares
 {
-    /// <summary>
-    /// Converts unhandled exceptions into RFC 7807 ProblemDetails responses with a safe message
-    /// and a traceId, and logs the full exception server-side. Prevents leaking internal details
-    /// (stack traces, provider error bodies) to API clients.
-    /// </summary>
     public sealed class ExceptionHandler : IExceptionHandler
     {
         private readonly ILogger<ExceptionHandler> _logger;
@@ -29,11 +24,10 @@ namespace EduFlowAI.Api.Middlewares
             Exception exception,
             CancellationToken cancellationToken)
         {
-            // The client disconnected mid-request: nothing useful to send, and not an error to alert on.
             if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
             {
                 _logger.LogInformation("Request {Path} was cancelled by the client.", httpContext.Request.Path);
-                httpContext.Response.StatusCode = 499; // client closed request
+                httpContext.Response.StatusCode = 499;
                 return true;
             }
 
@@ -57,8 +51,7 @@ namespace EduFlowAI.Api.Middlewares
             return true;
         }
 
-        // Maps exception types to a status code and a client-safe message. Internal exception text
-        // is never returned for 5xx; only our own controlled 404 messages are surfaced.
+        // Only our own 404 messages are surfaced; 5xx detail stays in the logs.
         private static (int status, string title, string detail) Map(Exception exception) => exception switch
         {
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource not found", exception.Message),

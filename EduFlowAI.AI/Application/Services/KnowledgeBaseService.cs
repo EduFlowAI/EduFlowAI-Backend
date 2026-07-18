@@ -39,11 +39,6 @@ public class KnowledgeBaseService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    /// Extracts, chunks, embeds and stores a previously-uploaded document. The file is read from
-    /// protected storage using the document's StorageKey, so this can be re-run during a
-    /// knowledge-base re-sync without the original HTTP upload stream.
-    /// </summary>
     public async Task IngestDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
         var document = await _repository.GetDocumentByIdAsync(documentId, cancellationToken);
@@ -62,11 +57,6 @@ public class KnowledgeBaseService
         }
     }
 
-    /// <summary>
-    /// Rebuilds the whole knowledge base: deletes every chunk, then re-indexes each stored
-    /// document from its source file. A document whose file is missing or unreadable is marked
-    /// Failed and the rest continue (team plan Part 8).
-    /// </summary>
     public async Task<KnowledgeBaseSyncResultDto> ResyncAllAsync(CancellationToken cancellationToken = default)
     {
         var documents = await _repository.GetAllDocumentsAsync(cancellationToken);
@@ -98,7 +88,6 @@ public class KnowledgeBaseService
         return result;
     }
 
-    /// <summary>Deletes a document, its chunks (FK cascade), and its stored file. False if not found.</summary>
     public async Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
         var document = await _repository.GetDocumentByIdAsync(documentId, cancellationToken);
@@ -109,14 +98,13 @@ public class KnowledgeBaseService
 
         await _repository.DeleteDocumentAsync(document, cancellationToken);
 
-        // Delete the file only after the database change succeeded, so a DB failure can't orphan the row.
+        // Only after the row is gone, so a DB failure cannot orphan the record.
         if (!string.IsNullOrWhiteSpace(storageKey))
             await _fileStorage.DeleteAsync(storageKey, cancellationToken);
 
         return true;
     }
 
-    // Shared indexing path used by both a first upload and a re-sync.
     private async Task IndexDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken)
     {
         document.Status = KnowledgeBaseStatus.Indexing;

@@ -7,10 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.Storage;
 
-/// <summary>
-/// Local-disk implementation of <see cref="IFileStorageService"/>. Files live under a configured
-/// root folder; relative keys are validated so they cannot escape that root (path-traversal guard).
-/// </summary>
 public class LocalFileStorageService : IFileStorageService
 {
     private readonly string _root;
@@ -63,7 +59,7 @@ public class LocalFileStorageService : IFileStorageService
 
         var combined = Path.GetFullPath(Path.Combine(_root, relativeKey));
 
-        // Guard against keys like "../../secret" escaping the storage root.
+        // Stop keys like "../../secret" escaping the root.
         var rootWithSep = _root.EndsWith(Path.DirectorySeparatorChar)
             ? _root
             : _root + Path.DirectorySeparatorChar;

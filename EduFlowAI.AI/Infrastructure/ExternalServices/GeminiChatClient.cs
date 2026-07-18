@@ -11,18 +11,12 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
-/// <summary>
-/// Single Gemini generateContent client shared by the RAG answer service, the intent classifier
-/// and document transcription. Builds the endpoint from <see cref="GeminiOptions"/> (BaseUrl +
-/// ChatModel), so changing configuration re-points every generation call in one place.
-/// </summary>
 public class GeminiChatClient : IGeminiChatClient
 {
+    private const int MaxAttempts = 3;
+
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;
-
-    // Transient statuses worth retrying: 429 (rate limit) and any 5xx (e.g. 503 "high demand").
-    private const int MaxAttempts = 3;
 
     public GeminiChatClient(HttpClient httpClient, IOptions<GeminiOptions> options)
     {
@@ -50,7 +44,6 @@ public class GeminiChatClient : IGeminiChatClient
             Contents = new[] { new GeminiContent { Parts = new[] { GeminiPart.FromText(userMessage) } } },
             GenerationConfig = new GeminiGenerationConfig
             {
-                // Classification must be deterministic: the same question always routes the same way.
                 Temperature = 0,
                 ResponseMimeType = "application/json",
                 ResponseSchema = responseSchema
@@ -96,8 +89,6 @@ public class GeminiChatClient : IGeminiChatClient
             {
                 var body = await response.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken: cancellationToken);
 
-                // FirstOrDefault guards against an empty candidates/parts array (avoids IndexOutOfRange).
-                // An empty string is a valid "no answer" signal the caller decides how to handle.
                 return body?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
             }
 
@@ -106,7 +97,6 @@ public class GeminiChatClient : IGeminiChatClient
 
             if (isTransient && attempt < MaxAttempts)
             {
-                // Back off (2s, 4s) to ride out a rate-limit window or a demand spike.
                 await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
                 continue;
             }
@@ -118,8 +108,6 @@ public class GeminiChatClient : IGeminiChatClient
         }
     }
 }
-
-// --- Gemini generateContent request/response contract (single definition for the whole module) ---
 
 internal sealed class GeminiGenerateRequest
 {

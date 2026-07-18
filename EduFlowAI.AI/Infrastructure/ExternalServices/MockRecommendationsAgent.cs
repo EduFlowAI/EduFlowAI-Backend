@@ -4,11 +4,6 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
-/// <summary>
-/// Placeholder Recommendations Agent. Deterministic (no randomness) and language-aware.
-/// Replaced by the Agents module's real Track Recommendation service — the owner swaps the DI
-/// registration only; no controller change is needed.
-/// </summary>
 public class MockRecommendationsAgent : IRecommendationsAgent
 {
     private const string ArabicResponse =

@@ -7,11 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.Services;
 
-/// <summary>
-/// Thread-safe in-memory session store. Sessions expire after an idle timeout (evicted lazily on
-/// access and swept opportunistically on create), per-session history is capped, and operations on
-/// a missing/expired session are safe no-ops rather than throwing.
-/// </summary>
 public class InMemorySessionManager : ISessionManager
 {
     private readonly Dictionary<string, ChatSessionDto> _sessions = new();
@@ -30,7 +25,7 @@ public class InMemorySessionManager : ISessionManager
         lock (_lockObject)
         {
             var now = _clock.GetUtcNow();
-            SweepExpired(now); // reclaim memory from abandoned sessions
+            SweepExpired(now);
 
             var session = new ChatSessionDto
             {
@@ -58,7 +53,7 @@ public class InMemorySessionManager : ISessionManager
         {
             var session = GetLiveSession(sessionId);
             if (session == null)
-                return false; // missing or expired — safe no-op (previously threw)
+                return false;
 
             session.History.Add(turn);
 
@@ -93,7 +88,6 @@ public class InMemorySessionManager : ISessionManager
         }
     }
 
-    // Returns the session only if present and not expired; evicts it if expired. Caller holds the lock.
     private ChatSessionDto? GetLiveSession(string sessionId)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))

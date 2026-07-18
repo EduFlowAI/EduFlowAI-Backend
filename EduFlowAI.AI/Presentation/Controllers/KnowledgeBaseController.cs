@@ -39,10 +39,7 @@ public class KnowledgeBaseController : ControllerBase
         _syncState = syncState ?? throw new ArgumentNullException(nameof(syncState));
     }
 
-    /// <summary>
-    /// Uploads a PDF, stores it in protected storage, then extracts text and generates vector
-    /// embeddings via Gemini. SuperAdmin-only once the Identity module is wired (Task 11).
-    /// </summary>
+    // Accepts a PDF or a .txt/.md file. To be restricted to SuperAdmin once auth is wired.
     [HttpPost("upload")]
     [RequestSizeLimit(MaxUploadBytes)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -58,8 +55,6 @@ public class KnowledgeBaseController : ControllerBase
 
         var isPlainText = DocumentTextExtractor.IsPlainText(file.FileName);
 
-        // Content-based validation for PDFs: a real PDF starts with "%PDF". This cannot be spoofed
-        // by renaming a non-PDF to .pdf, and it prevents the parser from throwing on junk input.
         if (!isPlainText)
         {
             await using var probeStream = file.OpenReadStream();
@@ -83,7 +78,7 @@ public class KnowledgeBaseController : ControllerBase
             Id = documentId,
             FileName = file.FileName,
             StorageKey = storageKey,
-            // TODO(Task 11 / Identity): use the authenticated SuperAdmin's id from JWT claims.
+            // TODO: replace with the authenticated user id once auth is wired.
             UploadedByUserId = "system-seed",
             Status = KnowledgeBaseStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow
@@ -91,7 +86,6 @@ public class KnowledgeBaseController : ControllerBase
 
         await _repository.AddDocumentAsync(documentRecord, cancellationToken);
 
-        // Coordinates chunking, Gemini vectorization, and chunk storage (reads the stored file).
         await _knowledgeBaseService.IngestDocumentAsync(documentId, cancellationToken);
 
         return Ok(new
@@ -101,10 +95,7 @@ public class KnowledgeBaseController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Diagnostic endpoint — reports a document's current status directly from the database,
-    /// including its error message (if indexing failed) and how many chunks were saved.
-    /// </summary>
+    // Reads the document row directly, so a slow or failed upload can be told apart.
     [HttpGet("{documentId}/status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -127,11 +118,7 @@ public class KnowledgeBaseController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Adds knowledge by pasting text directly — faster than authoring a document for short FAQs
-    /// or policy notes. The text is persisted to protected storage like any upload, so re-sync
-    /// rebuilds it identically.
-    /// </summary>
+    // Stored like any upload so re-sync rebuilds it the same way.
     [HttpPost("text")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -153,10 +140,10 @@ public class KnowledgeBaseController : ControllerBase
         var documentRecord = new KnowledgeBaseDocument
         {
             Id = documentId,
-            // The .txt suffix is what tells the extractor to decode rather than transcribe.
+            // The .txt suffix tells the extractor to decode rather than transcribe.
             FileName = title.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? title : $"{title}.txt",
             StorageKey = storageKey,
-            // TODO(Task 11 / Identity): use the authenticated SuperAdmin's id from JWT claims.
+            // TODO: replace with the authenticated user id once auth is wired.
             UploadedByUserId = "system-seed",
             Status = KnowledgeBaseStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow
@@ -172,7 +159,6 @@ public class KnowledgeBaseController : ControllerBase
         });
     }
 
-    /// <summary>Lists all knowledge-base documents. SuperAdmin-only once Identity is wired (Task 11).</summary>
     [HttpGet("documents")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ListDocuments(CancellationToken cancellationToken)
@@ -189,14 +175,14 @@ public class KnowledgeBaseController : ControllerBase
         }));
     }
 
-    /// <summary>Deletes a document, its chunks (cascade), and its stored PDF.</summary>
+    // Removes the row, its chunks (cascade) and the stored file.
     [HttpDelete("{documentId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteDocument(Guid documentId, CancellationToken cancellationToken)
     {
-        // Deleting mid-sync would race the rebuild that is currently writing chunks.
+        // Would race the rebuild currently writing chunks.
         if (_syncState.IsSyncing)
             return Conflict("A knowledge-base sync is in progress. Try again once it completes.");
 
@@ -207,10 +193,7 @@ public class KnowledgeBaseController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Rebuilds every embedding from the stored PDFs (team plan Part 8). All chunks are deleted
-    /// and regenerated; the chat endpoint reports the assistant as unavailable while this runs.
-    /// </summary>
+    // Deletes and regenerates every embedding from the stored files.
     [HttpPost("sync")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -238,7 +221,6 @@ public class KnowledgeBaseController : ControllerBase
 
 public class AddTextRequest
 {
-    /// <summary>Short label shown in the document list (e.g. "Refund policy").</summary>
     public string? Title { get; set; }
 
     public string Content { get; set; } = string.Empty;

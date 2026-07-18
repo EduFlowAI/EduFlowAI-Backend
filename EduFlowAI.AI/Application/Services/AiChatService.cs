@@ -21,14 +21,13 @@ public class AiChatService
 
     public async Task<RagAnswerDto> AnswerWithContextAsync(
         string userQuestion,
-        string language,   // "ar" or "en" — detected by the controller and passed in
+        string language,
         CancellationToken cancellationToken = default)
     {
         var chunks = await _retrievalService.RetrieveContextAsync(userQuestion, limit: 5, cancellationToken);
 
         if (chunks.Count == 0)
         {
-            // Phrased as the institute would: no mention of an empty knowledge base.
             return new RagAnswerDto
             {
                 Answer = language == "ar"
@@ -43,8 +42,8 @@ public class AiChatService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Label every excerpt with its document. Without this the model receives anonymous text
-        // and cannot answer questions about what the knowledge base covers.
+        // Labelling each excerpt with its document is what lets the assistant answer
+        // "what do you offer" questions instead of seeing anonymous text.
         var contextText = string.Join("\n\n---\n\n",
             chunks.Select(c => $"[Source document: {c.SourceTitle}]\n{c.Content}"));
 

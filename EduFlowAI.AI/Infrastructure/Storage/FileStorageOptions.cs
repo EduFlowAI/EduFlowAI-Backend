@@ -4,8 +4,6 @@ public class FileStorageOptions
 {
     public const string SectionName = "FileStorage";
 
-    /// <summary>
-    /// Root folder for protected files. A relative value resolves against the app base directory.
-    /// </summary>
+    // Relative values resolve against the app base directory.
     public string Root { get; set; } = "protected-files";
 }

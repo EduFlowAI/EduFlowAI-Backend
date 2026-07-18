@@ -19,19 +19,11 @@ namespace EduFlowAI.AI.Infrastructure.Configurations
 
             builder.Property(c => c.Content).HasColumnType("text").IsRequired();
 
-            // Must match Gemini:EmbeddingDimensions. 1536 retains far more of the embedding
-            // model's 3072-dimension signal than 768 while staying under pgvector's 2000-dimension
-            // ANN index limit, so an HNSW/IVFFlat index remains possible if the corpus grows.
-            // Changing this requires a migration plus a full re-sync (vectors change width).
+            // Must match Gemini:EmbeddingDimensions; changing it needs a migration and a re-sync.
             builder.Property(c => c.Embedding).HasColumnType("vector(1536)").IsRequired();
 
-            // Bind the relationship to the actual navigation properties
-            // (KnowledgeBaseChunk.Document <-> KnowledgeBaseDocument.Chunks) so EF maps a
-            // SINGLE foreign key on KnowledgeBaseDocumentId. Using the anonymous
-            // HasOne<KnowledgeBaseDocument>().WithMany() form leaves those navigations
-            // unmapped, and EF then discovers them as a second relationship with a shadow
-            // "DocumentId" FK column — the duplicate-FK drift that caused insert failures
-            // (Npgsql 23502: null value in column "KnowledgeBaseDocumentId").
+            // Bind both navigations explicitly. The HasOne<T>().WithMany() form leaves them
+            // unmapped and EF adds a second, shadow "DocumentId" FK.
             builder.HasOne(c => c.Document)
                 .WithMany(d => d.Chunks)
                 .HasForeignKey(c => c.KnowledgeBaseDocumentId)

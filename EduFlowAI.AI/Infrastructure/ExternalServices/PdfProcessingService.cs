@@ -6,15 +6,9 @@ using iText.Kernel.Pdf.Canvas.Parser;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
-/// <summary>
-/// Local (offline) PDF text extraction with iText. This is the fallback path: it is fast and free
-/// but loses ligatures and can interleave multi-column layouts, so
-/// <see cref="Processing.DocumentTextExtractor"/> prefers AI transcription and only falls back
-/// here for oversized files or transcription failures.
-/// </summary>
+// Offline fallback used when AI transcription is unavailable or the file is too large.
 public class PdfProcessingService
 {
-    /// <summary>Extracts raw text from every page of a PDF stream.</summary>
     public string ExtractRawText(Stream pdfStream)
     {
         if (pdfStream == null)
@@ -38,7 +32,7 @@ public class PdfProcessingService
             if (!string.IsNullOrWhiteSpace(pageText))
             {
                 textBuilder.AppendLine(pageText);
-                textBuilder.AppendLine(); // blank line => a block boundary for the chunker
+                textBuilder.AppendLine();
             }
         }
 

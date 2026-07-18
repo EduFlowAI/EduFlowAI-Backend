@@ -21,10 +21,7 @@ public class IntentClassifierService : IIntentClassifier
 
     private static readonly string[] ValidIntents = { "knowledge", "status", "recommendation" };
 
-    /// <summary>
-    /// Response schema sent to Gemini. Constraining primaryIntent to an enum makes an
-    /// out-of-vocabulary intent impossible, and JSON mode removes code-fence/prose parsing risk.
-    /// </summary>
+    // The enum constraint makes an out-of-vocabulary intent impossible.
     private static readonly object ResponseSchema = new
     {
         type = "OBJECT",
@@ -37,9 +34,6 @@ public class IntentClassifierService : IIntentClassifier
         required = new[] { "primaryIntent", "confidence" }
     };
 
-    // Classification is decided by what the user WANTS, not by which nouns appear. The explicit
-    // tracks rule exists because "Which are available tracks?" (a factual listing) was previously
-    // classified as a recommendation purely because it contains the word "track".
     private const string SystemPrompt = """
 You are the intent router for the Information Technology Institute (ITI) admission assistant.
 Classify the user's message into exactly one intent.
@@ -113,8 +107,7 @@ Message to classify:
 
         if (!TryParseIntentResponse(responseText, out var classification))
         {
-            // Our problem, not the user's: answer from the knowledge base rather than forcing a
-            // clarification loop. The warning makes the silent fallback visible in logs.
+            // Our problem, not the user's - answer anyway rather than forcing a clarification loop.
             _logger.LogWarning(
                 "Intent classifier could not parse a valid intent; falling back to 'knowledge'. Raw response: {RawResponse}",
                 responseText);
@@ -132,12 +125,7 @@ Message to classify:
         return classification;
     }
 
-    /// <summary>
-    /// Parses the model's response into a classification. JSON mode makes the happy path trivial,
-    /// but this stays tolerant of Markdown fences and surrounding prose so a model that ignores
-    /// the schema degrades instead of failing. Returns false (with a safe 'knowledge' fallback in
-    /// <paramref name="result"/>) when no valid intent can be read.
-    /// </summary>
+    // Tolerates Markdown fences and stray prose in case a model ignores the schema.
     internal static bool TryParseIntentResponse(string? responseText, out IntentClassificationDto result)
     {
         result = KnowledgeFallback();
@@ -186,7 +174,6 @@ Message to classify:
         RequiresClarification = false
     };
 
-    /// <summary>Extracts the outermost JSON object from text that may include code fences or prose.</summary>
     private static string? ExtractJsonObject(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -194,7 +181,6 @@ Message to classify:
 
         var t = text.Trim();
 
-        // Strip a leading ```json / ``` fence and its closing ``` if present.
         if (t.StartsWith("```", StringComparison.Ordinal))
         {
             var firstNewline = t.IndexOf('\n');

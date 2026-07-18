@@ -11,17 +11,6 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.Processing;
 
-/// <summary>
-/// Extracts text from an uploaded document, preferring AI transcription.
-///
-/// Local iText extraction corrupts ligatures ("proficiency" -> "pro?ciency") and interleaves the
-/// reading order of multi-column layouts, which poisons the knowledge base at the source. Sending
-/// the document to the model instead yields clean Markdown with correct reading order and intact
-/// tables. iText remains the fallback for oversized files, transcription failures, or when AI
-/// extraction is switched off.
-///
-/// Plain-text uploads are decoded directly — no model call needed.
-/// </summary>
 public class DocumentTextExtractor : IDocumentTextExtractor
 {
     private const string TranscriptionInstruction = """
@@ -57,10 +46,11 @@ Rules:
         if (content == null || content.Length == 0)
             throw new ArgumentException("Document content cannot be empty.", nameof(content));
 
-        // Text uploads need no extraction at all.
         if (IsPlainText(fileName))
             return DecodeText(content);
 
+        // iText loses ligatures and interleaves multi-column layouts, so transcribe with the model
+        // when possible and keep local extraction as the fallback.
         if (_options.UseAiExtraction && content.Length <= _options.MaxInlineBytesForAi)
         {
             try
@@ -71,11 +61,11 @@ Rules:
                 if (!string.IsNullOrWhiteSpace(transcript))
                     return transcript;
 
-                _logger.LogWarning("AI transcription returned empty text for {FileName}; falling back to local extraction.", fileName);
+                _logger.LogWarning("AI transcription returned empty text for {FileName}; using local extraction.", fileName);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogWarning(ex, "AI transcription failed for {FileName}; falling back to local extraction.", fileName);
+                _logger.LogWarning(ex, "AI transcription failed for {FileName}; using local extraction.", fileName);
             }
         }
         else if (content.Length > _options.MaxInlineBytesForAi)
@@ -95,7 +85,6 @@ Rules:
 
     private static string DecodeText(byte[] content)
     {
-        // Honour a UTF-8 BOM if present, otherwise assume UTF-8.
         using var reader = new StreamReader(new MemoryStream(content, writable: false), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         return reader.ReadToEnd();
     }

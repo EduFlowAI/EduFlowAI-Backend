@@ -38,7 +38,6 @@ public class GeminiEmbeddingService : IAiEmbeddingService
             return cachedEmbedding!;
         }
 
-        // Build the Gemini API endpoint url with the API Key query parameter
         string requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/{_options.EmbeddingModel}:embedContent?key={_options.ApiKey}";
 
         var payload = new
@@ -54,9 +53,7 @@ public class GeminiEmbeddingService : IAiEmbeddingService
             outputDimensionality = _options.EmbeddingDimensions
         };
 
-        // Retry up to 3 times with increasing delay — protects against transient
-        // DNS/network blips during long multi-chunk uploads (one chunk failing
-        // shouldn't fail the whole document).
+        // One network blip shouldn't fail a whole multi-chunk document.
         const int maxAttempts = 3;
         Exception? lastException = null;
 
@@ -74,14 +71,12 @@ public class GeminiEmbeddingService : IAiEmbeddingService
                     throw new InvalidOperationException("The Gemini API returned a successful status code, but the embedding payload was empty or malformed.");
                 }
 
-                // Cache before returning so future identical requests hit the cache
                 _cache.CacheEmbedding(text, result.Embedding.Values);
 
                 return result.Embedding.Values;
             }
             catch (HttpRequestException ex) when (attempt < maxAttempts)
             {
-                // Likely a transient DNS/network blip — wait and retry
                 lastException = ex;
                 _logger.LogWarning(ex, "Embedding attempt {Attempt} failed; retrying in {DelaySeconds}s", attempt, attempt * 2);
                 await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);

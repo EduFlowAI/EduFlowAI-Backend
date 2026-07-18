@@ -14,9 +14,6 @@ namespace EduFlowAI.AI;
 
 public static class AIModule
 {
-    // Parameterless to match the team's Program.cs call: builder.Services.AddAIModule();
-    // GeminiOptions is bound from the "Gemini" configuration section via BindConfiguration,
-    // which resolves IConfiguration from DI (no need to pass it in explicitly).
     public static IServiceCollection AddAIModule(this IServiceCollection services)
     {
         services.AddTransient<PdfProcessingService>();
@@ -36,19 +33,14 @@ public static class AIModule
         services.AddOptions<IngestionOptions>()
             .BindConfiguration(IngestionOptions.SectionName);
 
-        // Prefers AI transcription (accurate ligatures, reading order, tables) and falls back to
-        // local iText extraction for oversized files or transcription failures.
         services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 
-        // Clock abstraction so session expiry is testable with a fake time provider.
+        // Injected so session expiry can be tested with a fake clock.
         services.TryAddSingleton(TimeProvider.System);
 
-        // Protected local file storage for uploaded PDFs (swappable for cloud storage later).
         services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
         services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
-
-        // Single Gemini generateContent client shared by the RAG service and the intent classifier.
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
 
         services.AddScoped<KnowledgeBaseService>();
@@ -58,16 +50,12 @@ public static class AIModule
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
-
-        // Shared flag so the chat endpoint can report unavailability during a KB re-sync.
         services.AddSingleton<KnowledgeBaseSyncState>();
 
-        // Placeholder agents behind interfaces: the Applications / Agents module owners swap in
-        // their real implementations by changing only these two registrations.
+        // Swap these two registrations when the real agents land.
         services.AddScoped<IStatusAgent, MockStatusAgent>();
         services.AddScoped<IRecommendationsAgent, MockRecommendationsAgent>();
 
-        // No longer a typed HttpClient — it depends on IGeminiChatClient now.
         services.AddScoped<IIntentClassifier, IntentClassifierService>();
 
         services.AddSingleton<EmbeddingCacheService>();

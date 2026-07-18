@@ -18,10 +18,6 @@ public class KnowledgeBaseRetrievalService
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    /// <summary>
-    /// Embeds the query and returns the most semantically relevant chunks via exact cosine
-    /// distance, each carrying the document it came from.
-    /// </summary>
     public async Task<List<RetrievedChunkDto>> RetrieveContextAsync(
         string query,
         int limit = 5,

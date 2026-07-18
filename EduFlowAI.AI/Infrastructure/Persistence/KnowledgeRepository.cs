@@ -12,13 +12,6 @@ using EduFlowAI.AI.Domain.Entities;
 
 namespace EduFlowAI.AI.Infrastructure.Persistence;
 
-/// <summary>
-/// Data access for the knowledge base, via the module's own <see cref="IAIDbContext"/> contract
-/// rather than the concrete EduFlowAIDbContext. EduFlowAI.Persistence already references this
-/// project, so depending on the concrete context would create a circular project reference; the
-/// interface (implemented by the shared context and registered in AddPersistence) avoids that
-/// while still exposing only this module's tables.
-/// </summary>
 public class KnowledgeRepository : IKnowledgeRepository
 {
     private readonly IAIDbContext _context;
@@ -53,7 +46,7 @@ public class KnowledgeRepository : IKnowledgeRepository
 
     public async Task DeleteDocumentAsync(KnowledgeBaseDocument document, CancellationToken cancellationToken = default)
     {
-        // Chunks are removed by the FK cascade configured on KnowledgeBaseChunk.
+        // Chunks go with it through the FK cascade.
         _context.KnowledgeBaseDocuments.Remove(document);
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -80,7 +73,6 @@ public class KnowledgeRepository : IKnowledgeRepository
         int limit = 5,
         CancellationToken cancellationToken = default)
     {
-        // Join to the parent document so each chunk carries its source title.
         return await _context.KnowledgeBaseChunks
             .OrderBy(c => c.Embedding.CosineDistance(embedding))
             .Take(limit)
