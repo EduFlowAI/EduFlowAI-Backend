@@ -2,7 +2,6 @@ using EduFlowAI.Admission;
 using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.AI;
 using EduFlowAI.AI.Application.DbContextAbstraction;
-using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
 using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Documents;
@@ -29,28 +28,11 @@ namespace EduFlowAI.Api
                 .AddApplicationPart(typeof(DocumentsModule).Assembly)
                 .AddApplicationPart(typeof(AIModule).Assembly)
                 .AddApplicationPart(typeof(CommunicationModule).Assembly);
-
+           
             builder.Services.AddOpenApi();
             builder.Services.AddEndpointsApiExplorer();
 
-            // Global exception handling: unhandled exceptions become safe ProblemDetails responses.
-            builder.Services.AddExceptionHandler<ExceptionHandler>();
-            builder.Services.AddProblemDetails();
-
-            // Local manual-testing dashboard runs from a file:// page (Origin "null") or an
-            // arbitrary localhost port. Applied in Development only - never in production.
-            builder.Services.AddCors(options =>
-            {
-                options.AddPolicy("LocalDevTesting", policy => policy
-                    .SetIsOriginAllowed(_ => true)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod());
-            });
-
-            // Registers EduFlowAIDbContext with Npgsql/pgvector and maps each module's DbContext
-            // interface (IAIDbContext, IDocumentDbContext, ...) onto it. The AI module depends on
-            // IAIDbContext rather than the concrete context, which avoids a circular project
-            // reference back to EduFlowAI.Persistence.
+            // Register EduFlowAIDbContext with Npgsql provider, and DbContext interfaces
             builder.Services.AddPersistence(builder.Configuration);
 
             // register modules
@@ -82,20 +64,14 @@ namespace EduFlowAI.Api
                     {
                         [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
                     });
-                });
+                }); 
             #endregion
 
             var app = builder.Build();
 
-            // Must be first so it wraps the whole pipeline and catches downstream exceptions.
-            app.UseExceptionHandler();
-
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
-                // Must run before endpoint routing so preflight requests get CORS headers.
-                app.UseCors("LocalDevTesting");
-
                 app.MapOpenApi();
 
                 app.UseSwagger();

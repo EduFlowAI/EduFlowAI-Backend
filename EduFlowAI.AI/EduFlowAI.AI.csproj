@@ -27,13 +27,4 @@
     <PackageReference Include="itext" Version="9.7.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Application\DTOs\" />
-    <Folder Include="Application\Interfaces\" />
-    <Folder Include="Application\Services\" />
-    <Folder Include="Application\Validators\" />
-    <Folder Include="Infrastructure\ExternalServices\" />
-    <Folder Include="Presentation\Controllers\" />
-  </ItemGroup>
-
 </Project>

@@ -8,12 +8,12 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.AI.Application.Services;
 
-public class AiChatService
+public class AiChatService : IRagAnswerService
 {
-    private readonly KnowledgeBaseRetrievalService _retrievalService;
+    private readonly IKnowledgeRetrievalService _retrievalService;
     private readonly IGeminiChatClient _chatClient;
 
-    public AiChatService(KnowledgeBaseRetrievalService retrievalService, IGeminiChatClient chatClient)
+    public AiChatService(IKnowledgeRetrievalService retrievalService, IGeminiChatClient chatClient)
     {
         _retrievalService = retrievalService ?? throw new ArgumentNullException(nameof(retrievalService));
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));

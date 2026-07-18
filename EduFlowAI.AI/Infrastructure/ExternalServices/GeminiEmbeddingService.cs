@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
-public class GeminiEmbeddingService : IAiEmbeddingService
+public class GeminiEmbeddingService : IEmbeddingService
 {
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;

@@ -7,12 +7,12 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.AI.Application.Services;
 
-public class KnowledgeBaseRetrievalService
+public class KnowledgeBaseRetrievalService : IKnowledgeRetrievalService
 {
-    private readonly IAiEmbeddingService _embeddingService;
+    private readonly IEmbeddingService _embeddingService;
     private readonly IKnowledgeRepository _repository;
 
-    public KnowledgeBaseRetrievalService(IAiEmbeddingService embeddingService, IKnowledgeRepository repository)
+    public KnowledgeBaseRetrievalService(IEmbeddingService embeddingService, IKnowledgeRepository repository)
     {
         _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));

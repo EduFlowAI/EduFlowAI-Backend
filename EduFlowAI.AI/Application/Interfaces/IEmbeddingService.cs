@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace EduFlowAI.AI.Application.Interfaces;
 
-public interface IAiEmbeddingService
+public interface IEmbeddingService
 {
     // Width comes from Gemini:EmbeddingDimensions and must match the vector column.
    

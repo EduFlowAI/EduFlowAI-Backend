@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
-public class IntentClassifierService : IIntentClassifier
+public class IntentClassifierService : IIntentRouter
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

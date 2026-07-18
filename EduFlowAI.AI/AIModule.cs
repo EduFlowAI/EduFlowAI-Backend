@@ -40,23 +40,18 @@ public static class AIModule
 
         services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 
-        services.AddHttpClient<IAiEmbeddingService, GeminiEmbeddingService>();
+        services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
 
-        services.AddScoped<KnowledgeBaseService>();
-        services.AddScoped<KnowledgeBaseRetrievalService>();
-        services.AddScoped<AiChatService>();
+        services.AddScoped<IKnowledgeIndexingService, KnowledgeBaseService>();
+        services.AddScoped<IKnowledgeRetrievalService, KnowledgeBaseRetrievalService>();
+        services.AddScoped<IRagAnswerService, AiChatService>();
+        services.AddScoped<IIntentRouter, IntentClassifierService>();
 
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
         services.AddSingleton<KnowledgeBaseSyncState>();
-
-        // Swap these two registrations when the real agents land.
-        services.AddScoped<IStatusAgent, MockStatusAgent>();
-        services.AddScoped<IRecommendationsAgent, MockRecommendationsAgent>();
-
-        services.AddScoped<IIntentClassifier, IntentClassifierService>();
 
         services.AddSingleton<EmbeddingCacheService>();
 
