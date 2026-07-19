@@ -1,3 +1,5 @@
+using EduFlowAI.Admission.Application.EligibilityRuleStrategy;
+using EduFlowAI.Admission.Application.Interfaces.EligibilityRuleStrategy;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
@@ -21,6 +23,16 @@ namespace EduFlowAI.Admission
 
             // Register Infrastructure Layer repositories
             services.AddScoped<IApplicationRepository, ApplicationRepository>();
+
+            #region Register Eligibility rules and services
+            services.AddScoped<IEligibilityRuleStrategy, GraduationRecencyRule>();
+            services.AddScoped<IEligibilityRuleStrategy, CumulativeGradeRule>();
+            services.AddScoped<IEligibilityRuleStrategy, NationalityRule>();
+            services.AddScoped<IEligibilityRuleStrategy, MilitaryStatusRule>();
+            // Register the service
+            services.AddScoped<IEligibilityEngine, EligibilityEngine>();
+            #endregion
+
             return services;
         }
 

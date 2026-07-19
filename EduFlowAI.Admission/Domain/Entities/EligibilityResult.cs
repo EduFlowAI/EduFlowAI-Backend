@@ -8,7 +8,9 @@ namespace EduFlowAI.Admission.Domain.Entities
     {
         public Guid Id { get; set; }
         public bool Passed { get; set; }
-        // JSON array of failure reasons; "[]" when Passed = true
+        /// <summary>
+        /// JSON array of failure reasons; "[]" when Passed = true
+        /// </summary>
         public string FailureReasonsJson { get; set; } = "[]";
         public DateTimeOffset EvaluatedAt { get; set; }
 
