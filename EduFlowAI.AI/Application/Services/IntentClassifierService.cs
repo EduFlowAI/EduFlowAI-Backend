@@ -210,6 +210,10 @@ Message to classify:
         return true;
     }
 
+    public string GetClarificationMessage(string language) => language == "ar"
+        ? "لم أتأكد تماماً من سؤالك. هل تسأل عن معلومات عامة عن المعهد والمسارات، أم عن حالة طلبك أنت، أم تريد ترشيح المسار المناسب لك؟"
+        : "I'm not sure I understood. Are you asking about general information on ITI and its tracks, about the status of your own application, or for a recommendation on which track suits you?";
+
     // Dispatching a barely-detected second intent costs an extra call and answers something the
     // user did not ask. The primary is always kept, however weak - clarification covers that case.
     private void DropWeakSecondaryIntents(IntentClassificationDto classification)

@@ -11,4 +11,7 @@ public interface IIntentRouter
         string userQuestion,
         List<ConversationTurnDto> context,
         CancellationToken cancellationToken = default);
+
+    // What to show when RequiresClarification is true. "ar" or "en".
+    string GetClarificationMessage(string language);
 }
