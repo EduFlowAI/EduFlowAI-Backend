@@ -1,8 +1,10 @@
-﻿using System.Security.Claims;
-using EduFlowAI.Admission.Application.DTOs;
+﻿using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace EduFlowAI.Admission.Presentation.Controllers
 {
@@ -11,10 +13,13 @@ namespace EduFlowAI.Admission.Presentation.Controllers
     public class ApplicationsController : ControllerBase
     {
         private readonly IApplicationService _applicationService;
+        private readonly IAdmissionEligibilityService _eligibilityService;
 
-        public ApplicationsController(IApplicationService applicationService)
+        public ApplicationsController(IApplicationService applicationService,
+            IAdmissionEligibilityService eligibilityService)
         {
             _applicationService = applicationService;
+            _eligibilityService = eligibilityService;
         }
 
         // POST: api/modules/admission/applications/draft
@@ -27,6 +32,37 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _applicationService.CreateDraftApplicationAsync(userId, request);
             // Use the built-in StatusCode method to return both the HTTP code and the Result object
             return StatusCode(result.StatusCode, result);
+        }
+
+        // POST: api/modules/admission/applications/evaluate
+        [HttpPost("evaluate")]
+        public async Task<ActionResult<Result<EligibilityResult>>> EvaluateApplicant([FromBody] EvaluateEligibilityRequestDto request)
+        {
+            // 1. Basic validation to ensure required IDs are provided
+            if (request == null || request.ApplicantId == Guid.Empty || request.CycleId == Guid.Empty)
+            {
+                var failureResult = Result<EligibilityResult>.Failure(400, "Invalid request data. Please provide valid IDs.");
+                return StatusCode(failureResult.StatusCode, failureResult);
+            }
+
+            try
+            {
+                // 2. Call the application service to execute the business logic
+                var result = await _eligibilityService.EvaluateApplicantAsync(
+                    request.ApplicantId,
+                    request.CycleId,
+                    request.ApplicationId
+                );
+
+                // 3. Return the evaluation result
+                return Ok(result);
+            }
+            catch(Exception ex)
+            {
+                // General exception handling
+                var errorResult = Result<EligibilityResult>.Failure(500, $"An error occurred during evaluation: {ex.Message}");
+                return StatusCode(errorResult.StatusCode, errorResult);
+            }
         }
     }
 }
