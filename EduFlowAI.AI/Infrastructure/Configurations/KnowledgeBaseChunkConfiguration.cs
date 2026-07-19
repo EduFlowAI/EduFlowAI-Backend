@@ -19,10 +19,13 @@ namespace EduFlowAI.AI.Infrastructure.Configurations
 
             builder.Property(c => c.Content).HasColumnType("text").IsRequired();
 
-            builder.Property(c => c.Embedding).HasColumnType("vector(768)").IsRequired();
+            // Must match Gemini:EmbeddingDimensions; changing it needs a migration and a re-sync.
+            builder.Property(c => c.Embedding).HasColumnType("vector(1536)").IsRequired();
 
-            builder.HasOne<KnowledgeBaseDocument>()
-                .WithMany()
+            // Bind both navigations explicitly. The HasOne<T>().WithMany() form leaves them
+            // unmapped and EF adds a second, shadow "DocumentId" FK.
+            builder.HasOne(c => c.Document)
+                .WithMany(d => d.Chunks)
                 .HasForeignKey(c => c.KnowledgeBaseDocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
         }

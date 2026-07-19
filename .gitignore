@@ -9,6 +9,10 @@
 appsettings.Development.json
 Migrations/
 
+# local working notes and manual test tooling
+PLAN.md
+tools/
+
 # User-specific files
 *.rsuser
 *.suo

@@ -1,8 +1,19 @@
+using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Recommendation;
 using EduFlowAI.AI.Application.Recommendation.Contracts;
+using EduFlowAI.AI.Application.Services;
+using EduFlowAI.AI.Infrastructure.Caching;
+using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.Indexing;
+using EduFlowAI.AI.Infrastructure.Options;
+using EduFlowAI.AI.Infrastructure.Persistence;
+using EduFlowAI.AI.Infrastructure.Processing;
 using EduFlowAI.AI.Infrastructure.Recommendation;
+using EduFlowAI.AI.Infrastructure.Services;
+using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI;
@@ -13,10 +24,67 @@ public static class AIModule
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddKnowledgeAndIntentServices();
+        services.AddRecommendationServices(configuration);
+
+        return services;
+    }
+
+    // Knowledge base, RAG and intent routing.
+    private static void AddKnowledgeAndIntentServices(this IServiceCollection services)
+    {
+        services.AddTransient<PdfProcessingService>();
+
+        services.AddOptions<GeminiOptions>()
+            .BindConfiguration(GeminiOptions.SectionName);
+
+        services.AddOptions<FileStorageOptions>()
+            .BindConfiguration(FileStorageOptions.SectionName);
+
+        services.AddOptions<ChatSessionOptions>()
+            .BindConfiguration(ChatSessionOptions.SectionName);
+
+        services.AddOptions<IntentClassificationOptions>()
+            .BindConfiguration(IntentClassificationOptions.SectionName);
+
+        services.AddOptions<IngestionOptions>()
+            .BindConfiguration(IngestionOptions.SectionName);
+
+        services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
+
+        // Injected so session expiry can be tested with a fake clock.
+        services.TryAddSingleton(TimeProvider.System);
+
+        services.AddSingleton<IFileStorageService, LocalFileStorageService>();
+
+        services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
+        services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
+
+        // Registered concrete as well: the background worker needs IngestDocumentAsync, which is
+        // not part of the caller-facing interface.
+        services.AddScoped<KnowledgeBaseService>();
+        services.AddScoped<IKnowledgeIndexingService>(sp => sp.GetRequiredService<KnowledgeBaseService>());
+        services.AddScoped<IKnowledgeRetrievalService, KnowledgeBaseRetrievalService>();
+        services.AddScoped<IRagAnswerService, AiChatService>();
+        services.AddScoped<IIntentRouter, IntentClassifierService>();
+
+        services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
+
+        services.AddSingleton<ISessionManager, InMemorySessionManager>();
+        services.AddSingleton<KnowledgeBaseSyncState>();
+
+        services.AddSingleton<IIndexingQueue, IndexingQueue>();
+        services.AddHostedService<KnowledgeIndexingWorker>();
+
+        services.AddSingleton<EmbeddingCacheService>();
+    }
+
+    // Track recommendation (Kamel).
+    private static void AddRecommendationServices(this IServiceCollection services, IConfiguration configuration)
+    {
         services
             .AddOptions<GeminiRecommendationOptions>()
-            .Bind(configuration.GetSection(
-                GeminiRecommendationOptions.SectionName))
+            .Bind(configuration.GetSection(GeminiRecommendationOptions.SectionName))
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.ApiKey),
                 "Gemini recommendation API key is required.")
@@ -28,35 +96,20 @@ public static class AIModule
                 "Gemini recommendation timeout must be between 1 and 120 seconds.")
             .ValidateOnStart();
 
-        services.AddScoped<
-            ITrackRecommendationService,
-            TrackRecommendationService>();
+        services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
 
-        services.AddHttpClient<
-                IRecommendationModelClient,
-                GeminiRecommendationModelClient>()
+        services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()
             .ConfigureHttpClient((serviceProvider, client) =>
             {
                 var options = serviceProvider
-                    .GetRequiredService<
-                        IOptions<GeminiRecommendationOptions>>()
+                    .GetRequiredService<IOptions<GeminiRecommendationOptions>>()
                     .Value;
 
-                client.BaseAddress =
-                    new Uri("https://generativelanguage.googleapis.com/");
-
-                client.Timeout =
-                    TimeSpan.FromSeconds(options.TimeoutSeconds);
+                client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
-        // Register the development implementation of IOfferedTrackReader
-        // This is a temporary solution for development purposes.
-        // l7d ma boda y implement el interfece
-        services.AddScoped<
-                IOfferedTrackReader,
-                DevelopmentOfferedTrackReader>();
-        
-
-        return services;
+        // Temporary until the admission catalog provides the real reader.
+        services.AddScoped<IOfferedTrackReader, DevelopmentOfferedTrackReader>();
     }
 }
