@@ -40,7 +40,7 @@ namespace EduFlowAI.Api
             identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
-            builder.Services.AddAIModule();
+            builder.Services.AddAIModule(builder.Configuration);
             builder.Services.AddCommunicationModule();
 
             #region Swagger
