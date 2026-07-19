@@ -1,4 +1,6 @@
 using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Application.Recommendation;
+using EduFlowAI.AI.Application.Recommendation.Contracts;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
@@ -6,16 +8,30 @@ using EduFlowAI.AI.Infrastructure.Indexing;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
+using EduFlowAI.AI.Infrastructure.Recommendation;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI;
 
 public static class AIModule
 {
-    public static IServiceCollection AddAIModule(this IServiceCollection services)
+    public static IServiceCollection AddAIModule(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddKnowledgeAndIntentServices();
+        services.AddRecommendationServices(configuration);
+
+        return services;
+    }
+
+    // Knowledge base, RAG and intent routing.
+    private static void AddKnowledgeAndIntentServices(this IServiceCollection services)
     {
         services.AddTransient<PdfProcessingService>();
 
@@ -61,7 +77,39 @@ public static class AIModule
         services.AddHostedService<KnowledgeIndexingWorker>();
 
         services.AddSingleton<EmbeddingCacheService>();
+    }
 
-        return services;
+    // Track recommendation (Kamel).
+    private static void AddRecommendationServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<GeminiRecommendationOptions>()
+            .Bind(configuration.GetSection(GeminiRecommendationOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.ApiKey),
+                "Gemini recommendation API key is required.")
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.Model),
+                "Gemini recommendation model is required.")
+            .Validate(
+                options => options.TimeoutSeconds is > 0 and <= 120,
+                "Gemini recommendation timeout must be between 1 and 120 seconds.")
+            .ValidateOnStart();
+
+        services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
+
+        services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()
+            .ConfigureHttpClient((serviceProvider, client) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<IOptions<GeminiRecommendationOptions>>()
+                    .Value;
+
+                client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            });
+
+        // Temporary until the admission catalog provides the real reader.
+        services.AddScoped<IOfferedTrackReader, DevelopmentOfferedTrackReader>();
     }
 }
