@@ -28,6 +28,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
     private readonly IEmbeddingService _embeddingService;
     private readonly IKnowledgeRepository _repository;
     private readonly IFileStorageService _fileStorage;
+    private readonly IIndexingQueue _indexingQueue;
     private readonly KnowledgeBaseSyncState _syncState;
     private readonly IngestionOptions _ingestionOptions;
     private readonly ILogger<KnowledgeBaseService> _logger;
@@ -37,6 +38,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
         IEmbeddingService embeddingService,
         IKnowledgeRepository repository,
         IFileStorageService fileStorage,
+        IIndexingQueue indexingQueue,
         KnowledgeBaseSyncState syncState,
         IOptions<IngestionOptions> ingestionOptions,
         ILogger<KnowledgeBaseService> logger)
@@ -45,6 +47,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
         _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
+        _indexingQueue = indexingQueue ?? throw new ArgumentNullException(nameof(indexingQueue));
         _syncState = syncState ?? throw new ArgumentNullException(nameof(syncState));
         _ingestionOptions = ingestionOptions?.Value ?? new IngestionOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -150,7 +153,10 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
         };
 
         await _repository.AddDocumentAsync(document, cancellationToken);
-        await IngestDocumentAsync(documentId, cancellationToken);
+
+        // Indexing a PDF takes ~20 seconds, so the caller gets the id and a Pending status now
+        // and polls GetDocumentStatusAsync until it reaches Indexed or Failed.
+        await _indexingQueue.EnqueueAsync(documentId, cancellationToken);
 
         return documentId;
     }

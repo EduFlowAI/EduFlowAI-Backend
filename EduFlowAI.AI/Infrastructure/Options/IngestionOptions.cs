@@ -12,6 +12,10 @@ public class IngestionOptions
 
     public long MaxUploadBytes { get; set; } = 20L * 1024 * 1024;
 
+    // The indexing queue is in-memory, so a restart strands anything left Pending or Indexing.
+    // Set false in any second host that shares this module, or both would index the same documents.
+    public bool RequeueStrandedOnStartup { get; set; } = true;
+
     public int MaxChunkChars { get; set; } = 1200;
 
     public int ChunkOverlapChars { get; set; } = 200;

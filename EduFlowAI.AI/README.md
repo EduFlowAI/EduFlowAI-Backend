@@ -23,7 +23,7 @@ registered by `services.AddAIModule()`.
 |---|---|
 | `IIntentRouter` | `ClassifyAsync(question, context)` → intent, confidence, `requiresClarification` |
 | `IRagAnswerService` | `AnswerWithContextAsync(question, language)` → grounded answer + `sources` |
-| `IKnowledgeIndexingService` | Upload / paste text / list / status / delete / full re-sync |
+| `IKnowledgeIndexingService` | Upload / paste text / list / status / delete / full re-sync. Uploads are queued and indexed in the background; poll `GetDocumentStatusAsync`. |
 | `IKnowledgeRetrievalService` | `RetrieveContextAsync(query, limit)` → nearest chunks with their source |
 | `IEmbeddingService` | `GenerateEmbeddingAsync(text)` → vector of `Gemini:EmbeddingDimensions` |
 
@@ -46,8 +46,9 @@ me for them.
 Verified end to end against a local PostgreSQL + pgvector database using a real ITI track PDF.
 101 unit tests pass.
 
-- A **PDF, .txt or .md** file — or pasted text — is validated, stored, transcribed, chunked,
-  embedded and ends up `Indexed`.
+- A **PDF, .txt or .md** file — or pasted text — is validated and stored, then transcribed, chunked
+  and embedded on a background worker. The call returns in well under a second with `Pending`, and
+  the caller polls `GetDocumentStatusAsync` through `Indexing` to `Indexed` or `Failed`.
 - Questions in **English or Arabic** get an answer grounded in the uploaded documents, in the same
   language, with the source documents returned alongside.
 - Intent routing is deterministic — the same question always routes the same way — and asks the user
@@ -78,6 +79,8 @@ Infrastructure/
   ExternalServices/GeminiEmbeddingService.cs
   Processing/DocumentTextExtractor.cs    AI transcription, falls back to iText
   Processing/TextChunker.cs              sentence-aware chunking
+  Indexing/IndexingQueue.cs              in-memory queue behind background indexing
+  Indexing/KnowledgeIndexingWorker.cs    drains it, one scope per document
   Persistence/KnowledgeRepository.cs
   Storage/LocalFileStorageService.cs
   Services/InMemorySessionManager.cs
@@ -102,6 +105,12 @@ Config worth knowing: `Gemini:ChatModel`, `Gemini:EmbeddingModel`, `Gemini:Embed
 ---
 
 ## What's left
+
+**Durable indexing queue.** The indexing queue is in-memory, so a restart mid-index would strand
+documents — the worker re-queues anything left `Pending`/`Indexing` on startup to cover that. The
+proper answer is RabbitMQ through the Worker host once Ali's messaging contracts exist. Note the
+`Ingestion:RequeueStrandedOnStartup` flag: both hosts call `AddAIModule()`, so if the Worker is ever
+run alongside the API it must be `false` there or both would index the same documents.
 
 **Evaluation datasets.** RAG and router evaluation sets are on my task list and don't exist yet.
 Routing has been checked against a hand-written golden set, but retrieval quality has not been

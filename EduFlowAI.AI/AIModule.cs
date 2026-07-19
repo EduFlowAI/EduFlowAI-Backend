@@ -2,6 +2,7 @@ using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.Indexing;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
@@ -43,7 +44,10 @@ public static class AIModule
         services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
 
-        services.AddScoped<IKnowledgeIndexingService, KnowledgeBaseService>();
+        // Registered concrete as well: the background worker needs IngestDocumentAsync, which is
+        // not part of the caller-facing interface.
+        services.AddScoped<KnowledgeBaseService>();
+        services.AddScoped<IKnowledgeIndexingService>(sp => sp.GetRequiredService<KnowledgeBaseService>());
         services.AddScoped<IKnowledgeRetrievalService, KnowledgeBaseRetrievalService>();
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
@@ -52,6 +56,9 @@ public static class AIModule
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
         services.AddSingleton<KnowledgeBaseSyncState>();
+
+        services.AddSingleton<IIndexingQueue, IndexingQueue>();
+        services.AddHostedService<KnowledgeIndexingWorker>();
 
         services.AddSingleton<EmbeddingCacheService>();
 
