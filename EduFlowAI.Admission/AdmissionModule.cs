@@ -1,7 +1,9 @@
+using EduFlowAI.Admission.Application.Interfaces.Repositories;
+using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Application.Services;
+using EduFlowAI.Admission.Infrastructure.Repositories;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
+
 
 namespace EduFlowAI.Admission
 {
@@ -10,6 +12,15 @@ namespace EduFlowAI.Admission
         public static IServiceCollection AddAdmissionModule(this IServiceCollection services)
         {
             // Application + Infrastructure services registrations go here later
+            // Register AutoMapper profiles from the Application project
+            services.AddAutoMapper(cfg =>
+                cfg.AddMaps(typeof(Application.MappingProfiles.ApplicationProfile).Assembly));
+
+            // Register Application Layer services
+            services.AddScoped<IApplicationService, ApplicationService>();
+
+            // Register Infrastructure Layer repositories
+            services.AddScoped<IApplicationRepository, ApplicationRepository>();
             return services;
         }
 
