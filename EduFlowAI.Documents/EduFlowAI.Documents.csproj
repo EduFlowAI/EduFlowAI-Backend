@@ -10,7 +10,12 @@
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
     <ProjectReference Include="..\EduFlowAI.AI\EduFlowAI.AI.csproj" />
     <ProjectReference Include="..\EduFlowAI.Communication\EduFlowAI.Communication.csproj" />
+    <ProjectReference Include="..\EduFlowAI.Identity\EduFlowAI.Identity.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Kernel\EduFlowAI.Shared.Kernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

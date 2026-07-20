@@ -28,6 +28,10 @@ namespace EduFlowAI.Api
                 .AddApplicationPart(typeof(DocumentsModule).Assembly)
                 .AddApplicationPart(typeof(AIModule).Assembly)
                 .AddApplicationPart(typeof(CommunicationModule).Assembly);
+
+            // Documents endpoints use [Authorize]; authentication handlers/issuer configuration
+            // remain owned by the host because this repository contains no JWT settings.
+            builder.Services.AddAuthorization();
            
             builder.Services.AddOpenApi();
             builder.Services.AddEndpointsApiExplorer();
