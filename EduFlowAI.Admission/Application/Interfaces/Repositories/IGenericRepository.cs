@@ -24,6 +24,13 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
         Task AddAsync(T entity);
 
         /// <summary>
+        /// Update an existing entity.
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns></returns>
+        void Update(T entity);
+
+        /// <summary>
         /// Saves changes to the database.
         /// </summary>
         /// <returns></returns>

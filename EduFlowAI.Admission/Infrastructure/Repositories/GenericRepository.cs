@@ -35,6 +35,11 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
             await _dbSet.AddAsync(entity);
         }
 
+        public void Update(T entity)
+        {
+            _dbSet.Update(entity);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();

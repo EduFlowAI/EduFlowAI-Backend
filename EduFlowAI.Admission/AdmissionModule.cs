@@ -39,6 +39,9 @@ namespace EduFlowAI.Admission
             services.AddScoped<IAdmissionEligibilityService, AdmissionEligibilityService>();
             #endregion
 
+            services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
+            services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
+            
             return services;
         }
 

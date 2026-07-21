@@ -12,7 +12,7 @@ namespace EduFlowAI.Identity.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
         // Foreign Key
-        public string UserId { get; set; }
+        public required string UserId { get; set; }
         public string FullNameEn { get; set; } = null!;
         public string FullNameAr { get; set; } = null!;
         public string NationalId { get; set; } = null!;
