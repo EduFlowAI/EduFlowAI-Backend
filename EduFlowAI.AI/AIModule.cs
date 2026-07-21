@@ -73,6 +73,9 @@ public static class AIModule
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
         services.AddSingleton<KnowledgeBaseSyncState>();
 
+        // Registered before the worker so a dimension mismatch fails startup before anything indexes.
+        services.AddHostedService<EmbeddingDimensionGuard>();
+
         services.AddSingleton<IIndexingQueue, IndexingQueue>();
         services.AddHostedService<KnowledgeIndexingWorker>();
 
