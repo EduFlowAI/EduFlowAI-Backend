@@ -38,7 +38,10 @@ public class GeminiEmbeddingService : IEmbeddingService
             return cachedEmbedding!;
         }
 
-        string requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/{_options.EmbeddingModel}:embedContent?key={_options.ApiKey}";
+        // No model fallback for embeddings - a different model is a different vector space. Just
+        // the first configured key; quota exhaustion here surfaces as a failed ingestion to retry.
+        string apiKey = _options.ResolvedKeys[0];
+        string requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/{_options.EmbeddingModel}:embedContent?key={apiKey}";
 
         var payload = new
         {

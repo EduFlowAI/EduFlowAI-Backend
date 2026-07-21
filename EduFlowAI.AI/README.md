@@ -98,9 +98,10 @@ search, no ANN index).
 3. `dotnet ef database update --project EduFlowAI.Persistence --startup-project EduFlowAI.Api`
 4. `dotnet test EduFlowAI.AI.Tests`
 
-Config worth knowing: `Gemini:ChatModel`, `Gemini:EmbeddingModel`, `Gemini:EmbeddingDimensions`,
-`IntentClassification:MinConfidence`, `ChatSession:IdleTimeout`, `Ingestion:UseAiExtraction`,
-`Ingestion:MaxUploadBytes`.
+Config worth knowing: `Gemini:ChatModels` (fallback chain), `Gemini:ApiKeys`, `Gemini:EmbeddingModel`,
+`Gemini:EmbeddingDimensions`, `IntentClassification:MinConfidence`, `ChatSession:IdleTimeout`,
+`Ingestion:UseAiExtraction`, `Ingestion:MaxUploadBytes`. `ChatModel`/`ApiKey` (singular) still work
+as a fallback when the lists are empty.
 
 ---
 
@@ -117,13 +118,20 @@ Routing has been checked against a hand-written golden set, but retrieval qualit
 measured.
 
 **Models.** Everything runs on Gemini (`gemini-3.1-flash-lite` for chat and transcription,
-`gemini-embedding-001` for embeddings). These were picked because they work on a free key —
-`gemini-2.5-flash` returns 404 for newly issued keys. They still need review before the demo, along
-with the embedding width (1536), since changing it means a migration plus a full re-sync.
+`gemini-embedding-001` @ 1536 for embeddings). Chat and extraction share a **fallback chain**
+(`Gemini:ChatModels`): a model that is rate-limited, quota-exhausted or 404 (as `gemini-2.5-flash` is
+for new keys) is skipped for the next, and each model has its own free-tier quota bucket. `ApiKeys`
+rotate on quota/auth failures — one key today, extensible via config. **Embeddings never fall back**
+to another model, because a different model is a different vector space; they stay on the one model
+with the cache and backoff.
 
-**Hosted database.** Only the local database has been migrated. The hosted (Neon) database still
-needs the `vector(1536)` migration and then a **full re-sync**, because both the vector width and the
-chunk text have changed. To be done at the end with whoever owns the database.
+**Hosted database.** Only the local database holds embeddings. The embedding model and 1536 width are
+now fixed, so the hosted (Neon) database just needs the `vector(1536)` schema applied (no alter) and
+then the corpus ingested/re-synced. To be done with whoever owns the database once the documents are
+supplied.
+
+**RabbitMQ.** The in-memory indexing queue is the interim; message-based indexing through the Worker
+host is the future path once the messaging contracts exist.
 
 **Endpoints — Kamel.** Nothing in this module is reachable over HTTP until the assistant and
 knowledge-base endpoints exist. Integration notes sent separately.
