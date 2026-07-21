@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence.Extensions
 {
@@ -20,7 +21,7 @@ namespace EduFlowAI.Persistence.Extensions
         this IServiceCollection services,
         IConfiguration configuration)
         {
-            services.AddDbContext<EduFlowAIDbContext>(options =>
+            services.AddDbContextWithWolverineIntegration<EduFlowAIDbContext>(options =>
             {
                 options.UseNpgsql(
                     configuration.GetConnectionString("DefaultConnection"),
@@ -47,7 +48,7 @@ namespace EduFlowAI.Persistence.Extensions
                 sp.GetRequiredService<EduFlowAIDbContext>());
 
             // ensure (builder.ConfigureCommonMessaging) in program.cs is un-commented to use this outbox
-            //services.AddScoped<IDocumentVerificationOutbox, DocumentVerificationOutbox>();
+            services.AddScoped<IDocumentVerificationOutbox, DocumentVerificationOutbox>();
 
             return services;
         }

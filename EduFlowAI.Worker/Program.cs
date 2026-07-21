@@ -6,6 +6,7 @@ using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
 using EduFlowAI.Shared.Messaging.Contracts.Configuration;
 using iText.StyledXmlParser.Jsoup.Nodes;
+using JasperFx.Resources;
 using Microsoft.EntityFrameworkCore;
 using Wolverine;
 
@@ -25,11 +26,17 @@ namespace EduFlowAI.Worker
             builder.Services.AddCommunicationModule();
 
             // messaging -> ensure running rabbitmq before un-comment it
-            //builder.ConfigureCommonMessaging("EduFlowAI.Worker");
+            builder.ConfigureCommonMessaging("EduFlowAI.Worker");
             builder.Services.ConfigureWolverine(options =>
             {
                 MessagingConfiguration.ConfigureWorkerListeners(options);
             });
+
+            // messaging dev only
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services.AddResourceSetupOnStartup();
+            }
 
             // we will add consumers later
             //builder.Services.AddHostedService<Worker>();

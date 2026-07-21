@@ -20,6 +20,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             {
                 var databaseConnection = builder.Configuration.GetConnectionString("DefaultConnection");
                 var rabbitConnection = builder.Configuration.GetConnectionString("RabbitMq");
+                var useRabbitMq =builder.Configuration.GetValue<bool>("Messaging:Enabled");
 
                 builder.UseWolverine(options =>
                 {
@@ -31,11 +32,20 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
                     options.Policies.UseDurableOutboxOnAllSendingEndpoints();
                     options.Policies.UseDurableInboxOnAllListeners();
 
-                    options.UseRabbitMq(rabbitConnection!)
-                        .AutoProvision()
+                    var rmq = options.UseRabbitMq(rabbitConnection!)
                         .EnableEnhancedDeadLettering();
 
                     ConfigureSendingRoutes(options);
+
+                    if (useRabbitMq)
+                    {
+                        rmq.AutoProvision();
+                    }
+                    else
+                    {
+                        // stop wolverine from trying to connect to RabbitMQ and just stub out the transports for testing
+                        options.StubAllExternalTransports();
+                    }
                 });
             }
             catch (Exception ex)
