@@ -27,6 +27,7 @@
     <PackageReference Include="Pgvector" Version="0.3.2" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <PackageReference Include="itext" Version="9.7.0" />
+    <PackageReference Include="WolverineFx" Version="6.20.0" />
   </ItemGroup>
 
 </Project>
