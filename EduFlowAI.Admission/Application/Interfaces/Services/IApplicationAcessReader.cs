@@ -2,6 +2,6 @@
 {
     public interface IApplicationAcessReader
     {
-        Task<bool> CanUploadDocumentsAsync(Guid applicationId, string userId);
+        Task<bool> CanUploadDocumentsAsync(Guid applicationId, string userId, CancellationToken cancellationToken);
     }
 }

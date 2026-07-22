@@ -17,6 +17,15 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
             Func<IQueryable<T>, IQueryable<T>>? include = null);
 
         /// <summary>
+        /// Get all entities meet the condition.
+        /// </summary>
+        /// <param name="predicate"></param>
+        /// <param name="include"></param>
+        /// <returns></returns>
+        Task<List<T>?> GetAllAsync(Expression<Func<T, bool>> predicate,
+            Func<IQueryable<T>, IQueryable<T>>? include = null);
+
+        /// <summary>
         /// Adds a new entity.
         /// </summary>
         /// <param name="entity"></param>

@@ -16,6 +16,7 @@ namespace EduFlowAI.Admission.Domain.Entities
         public DateTimeOffset? SubmittedAt { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
+        public string? AdminNotes { get; set; }
 
         public uint RowVersion { get; set; }
 

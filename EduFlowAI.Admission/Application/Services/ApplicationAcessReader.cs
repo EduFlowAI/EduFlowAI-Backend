@@ -12,7 +12,7 @@ namespace EduFlowAI.Admission.Application.Services
             _applicationRepository = applicationRepository;
         }
 
-        public async Task<bool> CanUploadDocumentsAsync(Guid applicationId, string userId)
+        public async Task<bool> CanUploadDocumentsAsync(Guid applicationId, string userId, CancellationToken cancellationToken)
         {
             var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
             if(application == null)
