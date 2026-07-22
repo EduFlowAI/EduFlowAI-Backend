@@ -1,10 +1,11 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
-using EduFlowAI.AI.Application.Recommendation.Contracts;
-using EduFlowAI.AI.Application.Recommendation.Models;
+using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
+using EduFlowAI.AI.Infrastructure.Options;
 using Microsoft.Extensions.Options;
 
-namespace EduFlowAI.AI.Infrastructure.Recommendation;
+namespace EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 
 public sealed class GeminiRecommendationModelClient(
     HttpClient httpClient,
@@ -16,8 +17,8 @@ public sealed class GeminiRecommendationModelClient(
 
     private readonly GeminiRecommendationOptions _options = options.Value;
 
-    public async Task<RecommendationModelResponse> RankAsync(
-        RecommendationModelRequest request,
+    public async Task<RecommendationModelResponseDto> RankAsync(
+        RecommendationModelRequestDto request,
         CancellationToken cancellationToken = default)
     {
         ValidateConfiguration();
@@ -56,14 +57,14 @@ public sealed class GeminiRecommendationModelClient(
                 "Gemini returned an empty recommendation response.");
         }
 
-        return JsonSerializer.Deserialize<RecommendationModelResponse>(
+        return JsonSerializer.Deserialize<RecommendationModelResponseDto>(
                    json,
                    JsonOptions)
                ?? throw new JsonException(
                    "Gemini returned an invalid recommendation response.");
     }
 
-    private static object CreatePayload(RecommendationModelRequest request)
+    private static object CreatePayload(RecommendationModelRequestDto request)
     {
         return new
         {

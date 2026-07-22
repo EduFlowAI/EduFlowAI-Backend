@@ -1,6 +1,7 @@
-﻿using EduFlowAI.AI.Application.Recommendation.Models;
+﻿
+using EduFlowAI.AI.Application.DTOs;
 
-namespace EduFlowAI.AI.Application.Recommendation;
+namespace EduFlowAI.AI.Application.Validators;
 
 public static class RecommendationQuestionnaireValidator
 {
@@ -8,7 +9,7 @@ public static class RecommendationQuestionnaireValidator
     private const int MaximumTextLength = 500;
 
     public static IReadOnlyList<string> Validate(
-        RecommendationQuestionnaire questionnaire)
+        RecommendationQuestionnaireDto questionnaire)
     {
         ArgumentNullException.ThrowIfNull(questionnaire);
 
