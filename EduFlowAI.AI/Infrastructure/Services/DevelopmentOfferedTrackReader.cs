@@ -1,17 +1,17 @@
-﻿using EduFlowAI.AI.Application.Recommendation.Contracts;
-using EduFlowAI.AI.Application.Recommendation.Models;
+﻿using EduFlowAI.AI.Application.DTOs;
+using EduFlowAI.AI.Application.Interfaces;
 
-namespace EduFlowAI.AI.Infrastructure.Recommendation;
+namespace EduFlowAI.AI.Infrastructure.Services;
 
 public sealed class DevelopmentOfferedTrackReader : IOfferedTrackReader
 {
-    public Task<IReadOnlyList<OfferedTrackForRecommendation>>
+    public Task<IReadOnlyList<OfferedTrackForRecommendationDto>>
         GetActiveOfferedTracksAsync(
             CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<OfferedTrackForRecommendation> tracks =
+        IReadOnlyList<OfferedTrackForRecommendationDto> tracks =
         [
-            new OfferedTrackForRecommendation
+            new OfferedTrackForRecommendationDto
             {
                 TrackId = Guid.Parse(
                     "11111111-1111-1111-1111-111111111111"),
@@ -25,7 +25,7 @@ public sealed class DevelopmentOfferedTrackReader : IOfferedTrackReader
                     "Web fundamentals"
                 ]
             },
-            new OfferedTrackForRecommendation
+            new OfferedTrackForRecommendationDto
             {
                 TrackId = Guid.Parse(
                     "22222222-2222-2222-2222-222222222222"),
@@ -39,7 +39,7 @@ public sealed class DevelopmentOfferedTrackReader : IOfferedTrackReader
                     "Database fundamentals"
                 ]
             },
-            new OfferedTrackForRecommendation
+            new OfferedTrackForRecommendationDto
             {
                 TrackId = Guid.Parse(
                     "33333333-3333-3333-3333-333333333333"),

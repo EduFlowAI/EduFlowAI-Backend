@@ -1,6 +1,6 @@
-﻿namespace EduFlowAI.AI.Application.Recommendation.Models;
+﻿namespace EduFlowAI.AI.Application.DTOs;
 
-public sealed record RecommendationQuestionnaire
+public sealed record RecommendationQuestionnaireDto
 {
     public required string Major { get; init; }
 

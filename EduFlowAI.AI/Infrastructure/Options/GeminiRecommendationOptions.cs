@@ -1,4 +1,4 @@
-﻿namespace EduFlowAI.AI.Infrastructure.Recommendation;
+﻿namespace EduFlowAI.AI.Infrastructure.Options;
 
 public sealed class GeminiRecommendationOptions
 {

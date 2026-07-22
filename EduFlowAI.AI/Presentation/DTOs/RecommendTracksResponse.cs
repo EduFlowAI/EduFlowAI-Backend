@@ -1,4 +1,4 @@
-﻿namespace EduFlowAI.AI.Presentation.Recommendation;
+﻿namespace EduFlowAI.AI.Presentation.DTOs;
 
 public sealed record RecommendTracksResponse
 {

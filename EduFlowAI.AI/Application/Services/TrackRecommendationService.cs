@@ -1,8 +1,10 @@
-﻿using EduFlowAI.AI.Application.Recommendation.Contracts;
-using EduFlowAI.AI.Application.Recommendation.Models;
+﻿namespace EduFlowAI.AI.Application.Services;
 
-namespace EduFlowAI.AI.Application.Recommendation;
-
+using EduFlowAI.AI.Application.DTOs;
+using EduFlowAI.AI.Application.Exceptions;
+using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Application.Validators;
+using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
 using Microsoft.Extensions.Logging;
 
 
@@ -18,8 +20,8 @@ private const int MaximumRecommendations = 3;
     private const string AdvisoryNotice =
         "These recommendations are advisory only and do not determine eligibility or admission.";
 
-    public async Task<TrackRecommendationResult> RecommendAsync(
-        RecommendationQuestionnaire questionnaire,
+    public async Task<TrackRecommendationResultDto> RecommendAsync(
+        RecommendationQuestionnaireDto questionnaire,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(questionnaire);
@@ -37,7 +39,7 @@ private const int MaximumRecommendations = 3;
 
         if (offeredTracks.Count == 0)
         {
-            return new TrackRecommendationResult
+            return new TrackRecommendationResultDto
             {
                 Recommendations = [],
                 UsedFallback = false,
@@ -48,7 +50,7 @@ private const int MaximumRecommendations = 3;
         try
         {
             var modelResponse = await recommendationModelClient.RankAsync(
-                new RecommendationModelRequest
+                new RecommendationModelRequestDto
                 {
                     Questionnaire = questionnaire,
                     OfferedTracks = offeredTracks
@@ -66,7 +68,7 @@ private const int MaximumRecommendations = 3;
 
             if (validatedRecommendations.Count > 0)
             {
-                return new TrackRecommendationResult
+                return new TrackRecommendationResultDto
                 {
                     Recommendations = validatedRecommendations,
                     UsedFallback = false,
@@ -90,10 +92,10 @@ private const int MaximumRecommendations = 3;
         return CreateFallback(offeredTracks);
     }
 
-    private static IReadOnlyList<RecommendedTrackResult>
+    private static IReadOnlyList<RecommendedTrackResultDto>
         ValidateRecommendations(
-            RecommendationModelResponse? modelResponse,
-            IReadOnlyList<OfferedTrackForRecommendation> offeredTracks)
+            RecommendationModelResponseDto? modelResponse,
+            IReadOnlyList<OfferedTrackForRecommendationDto> offeredTracks)
     {
         if (modelResponse?.Recommendations is null)
         {
@@ -120,7 +122,7 @@ private const int MaximumRecommendations = 3;
             {
                 var track = offeredTracksById[item.TrackId];
 
-                return new RecommendedTrackResult
+                return new RecommendedTrackResultDto
                 {
                     TrackId = track.TrackId,
                     TrackName = track.Name,
@@ -131,15 +133,15 @@ private const int MaximumRecommendations = 3;
             .ToList();
     }
 
-    private static TrackRecommendationResult CreateFallback(
-        IReadOnlyList<OfferedTrackForRecommendation> offeredTracks)
+    private static TrackRecommendationResultDto CreateFallback(
+        IReadOnlyList<OfferedTrackForRecommendationDto> offeredTracks)
     {
         var recommendations = offeredTracks
             .GroupBy(track => track.TrackId)
             .Select(group => group.First())
             .OrderBy(track => track.Name)
             .Take(MaximumRecommendations)
-            .Select((track, index) => new RecommendedTrackResult
+            .Select((track, index) => new RecommendedTrackResultDto
             {
                 TrackId = track.TrackId,
                 TrackName = track.Name,
@@ -149,7 +151,7 @@ private const int MaximumRecommendations = 3;
             })
             .ToList();
 
-        return new TrackRecommendationResult
+        return new TrackRecommendationResultDto
         {
             Recommendations = recommendations,
             UsedFallback = true,

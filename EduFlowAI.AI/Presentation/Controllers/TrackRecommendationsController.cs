@@ -1,8 +1,10 @@
-﻿using EduFlowAI.AI.Application.Recommendation;
-using EduFlowAI.AI.Application.Recommendation.Contracts;
-using EduFlowAI.AI.Application.Recommendation.Models;
-using EduFlowAI.AI.Presentation.Recommendation;
+﻿using EduFlowAI.AI.Application.Exceptions;
+using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Application.DTOs;
+using EduFlowAI.AI.Application.Services;
+using EduFlowAI.AI.Presentation.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 
 namespace EduFlowAI.Api.Controllers;
 
@@ -23,7 +25,7 @@ public sealed class TrackRecommendationsController(
     {
         try
         {
-            var questionnaire = new RecommendationQuestionnaire
+            var questionnaire = new RecommendationQuestionnaireDto
             {
                 Major = request.Major,
                 TechnicalCourses = request.TechnicalCourses,

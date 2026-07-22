@@ -1,14 +1,14 @@
 ﻿using System.Text.Json;
-using EduFlowAI.AI.Application.Recommendation.Models;
+using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
 
-namespace EduFlowAI.AI.Infrastructure.Recommendation;
+namespace EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 
 internal static class RecommendationPromptBuilder
 {
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
-    public static string Build(RecommendationModelRequest request)
+    public static string Build(RecommendationModelRequestDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
