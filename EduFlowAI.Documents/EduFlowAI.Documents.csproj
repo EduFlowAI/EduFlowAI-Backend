@@ -22,10 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Application\DTOs\" />
     <Folder Include="Application\Validators\" />
     <Folder Include="Infrastructure\ExternalServices\" />
-    <Folder Include="Presentation\Controllers\" />
     <Folder Include="Presentation\Responses\" />
     <Folder Include="Presentation\Requests\" />
   </ItemGroup>
