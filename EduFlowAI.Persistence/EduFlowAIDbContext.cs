@@ -65,9 +65,6 @@ namespace EduFlowAI.Persistence
             // Enable pgvector extension for PostgreSQL to support AI embeddings
             modelBuilder.HasPostgresExtension("vector");
 
-            // mapping Wolverine messaging storage
-            modelBuilder.MapWolverineEnvelopeStorage();
-
             // Module entity configs applied here (The Modular Monolith Way)
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppUserConfiguration).Assembly);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(ProgramConfiguration).Assembly);

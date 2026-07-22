@@ -2,13 +2,16 @@
 using EduFlowAI.AI.Application.DbContextAbstraction;
 using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
+using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Identity.Application.DbContextAbstraction;
+using EduFlowAI.Persistence.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence.Extensions
 {
@@ -18,7 +21,7 @@ namespace EduFlowAI.Persistence.Extensions
         this IServiceCollection services,
         IConfiguration configuration)
         {
-            services.AddDbContext<EduFlowAIDbContext>(options =>
+            services.AddDbContextWithWolverineIntegration<EduFlowAIDbContext>(options =>
             {
                 options.UseNpgsql(
                     configuration.GetConnectionString("DefaultConnection"),
@@ -43,6 +46,9 @@ namespace EduFlowAI.Persistence.Extensions
 
             services.AddScoped<ICommunicationDbContext>(sp =>
                 sp.GetRequiredService<EduFlowAIDbContext>());
+
+            // ensure (builder.ConfigureCommonMessaging) in program.cs is un-commented to use this outbox
+            services.AddScoped<IDocumentVerificationOutbox, DocumentVerificationOutbox>();
 
             return services;
         }

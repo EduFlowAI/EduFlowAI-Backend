@@ -14,7 +14,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Documents.V1
         Guid ReplacementRequestId,
         Guid DocumentId,
         Guid ApplicationId,
-        Guid ApplicantUserId,
+        string ApplicantUserId,
         string NewStorageKey,
         string NewOriginalFileName,
         string DocumentType,
