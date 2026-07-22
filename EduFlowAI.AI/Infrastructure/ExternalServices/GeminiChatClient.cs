@@ -13,7 +13,9 @@ namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
 public class GeminiChatClient : IGeminiChatClient
 {
-    private const int MaxAttempts = 3;
+    // Attempts on a single (model, key) before moving on - covers a per-minute rate blip or a
+    // transient 5xx without labouring a combo that is genuinely out of quota.
+    private const int MaxAttemptsPerCombo = 2;
 
     private readonly HttpClient _httpClient;
     private readonly GeminiOptions _options;
@@ -77,35 +79,76 @@ public class GeminiChatClient : IGeminiChatClient
         return SendAsync(request, cancellationToken);
     }
 
+    // Walks the model chain, and the keys within each model, until one combination succeeds.
+    // A model has its own free-tier quota bucket, so switching model is the real quota lever;
+    // switching key helps once separate-project keys are configured.
     private async Task<string> SendAsync(GeminiGenerateRequest payload, CancellationToken cancellationToken)
     {
-        var requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/models/{_options.ChatModel}:generateContent?key={_options.ApiKey}";
+        var models = _options.ResolvedChatModels;
+        var keys = _options.ResolvedKeys;
+        var triedModels = new List<string>();
+        var lastStatus = 0;
+        var lastDetail = string.Empty;
 
-        for (var attempt = 1; ; attempt++)
+        foreach (var model in models)
         {
-            var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
+            triedModels.Add(model);
+            var modelUnavailable = false;
 
-            if (response.IsSuccessStatusCode)
+            foreach (var key in keys)
             {
-                var body = await response.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken: cancellationToken);
+                var requestUrl = $"{_options.BaseUrl.TrimEnd('/')}/models/{model}:generateContent?key={key}";
 
-                return body?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+                for (var attempt = 1; attempt <= MaxAttemptsPerCombo; attempt++)
+                {
+                    var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var body = await response.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken: cancellationToken);
+                        return body?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+                    }
+
+                    lastStatus = (int)response.StatusCode;
+                    lastDetail = await ReadDetailAsync(response, cancellationToken);
+
+                    // Unknown/unsupported model: every key answers the same, so skip to the next model.
+                    if (lastStatus is 400 or 404)
+                    {
+                        modelUnavailable = true;
+                        break;
+                    }
+
+                    // Rate-limited or a server blip: one short backoff on the same combo, then
+                    // move to the next key.
+                    if (lastStatus == 429 || lastStatus >= 500)
+                    {
+                        if (attempt < MaxAttemptsPerCombo)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
+                            continue;
+                        }
+                        break;
+                    }
+
+                    // Other 4xx (e.g. 401/403 bad or disabled key): this key won't recover, try the next.
+                    break;
+                }
+
+                if (modelUnavailable)
+                    break;
             }
-
-            var status = (int)response.StatusCode;
-            var isTransient = status == 429 || status >= 500;
-
-            if (isTransient && attempt < MaxAttempts)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
-                continue;
-            }
-
-            var detail = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (detail.Length > 300)
-                detail = detail.Substring(0, 300);
-            throw new HttpRequestException($"Gemini generateContent failed with HTTP {status} for model '{_options.ChatModel}'. {detail}");
         }
+
+        throw new HttpRequestException(
+            $"Gemini generateContent failed after trying models [{string.Join(", ", triedModels)}]. " +
+            $"Last status HTTP {lastStatus}. {lastDetail}");
+    }
+
+    private static async Task<string> ReadDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var detail = await response.Content.ReadAsStringAsync(cancellationToken);
+        return detail.Length > 300 ? detail.Substring(0, 300) : detail;
     }
 }
 

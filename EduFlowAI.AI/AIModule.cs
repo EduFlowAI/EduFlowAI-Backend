@@ -1,14 +1,12 @@
 using EduFlowAI.AI.Application.Interfaces;
-using EduFlowAI.AI.Application.Recommendation;
-using EduFlowAI.AI.Application.Recommendation.Contracts;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 using EduFlowAI.AI.Infrastructure.Indexing;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
-using EduFlowAI.AI.Infrastructure.Recommendation;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
@@ -72,6 +70,9 @@ public static class AIModule
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
         services.AddSingleton<KnowledgeBaseSyncState>();
+
+        // Registered before the worker so a dimension mismatch fails startup before anything indexes.
+        services.AddHostedService<EmbeddingDimensionGuard>();
 
         services.AddSingleton<IIndexingQueue, IndexingQueue>();
         services.AddHostedService<KnowledgeIndexingWorker>();

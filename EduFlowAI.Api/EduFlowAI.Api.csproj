@@ -23,10 +23,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
-    <PackageReference Include="WolverineFx" Version="6.19.0" />
-    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.19.0" />
-    <PackageReference Include="WolverineFx.Postgresql" Version="6.19.0" />
-    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.19.0" />
+    <PackageReference Include="WolverineFx" Version="6.20.0" />
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.20.0" />
+    <PackageReference Include="WolverineFx.Postgresql" Version="6.20.0" />
+    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.20.0" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.20.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +38,10 @@
     <ProjectReference Include="..\EduFlowAI.Identity\EduFlowAI.Identity.csproj" />
     <ProjectReference Include="..\EduFlowAI.Persistence\EduFlowAI.Persistence.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Messaging.Contracts\EduFlowAI.Shared.Messaging.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Controllers\" />
   </ItemGroup>
 
 </Project>
