@@ -13,5 +13,8 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="applicationId"></param>
         /// <returns></returns>
         Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId);
+
+
+        Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default);
     }
 }
