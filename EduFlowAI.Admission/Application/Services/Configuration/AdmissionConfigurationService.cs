@@ -1093,7 +1093,7 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return cycles.Select(MapCycle).ToList();
+        return cycles.Select(cycle => MapCycle(cycle)).ToList();
     }
 
     public async Task<Result<AdmissionCycleDto>> CreateCycleAsync(CreateAdmissionCycleRequest request, CancellationToken cancellationToken = default)
