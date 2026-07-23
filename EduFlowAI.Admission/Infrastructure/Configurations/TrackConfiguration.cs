@@ -1,9 +1,6 @@
-﻿using EduFlowAI.Admission.Domain.Entities;
+using EduFlowAI.Admission.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace EduFlowAI.Admission.Infrastructure.Configurations
 {
@@ -14,10 +11,13 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.ToTable("Tracks", "admissions");
             builder.HasKey(x => x.Id);
 
-            builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
-            builder.Property(x => x.IsActive).HasDefaultValue(true);
+            builder.Property(x => x.Name)
+                .HasMaxLength(200)
+                .IsRequired();
 
-            // Magic happens here: Map the C# List<string> to PostgreSQL JSONB
+            builder.Property(x => x.IsActive)
+                .HasDefaultValue(true);
+
             builder.Property(x => x.PrerequisiteTopics)
                 .HasColumnType("jsonb")
                 .IsRequired();
@@ -30,7 +30,10 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .HasDefaultValueSql("now()")
                 .IsRequired();
 
-            // Relationship: Program -> Tracks (Restrict delete)
+            builder.HasIndex(x => new { x.ProgramId, x.Name })
+                .HasDatabaseName("UX_Tracks_Program_Name")
+                .IsUnique();
+
             builder.HasOne(x => x.Program)
                 .WithMany(x => x.Tracks)
                 .HasForeignKey(x => x.ProgramId)
