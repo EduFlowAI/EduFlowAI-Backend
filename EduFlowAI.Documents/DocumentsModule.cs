@@ -1,3 +1,6 @@
+using EduFlowAI.Documents.Application.Interfaces;
+using EduFlowAI.Documents.Application.Services;
+using EduFlowAI.Documents.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -9,7 +12,10 @@ namespace EduFlowAI.Documents
     {
         public static IServiceCollection AddDocumentsModule(this IServiceCollection services)
         {
-            // Application + Infrastructure services registrations go here later
+            services.AddScoped<IDocumentHumanReviewService, DocumentHumanReviewService>();
+            services.AddScoped<IFileStorageService, FileStorageService>();
+            services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
+
             return services;
         }
 

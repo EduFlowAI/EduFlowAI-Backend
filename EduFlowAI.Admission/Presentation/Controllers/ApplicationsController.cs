@@ -16,16 +16,19 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         private readonly IAdmissionEligibilityService _eligibilityService;
         private readonly IApplicationStatusQueryService _statusQueryService;
         private readonly IStatusTransitionCoordinator _statusTransitionCoordinator;
+        private readonly IAssessmentSimulationService _simulationService;
 
         public ApplicationsController(IApplicationService applicationService,
             IAdmissionEligibilityService eligibilityService,
             IApplicationStatusQueryService statusQueryService,
-            IStatusTransitionCoordinator statusTransitionCoordinator)
+            IStatusTransitionCoordinator statusTransitionCoordinator,
+            IAssessmentSimulationService simulationService)
         {
             _applicationService = applicationService;
             _eligibilityService = eligibilityService;
             _statusQueryService=statusQueryService;
             _statusTransitionCoordinator = statusTransitionCoordinator;
+            _simulationService = simulationService;
         }
 
         // POST: api/modules/admission/applications/draft
@@ -147,5 +150,14 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             return Ok(successResult);
         }
 
+        [HttpGet("{applicationId}/stages")]
+        public async Task<ActionResult<Result<List<SimulatedStageDto>>>> GetStagesResults(Guid applicationId)
+        {
+            var stagesResultDto = await _simulationService.GetApplicantStagesAsync(applicationId);
+
+            // Return OK 200
+            var res = Result<IEnumerable<SimulatedStageDto>>.Success(stagesResultDto, message: "Applicant stages results are retreived successfully");
+            return StatusCode(res.StatusCode, res);
+        }
     }
 }

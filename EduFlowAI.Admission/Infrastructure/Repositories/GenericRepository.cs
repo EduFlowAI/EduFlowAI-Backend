@@ -30,6 +30,20 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
             return await query.FirstOrDefaultAsync(predicate);
         }
 
+        public async Task<List<T>?> GetAllAsync(Expression<Func<T, bool>> predicate,
+            Func<IQueryable<T>, IQueryable<T>>? include = null)
+        {
+            IQueryable<T> query = _dbSet;
+
+            // Apply includes if provided
+            if (include != null)
+            {
+                query = include(query);
+            }
+
+            return await query.Where(predicate).ToListAsync();
+        }
+
         public async Task AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);

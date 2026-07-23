@@ -5,8 +5,9 @@ using System.Text;
 
 namespace EduFlowAI.Documents.Application.Interfaces
 {
-    internal interface IFileStorageService
+    public interface IFileStorageService
     {
         Task<string> SaveFileAsync(IFormFile file, CancellationToken cancellationToken = default);
+        Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default);
     }
 }
