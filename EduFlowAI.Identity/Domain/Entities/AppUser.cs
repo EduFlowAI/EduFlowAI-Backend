@@ -4,7 +4,7 @@ using System;
 namespace EduFlowAI.Identity.Domain.Entities
 {
     // Inheriting from IdentityUser automatically gives us Id, Email, PasswordHash, etc.
-    public sealed class AppUser : IdentityUser
+    public sealed class AppUser : IdentityUser<Guid>
     {
         public bool IsActive { get; set; } = true;
         public string PreferredLanguage { get; set; } = "en";

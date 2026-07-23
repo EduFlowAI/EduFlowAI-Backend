@@ -18,8 +18,9 @@ namespace EduFlowAI.Identity
             {
                 options.User.RequireUniqueEmail = true;
             })
-            .AddRoles<IdentityRole>()
+            .AddRoles<IdentityRole<Guid>>()
             .AddSignInManager();
+
         }
 
         // Called only by Api — Worker never calls this
