@@ -1,4 +1,6 @@
-﻿using EduFlowAI.AI.Application.DTOs;
+﻿using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Services;
@@ -14,7 +16,8 @@ public class AssistantMessageServiceTests
             new FakeIntentRouter(),
             new FakeRagAnswerService(),
             new FakeSessionManager(),
-            new FakeChatRecommendationService());
+            new FakeChatRecommendationService(),
+            new FakeApplicationStatusQueryService());
 
         var response = await service.HandleAsync(
             new AssistantMessageRequest(
@@ -40,40 +43,45 @@ public class AssistantMessageServiceTests
             List<ConversationTurnDto> context,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new IntentClassificationDto
-            {
-                PrimaryIntent = "knowledge",
-                Confidence = 0.95m,
-                RoutedTo = "knowledge_rag",
-                RequiresClarification = false,
-                Intents =
-                [
-                    new DetectedIntentDto
-                    {
-                        Intent = "knowledge",
-                        Confidence = 0.95m,
-                        RoutedTo = "knowledge_rag"
-                    }
-                ]
-            });
+            return Task.FromResult(
+                new IntentClassificationDto
+                {
+                    PrimaryIntent = "knowledge",
+                    Confidence = 0.95m,
+                    RoutedTo = "knowledge_rag",
+                    RequiresClarification = false,
+                    Intents =
+                    [
+                        new DetectedIntentDto
+                        {
+                            Intent = "knowledge",
+                            Confidence = 0.95m,
+                            RoutedTo = "knowledge_rag"
+                        }
+                    ]
+                });
         }
 
         public string GetClarificationMessage(string language)
-            => "Clarify";
+        {
+            return "Clarify";
+        }
     }
 
     private sealed class FakeRagAnswerService : IRagAnswerService
     {
         public Task<RagAnswerDto> AnswerWithContextAsync(
             string userQuestion,
+            IReadOnlyList<ConversationTurnDto> context,
             string language,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new RagAnswerDto
-            {
-                Answer = "Test answer",
-                Sources = ["Test Source"]
-            });
+            return Task.FromResult(
+                new RagAnswerDto
+                {
+                    Answer = "Test answer",
+                    Sources = ["Test Source"]
+                });
         }
     }
 
@@ -85,11 +93,19 @@ public class AssistantMessageServiceTests
             UserId = Guid.Empty
         };
 
-        public ChatSessionDto CreateSession(Guid userId) => _session;
+        public ChatSessionDto CreateSession(Guid userId)
+        {
+            return _session;
+        }
 
-        public ChatSessionDto? GetSession(string sessionId) => _session;
+        public ChatSessionDto? GetSession(string sessionId)
+        {
+            return _session;
+        }
 
-        public bool AddTurn(string sessionId, ConversationTurnDto turn)
+        public bool AddTurn(
+            string sessionId,
+            ConversationTurnDto turn)
         {
             _session.History.Add(turn);
             return true;
@@ -99,7 +115,9 @@ public class AssistantMessageServiceTests
             string sessionId,
             int lastN = 3)
         {
-            return _session.History.TakeLast(lastN).ToList();
+            return _session.History
+                .TakeLast(lastN)
+                .ToList();
         }
 
         public void EndSession(string sessionId)
@@ -110,16 +128,36 @@ public class AssistantMessageServiceTests
     private sealed class FakeChatRecommendationService
         : IChatRecommendationService
     {
-        public Task<ChatRecommendationResultDto> RecommendFromMessageAsync(
-            string message,
-            CancellationToken cancellationToken = default)
+        public Task<ChatRecommendationResultDto>
+            RecommendFromMessageAsync(
+                string message,
+                CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new ChatRecommendationResultDto
-            {
-                Message = "Test recommendation",
-                ShouldUseQuestionnaire = true,
-                Recommendations = []
-            });
+            return Task.FromResult(
+                new ChatRecommendationResultDto
+                {
+                    Message = "Test recommendation",
+                    ShouldUseQuestionnaire = true,
+                    Recommendations = []
+                });
+        }
+    }
+
+    private sealed class FakeApplicationStatusQueryService
+        : IApplicationStatusQueryService
+    {
+        public Task<ApplicationStatusDto?> GetApplicationStatusAsync(
+            Guid applicationId)
+        {
+            return Task.FromResult<ApplicationStatusDto?>(null);
+        }
+
+        public Task<ApplicationStatusDto?>
+            GetCurrentApplicationStatusForApplicantAsync(
+                string applicantUserId,
+                CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ApplicationStatusDto?>(null);
         }
     }
 }

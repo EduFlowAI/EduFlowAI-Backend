@@ -1,4 +1,5 @@
-﻿using EduFlowAI.AI.Application.DTOs;
+﻿using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
@@ -11,17 +12,21 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private readonly IRagAnswerService _ragAnswerService;
     private readonly ISessionManager _sessionManager;
     private readonly IChatRecommendationService _chatRecommendationService;
+    private readonly IApplicationStatusQueryService
+        _applicationStatusQueryService;
 
     public AssistantMessageService(
         IIntentRouter intentRouter,
         IRagAnswerService ragAnswerService,
         ISessionManager sessionManager,
-        IChatRecommendationService chatRecommendationService)
+        IChatRecommendationService chatRecommendationService,
+        IApplicationStatusQueryService applicationStatusQueryService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
         _chatRecommendationService = chatRecommendationService;
+        _applicationStatusQueryService = applicationStatusQueryService;
     }
 
     public async Task<AssistantResponse> HandleAsync(
@@ -66,7 +71,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
             var result = await DispatchAsync(
                 detectedIntent.Intent,
                 request.Message,
+                history,
                 language,
+                userId,
                 isAuthenticated,
                 cancellationToken);
 
@@ -99,7 +106,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private async Task<AssistantResultDto> DispatchAsync(
         string intent,
         string message,
+        IReadOnlyList<ConversationTurnDto> history,
         string language,
+        Guid userId,
         bool isAuthenticated,
         CancellationToken cancellationToken)
     {
@@ -107,14 +116,20 @@ public sealed class AssistantMessageService : IAssistantMessageService
         {
             "knowledge" => await HandleKnowledgeAsync(
                 message,
+                history,
                 language,
                 cancellationToken),
 
             "recommendation" => await HandleRecommendationAsync(
                 message,
+                language,
                 cancellationToken),
 
-            "status" => HandleStatus(isAuthenticated),
+            "status" => await HandleStatusAsync(
+                userId,
+                isAuthenticated,
+                language,
+                cancellationToken),
 
             _ => CreateUnknownResult(language)
         };
@@ -122,17 +137,21 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
     private async Task<AssistantResultDto> HandleKnowledgeAsync(
         string message,
+        IReadOnlyList<ConversationTurnDto> history,
         string language,
         CancellationToken cancellationToken)
     {
         var answer = await _ragAnswerService.AnswerWithContextAsync(
             message,
+            history,
             language,
             cancellationToken);
 
         return new AssistantResultDto(
             Intent: "knowledge",
-            Title: language == "ar" ? "معلومات القبول" : "Admission Information",
+            Title: language == "ar"
+                ? "معلومات القبول"
+                : "Admission Information",
             Content: answer.Answer,
             Sources: answer.Sources,
             Metadata: new Dictionary<string, object?>());
@@ -140,6 +159,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
     private async Task<AssistantResultDto> HandleRecommendationAsync(
         string message,
+        string language,
         CancellationToken cancellationToken)
     {
         var recommendation =
@@ -149,7 +169,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
         return new AssistantResultDto(
             Intent: "recommendation",
-            Title: "Track Recommendation",
+            Title: language == "ar"
+                ? "ترشيح المسار"
+                : "Track Recommendation",
             Content: recommendation.Message,
             Sources: [],
             Metadata: new Dictionary<string, object?>
@@ -158,19 +180,28 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     recommendation.ShouldUseQuestionnaire,
 
                 ["recommendations"] =
-                    recommendation.Recommendations
+                    recommendation.Recommendations,
+
+                ["advisory"] = true
             });
     }
 
-    private static AssistantResultDto HandleStatus(
-        bool isAuthenticated)
+    private async Task<AssistantResultDto> HandleStatusAsync(
+        Guid userId,
+        bool isAuthenticated,
+        string language,
+        CancellationToken cancellationToken)
     {
         if (!isAuthenticated)
         {
             return new AssistantResultDto(
                 Intent: "status",
-                Title: "Application Status",
-                Content: "Please log in to view your application status.",
+                Title: language == "ar"
+                    ? "حالة الطلب"
+                    : "Application Status",
+                Content: language == "ar"
+                    ? "من فضلك سجل الدخول لعرض حالة طلبك."
+                    : "Please log in to view your application status.",
                 Sources: [],
                 Metadata: new Dictionary<string, object?>
                 {
@@ -178,15 +209,54 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 });
         }
 
+        var applicationStatus =
+            await _applicationStatusQueryService
+                .GetCurrentApplicationStatusForApplicantAsync(
+                    userId.ToString(),
+                    cancellationToken);
+
+        if (applicationStatus is null)
+        {
+            return new AssistantResultDto(
+                Intent: "status",
+                Title: language == "ar"
+                    ? "حالة الطلب"
+                    : "Application Status",
+                Content: language == "ar"
+                    ? "لا يوجد طلب تقديم حالي مرتبط بحسابك."
+                    : "No current application was found for your account.",
+                Sources: [],
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["applicationFound"] = false
+                });
+        }
+
+        var content = !string.IsNullOrWhiteSpace(
+            applicationStatus.StatusMessage)
+                ? applicationStatus.StatusMessage
+                : language == "ar"
+                    ? $"حالة طلبك الحالية هي: {applicationStatus.CurrentStatus}."
+                    : $"Your current application status is: {applicationStatus.CurrentStatus}.";
+
         return new AssistantResultDto(
             Intent: "status",
-            Title: "Application Status",
-            Content:
-                "Application status integration is not available yet.",
+            Title: language == "ar"
+                ? "حالة الطلب"
+                : "Application Status",
+            Content: content,
             Sources: [],
             Metadata: new Dictionary<string, object?>
             {
-                ["integrationPending"] = true
+                ["applicationFound"] = true,
+                ["applicationId"] =
+                    applicationStatus.ApplicationId,
+                ["currentStatus"] =
+                    applicationStatus.CurrentStatus,
+                ["lastUpdatedAt"] =
+                    applicationStatus.LastUpdatedAt,
+                ["statusMessage"] =
+                    applicationStatus.StatusMessage
             });
     }
 
@@ -195,7 +265,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
     {
         return new AssistantResultDto(
             Intent: "unknown",
-            Title: language == "ar" ? "محتاج توضيح" : "Clarification Needed",
+            Title: language == "ar"
+                ? "محتاج توضيح"
+                : "Clarification Needed",
             Content: language == "ar"
                 ? "اختر: سؤال عام، حالة الطلب، حالة المستندات، أو ترشيح مسار."
                 : "Choose: general question, application status, document status, or track recommendation.",
@@ -240,7 +312,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         ];
     }
 
-    private static string NormalizeLanguage(string? language)
+    private static string NormalizeLanguage(
+        string? language)
     {
         return string.Equals(
             language,
