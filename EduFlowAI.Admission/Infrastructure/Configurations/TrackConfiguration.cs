@@ -33,7 +33,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                     0,
                     (hash, topic) => HashCode.Combine(
                         hash,
-                        topic is null
+                        topic == null
                             ? 0
                             : StringComparer.Ordinal.GetHashCode(topic))),
                 topics => topics.ToList());
