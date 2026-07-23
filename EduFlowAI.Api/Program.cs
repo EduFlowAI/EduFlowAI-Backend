@@ -38,8 +38,9 @@ namespace EduFlowAI.Api
             // Register EduFlowAIDbContext with Npgsql provider, and DbContext interfaces
             builder.Services.AddPersistence(builder.Configuration);
 
-            // register modules
+            // register modules(All DI in each module is registered by the module itself)
             var identityBuilder = builder.Services.AddIdentityModule();
+
             identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();

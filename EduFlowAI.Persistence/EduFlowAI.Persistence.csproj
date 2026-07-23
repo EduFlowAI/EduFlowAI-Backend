@@ -77,8 +77,4 @@
     <ProjectReference Include="..\EduFlowAI.Shared.Messaging.Contracts\EduFlowAI.Shared.Messaging.Contracts.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Migrations\" />
-  </ItemGroup>
-
 </Project>
