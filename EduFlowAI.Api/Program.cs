@@ -10,9 +10,12 @@ using EduFlowAI.Identity;
 using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
+using EduFlowAI.Shared.Messaging.Contracts.Configuration;
+using JasperFx.Resources;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Wolverine;
 
 namespace EduFlowAI.Api
 {
@@ -43,6 +46,19 @@ namespace EduFlowAI.Api
             builder.Services.AddAIModule(builder.Configuration);
             builder.Services.AddCommunicationModule();
 
+            // messaging -> ensure running rabbitmq before un-comment it
+            builder.ConfigureCommonMessaging("EduFlowAI.Api");
+            builder.Services.ConfigureWolverine(options =>
+            {
+                MessagingConfiguration.ConfigureApiListeners(options);
+            });
+
+            // messaging dev only
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services.AddResourceSetupOnStartup();
+            }
+
             #region Swagger
             builder.Services.AddSwaggerGen(options =>
                 {
@@ -64,7 +80,7 @@ namespace EduFlowAI.Api
                     {
                         [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
                     });
-                }); 
+                });
             #endregion
 
             var app = builder.Build();

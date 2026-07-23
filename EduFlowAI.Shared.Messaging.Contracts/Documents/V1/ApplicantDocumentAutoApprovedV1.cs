@@ -9,7 +9,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Documents.V1
     [MessageIdentity("eduflow.documents.applicant-document-auto-approved", Version = 1)]
         public sealed record ApplicantDocumentAutoApprovedV1(
         Guid MessageId, Guid CorrelationId, Guid? CausationId,
-        Guid DocumentId, Guid ApplicationId, Guid ApplicantUserId,
+        Guid DocumentId, Guid ApplicationId, string ApplicantUserId,
         string DocumentType,
         DateTimeOffset OccurredAtUtc
 

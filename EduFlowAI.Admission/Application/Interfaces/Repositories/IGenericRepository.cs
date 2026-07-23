@@ -17,11 +17,27 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
             Func<IQueryable<T>, IQueryable<T>>? include = null);
 
         /// <summary>
+        /// Get all entities meet the condition.
+        /// </summary>
+        /// <param name="predicate"></param>
+        /// <param name="include"></param>
+        /// <returns></returns>
+        Task<List<T>?> GetAllAsync(Expression<Func<T, bool>> predicate,
+            Func<IQueryable<T>, IQueryable<T>>? include = null);
+
+        /// <summary>
         /// Adds a new entity.
         /// </summary>
         /// <param name="entity"></param>
         /// <returns></returns>
         Task AddAsync(T entity);
+
+        /// <summary>
+        /// Update an existing entity.
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns></returns>
+        void Update(T entity);
 
         /// <summary>
         /// Saves changes to the database.
