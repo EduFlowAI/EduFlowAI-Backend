@@ -7,7 +7,6 @@ using EduFlowAI.AI.Infrastructure.Indexing;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
-using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -110,7 +109,6 @@ public static class AIModule
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
-        // Temporary until the admission catalog provides the real reader.
-        services.AddScoped<IOfferedTrackReader, DevelopmentOfferedTrackReader>();
+        // IOfferedTrackReader is supplied by the Admission catalog module.
     }
 }
