@@ -14,7 +14,7 @@ namespace EduFlowAI.Identity.Domain.Entities
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? DeactivatedAt { get; set; }
-        
+
         // Navigation property (1-to-1 relationship with Profile)
         public ApplicantProfile? ApplicantProfile { get; set; }
     }
