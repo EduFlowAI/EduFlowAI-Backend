@@ -160,45 +160,6 @@ namespace EduFlowAI.Documents.Application.Services
             }
         }
 
-        public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById)
-        {
-            try
-            {
-                var doc = await dbContext.ApplicantDocuments.FirstOrDefaultAsync(d => d.Id == request.DocumentId);
-                if (doc == null)
-                {
-                    return Result<string>.Failure(404, "Document not found");
-                }
-
-                var isAuthorizedUser = await IsUserAuthorizedAsync(requestedById);
-                if (!isAuthorizedUser)
-                {
-                    return Result<string>.Failure(403, "User is not authorized to send replacement requests");
-                }
-
-                var replacementRequest = new Domain.Entities.DocumentReplacementRequest
-                {
-                    Id = Guid.NewGuid(),
-                    DocumentId = request.DocumentId,
-                    RequestedByUserId = requestedById,
-                    Reason = request.Reason,
-                    Status = ReplacementRequestStatus.Open,
-                    RequestedAt = DateTimeOffset.UtcNow
-                };
-
-                await dbContext.DocumentReplacementRequests.AddAsync(replacementRequest);
-                await dbContext.SaveChangesAsync();
-
-                // may send notification/email to applicant about replacement request here
-
-                return Result<string>.Success("Replacement request sent successfully");
-            }
-            catch (Exception ex)
-            {
-                return Result<string>.Failure(500, $"An error occurred while sending the replacement request: {ex.Message}");
-            }
-        }
-
         public async Task<Result<DocumentFileDto>> GetDocumentFileAsync(Guid documentId)
         {
             try
