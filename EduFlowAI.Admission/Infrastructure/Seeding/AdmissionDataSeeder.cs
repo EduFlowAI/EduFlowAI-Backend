@@ -245,136 +245,71 @@ namespace EduFlowAI.Admission.Infrastructure.Seeding
         {
             return new List<Track>
             {
-                new()
-                {
-                    Id = AdmissionSeedIds.OpenSourceApplicationsDevelopmentTrackId,
-                    ProgramId = programId,
-                    Name = "Open Source Applications Development",
-                    Description = "Build modern applications using open-source technologies and frameworks.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Programming Fundamentals",
-                        "Object-Oriented Programming",
-                        "Databases"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.AiAndMachineLearningTrackId,
-                    ProgramId = programId,
-                    Name = "AI and Machine Learning",
-                    Description = "Develop machine-learning solutions and data-driven intelligent applications.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Python",
-                        "Statistics",
-                        "Problem Solving"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.SystemsAdministrationTrackId,
-                    ProgramId = programId,
-                    Name = "Systems Administration",
-                    Description = "Administer operating systems, enterprise infrastructure, and networked services.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Operating Systems",
-                        "Networking Fundamentals",
-                        "Linux"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId,
-                    ProgramId = programId,
-                    Name = "Professional Development & BI-infused CRM",
-                    Description = "Build business applications using CRM platforms, analytics, and full-stack development.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Programming Fundamentals",
-                        "Databases",
-                        "Business Applications"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.CloudPlatformDevelopmentTrackId,
-                    ProgramId = programId,
-                    Name = "Cloud Platform Development",
-                    Description = "Design and build applications that run on modern cloud platforms.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Programming Fundamentals",
-                        "Web Development",
-                        "Databases"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.CloudArchitectureTrackId,
-                    ProgramId = programId,
-                    Name = "Cloud Architecture",
-                    Description = "Design secure, scalable, and reliable cloud infrastructure and solutions.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Networking Fundamentals",
-                        "Operating Systems",
-                        "Cloud Fundamentals"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId,
-                    ProgramId = programId,
-                    Name = "Integrated Software Development & Architecture",
-                    Description = "Develop enterprise software while applying architecture and integration practices.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Object-Oriented Programming",
-                        "Software Engineering",
-                        "Databases"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.CyberSecurityTrackId,
-                    ProgramId = programId,
-                    Name = "Cyber Security",
-                    Description = "Protect systems, networks, and applications against security threats.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Networking Fundamentals",
-                        "Operating Systems",
-                        "Security Fundamentals"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.EnterpriseJavaTrackId,
-                    ProgramId = programId,
-                    Name = "Enterprise & Web Applications Development (Java)",
-                    Description = "Build enterprise and web applications using Java technologies.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Java",
-                        "Object-Oriented Programming",
-                        "Databases"
-                    }
-                },
-                new()
-                {
-                    Id = AdmissionSeedIds.TelecomApplicationDevelopmentTrackId,
-                    ProgramId = programId,
-                    Name = "Telecom Application Development",
-                    Description = "Develop software solutions for telecommunications systems and services.",
-                    PrerequisiteTopics = new List<string>
-                    {
-                        "Programming Fundamentals",
-                        "Networking Fundamentals",
-                        "Data Structures"
-                    }
-                }
+                CreateTrack(
+                    AdmissionSeedIds.OpenSourceApplicationsDevelopmentTrackId,
+                    programId,
+                    "Open Source Applications Development"),
+
+                CreateTrack(
+                    AdmissionSeedIds.AiAndMachineLearningTrackId,
+                    programId,
+                    "AI and Machine Learning"),
+
+                CreateTrack(
+                    AdmissionSeedIds.SystemsAdministrationTrackId,
+                    programId,
+                    "Systems Administration"),
+
+                CreateTrack(
+                    AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId,
+                    programId,
+                    "Professional Development & BI-infused CRM"),
+
+                CreateTrack(
+                    AdmissionSeedIds.CloudPlatformDevelopmentTrackId,
+                    programId,
+                    "Cloud Platform Development"),
+
+                CreateTrack(
+                    AdmissionSeedIds.CloudArchitectureTrackId,
+                    programId,
+                    "Cloud Architecture"),
+
+                CreateTrack(
+                    AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId,
+                    programId,
+                    "Integrated Software Development & Architecture"),
+
+                CreateTrack(
+                    AdmissionSeedIds.CyberSecurityTrackId,
+                    programId,
+                    "Cyber Security"),
+
+                CreateTrack(
+                    AdmissionSeedIds.EnterpriseJavaTrackId,
+                    programId,
+                    "Enterprise & Web Applications Development (Java)"),
+
+                CreateTrack(
+                    AdmissionSeedIds.TelecomApplicationDevelopmentTrackId,
+                    programId,
+                    "Telecom Application Development")
+            };
+        }
+
+        private static Track CreateTrack(
+            Guid id,
+            Guid programId,
+            string name)
+        {
+            return new Track
+            {
+                Id = id,
+                ProgramId = programId,
+                Name = name,
+                Description = null,
+                PrerequisiteTopics = new List<string>(),
+                IsActive = true
             };
         }
 
