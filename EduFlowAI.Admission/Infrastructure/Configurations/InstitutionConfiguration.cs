@@ -21,8 +21,9 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .HasDefaultValueSql("now()")
                 .IsRequired();
 
-            // Code must be unique (e.g., "ITI")
-            builder.HasIndex(x => x.Code).IsUnique();
+            builder.HasIndex(x => x.Code)
+                .HasDatabaseName("UX_Institutions_Code")
+                .IsUnique();
         }
     }
 }

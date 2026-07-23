@@ -68,3 +68,4 @@ namespace EduFlowAI.Admission.Infrastructure.Seeding
             Guid.Parse("50000000-0000-0000-0000-000000000005");
     }
 }
+

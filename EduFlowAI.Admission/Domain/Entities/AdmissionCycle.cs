@@ -26,3 +26,4 @@ namespace EduFlowAI.Admission.Domain.Entities
         public ICollection<TrackBranchOffering> Offerings { get; set; } = new List<TrackBranchOffering>();
     }
 }
+

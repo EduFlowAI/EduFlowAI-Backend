@@ -1,40 +1,14 @@
 using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 
 namespace EduFlowAI.Admission.Application.Services.Configuration;
-
-public sealed class AdmissionOperationResult<T>
-{
-    public bool Succeeded { get; init; }
-    public int StatusCode { get; init; }
-    public string Message { get; init; } = string.Empty;
-    public T? Data { get; init; }
-
-    public static AdmissionOperationResult<T> Success(T data, string message = "Success", int statusCode = 200)
-    {
-        return new AdmissionOperationResult<T>
-        {
-            Succeeded = true,
-            StatusCode = statusCode,
-            Message = message,
-            Data = data
-        };
-    }
-
-    public static AdmissionOperationResult<T> Failure(int statusCode, string message)
-    {
-        return new AdmissionOperationResult<T>
-        {
-            Succeeded = false,
-            StatusCode = statusCode,
-            Message = message,
-            Data = default
-        };
-    }
-}
 
 public sealed class InstitutionDto
 {
@@ -147,7 +121,7 @@ public sealed class CreateInstitutionRequest
     [Required, MaxLength(200)]
     public string Name { get; init; } = string.Empty;
 
-    [Required, MaxLength(30)]
+    [Required, MaxLength(20)]
     public string Code { get; init; } = string.Empty;
 }
 
@@ -156,7 +130,7 @@ public sealed class UpdateInstitutionRequest
     [Required, MaxLength(200)]
     public string Name { get; init; } = string.Empty;
 
-    [Required, MaxLength(30)]
+    [Required, MaxLength(20)]
     public string Code { get; init; } = string.Empty;
 }
 
@@ -194,8 +168,8 @@ public sealed class ProgramDocumentRequirementInput
 
 public sealed class UpdateProgramDocumentRequirementsRequest
 {
-    [Required]
-    public List<ProgramDocumentRequirementInput> Requirements { get; init; } = new();
+    [Required, MaxLength(12)]
+    public ProgramDocumentRequirementInput[] Requirements { get; init; } = [];
 }
 
 public sealed class CreateTrackRequest
@@ -205,8 +179,11 @@ public sealed class CreateTrackRequest
     [Required, MaxLength(200)]
     public string Name { get; init; } = string.Empty;
 
+    [MaxLength(4000)]
     public string? Description { get; init; }
-    public List<string> PrerequisiteTopics { get; init; } = new();
+
+    [MaxLength(50)]
+    public string[] PrerequisiteTopics { get; init; } = [];
     public bool IsActive { get; init; } = true;
 }
 
@@ -215,8 +192,11 @@ public sealed class UpdateTrackRequest
     [Required, MaxLength(200)]
     public string Name { get; init; } = string.Empty;
 
+    [MaxLength(4000)]
     public string? Description { get; init; }
-    public List<string> PrerequisiteTopics { get; init; } = new();
+
+    [MaxLength(50)]
+    public string[] PrerequisiteTopics { get; init; } = [];
     public bool IsActive { get; init; } = true;
 }
 
@@ -278,8 +258,8 @@ public sealed class OfferingInput
 
 public sealed class ConfigureOfferingsRequest
 {
-    [Required]
-    public List<OfferingInput> Offerings { get; init; } = new();
+    [Required, MaxLength(500)]
+    public OfferingInput[] Offerings { get; init; } = [];
 }
 
 public interface IAdmissionConfigurationService
@@ -288,29 +268,29 @@ public interface IAdmissionConfigurationService
     Task<TrackDto?> GetPublicTrackAsync(Guid trackId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<InstitutionDto>> GetInstitutionsAsync(CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<InstitutionDto>> CreateInstitutionAsync(CreateInstitutionRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<InstitutionDto>> UpdateInstitutionAsync(Guid institutionId, UpdateInstitutionRequest request, CancellationToken cancellationToken = default);
+    Task<Result<InstitutionDto>> CreateInstitutionAsync(CreateInstitutionRequest request, CancellationToken cancellationToken = default);
+    Task<Result<InstitutionDto>> UpdateInstitutionAsync(Guid institutionId, UpdateInstitutionRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ProgramDto>> GetProgramsAsync(CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<ProgramDto>> CreateProgramAsync(CreateProgramRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<ProgramDto>> UpdateProgramAsync(Guid programId, UpdateProgramRequest request, CancellationToken cancellationToken = default);
+    Task<Result<ProgramDto>> CreateProgramAsync(CreateProgramRequest request, CancellationToken cancellationToken = default);
+    Task<Result<ProgramDto>> UpdateProgramAsync(Guid programId, UpdateProgramRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProgramDocumentRequirementDto>?> GetProgramRequirementsAsync(Guid programId, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>> ReplaceProgramRequirementsAsync(Guid programId, UpdateProgramDocumentRequirementsRequest request, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<ProgramDocumentRequirementDto>>> ReplaceProgramRequirementsAsync(Guid programId, UpdateProgramDocumentRequirementsRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<TrackDto>> GetAdminTracksAsync(CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<TrackDto>> CreateTrackAsync(CreateTrackRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<TrackDto>> UpdateTrackAsync(Guid trackId, UpdateTrackRequest request, CancellationToken cancellationToken = default);
+    Task<Result<TrackDto>> CreateTrackAsync(CreateTrackRequest request, CancellationToken cancellationToken = default);
+    Task<Result<TrackDto>> UpdateTrackAsync(Guid trackId, UpdateTrackRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<BranchDto>> GetBranchesAsync(CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<BranchDto>> CreateBranchAsync(CreateBranchRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<BranchDto>> UpdateBranchAsync(Guid branchId, UpdateBranchRequest request, CancellationToken cancellationToken = default);
+    Task<Result<BranchDto>> CreateBranchAsync(CreateBranchRequest request, CancellationToken cancellationToken = default);
+    Task<Result<BranchDto>> UpdateBranchAsync(Guid branchId, UpdateBranchRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AdmissionCycleDto>> GetCyclesAsync(CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<AdmissionCycleDto>> CreateCycleAsync(CreateAdmissionCycleRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(Guid cycleId, UpdateCycleEligibilityRuleRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(Guid cycleId, ConfigureOfferingsRequest request, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<AdmissionCycleDto>> ActivateCycleAsync(Guid cycleId, CancellationToken cancellationToken = default);
-    Task<AdmissionOperationResult<AdmissionCycleDto>> CloseCycleAsync(Guid cycleId, CancellationToken cancellationToken = default);
+    Task<Result<AdmissionCycleDto>> CreateCycleAsync(CreateAdmissionCycleRequest request, CancellationToken cancellationToken = default);
+    Task<Result<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(Guid cycleId, UpdateCycleEligibilityRuleRequest request, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(Guid cycleId, ConfigureOfferingsRequest request, CancellationToken cancellationToken = default);
+    Task<Result<AdmissionCycleDto>> ActivateCycleAsync(Guid cycleId, CancellationToken cancellationToken = default);
+    Task<Result<AdmissionCycleDto>> CloseCycleAsync(Guid cycleId, CancellationToken cancellationToken = default);
 
     Task<AdminAdmissionDashboardDto> GetDashboardAsync(CancellationToken cancellationToken = default);
 }
@@ -318,17 +298,27 @@ public interface IAdmissionConfigurationService
 public sealed class AdmissionConfigurationService : IAdmissionConfigurationService
 {
     private readonly IAdmissionDbContext _dbContext;
+    private readonly IAdmissionApplicationReader _applicationReader;
+    private readonly TimeProvider _timeProvider;
 
-    public AdmissionConfigurationService(IAdmissionDbContext dbContext)
+    public AdmissionConfigurationService(
+        IAdmissionDbContext dbContext,
+        IAdmissionApplicationReader applicationReader,
+        TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(applicationReader);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
         _dbContext = dbContext;
+        _applicationReader = applicationReader;
+        _timeProvider = timeProvider;
     }
 
     public async Task<IReadOnlyList<TrackDto>> GetPublicTracksAsync(CancellationToken cancellationToken = default)
     {
         var offerings = await _dbContext.TrackBranchOfferings
             .AsNoTracking()
-            .Include(x => x.Cycle)
             .Include(x => x.Track)
             .Include(x => x.Branch)
             .Where(x =>
@@ -349,7 +339,6 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
     {
         var offerings = await _dbContext.TrackBranchOfferings
             .AsNoTracking()
-            .Include(x => x.Cycle)
             .Include(x => x.Track)
             .Include(x => x.Branch)
             .Where(x =>
@@ -383,59 +372,110 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<AdmissionOperationResult<InstitutionDto>> CreateInstitutionAsync(CreateInstitutionRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<InstitutionDto>> CreateInstitutionAsync(CreateInstitutionRequest request, CancellationToken cancellationToken = default)
     {
-        string code = NormalizeCode(request.Code);
-        string name = request.Name.Trim();
-
-        if (await _dbContext.Institutions.AnyAsync(x => x.Code == code, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<InstitutionDto>.Failure(409, $"Institution code '{code}' already exists.");
+            return Result<InstitutionDto>.Failure(400, "Request body is required.");
         }
 
-        var institution = new Institution
+        string name = NormalizeRequiredText(request.Name);
+        string code = NormalizeCode(request.Code);
+        if (!IsRequiredTextValid(name, 200) || !IsRequiredTextValid(code, 20))
         {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Code = code
-        };
+            return Result<InstitutionDto>.Failure(
+                400,
+                "Institution name is required and must not exceed 200 characters; code is required and must not exceed 20 characters.");
+        }
 
-        _dbContext.Institutions.Add(institution);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
+            {
+                if (await _dbContext.Institutions.AnyAsync(x => x.Code == code, ct))
+                {
+                    return Result<InstitutionDto>.Failure(409, $"Institution code '{code}' already exists.");
+                }
 
-        return AdmissionOperationResult<InstitutionDto>.Success(
-            MapInstitution(institution, 0),
-            "Institution created successfully.",
-            201);
+                var institution = new Institution
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    Code = code,
+                    CreatedAt = UtcNow
+                };
+
+                _dbContext.Institutions.Add(institution);
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<InstitutionDto>.Success(
+                    MapInstitution(institution, 0),
+                    201,
+                    "Institution created successfully.");
+            },
+            ("UX_Institutions_Code", $"Institution code '{code}' already exists."));
     }
 
-    public async Task<AdmissionOperationResult<InstitutionDto>> UpdateInstitutionAsync(Guid institutionId, UpdateInstitutionRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<InstitutionDto>> UpdateInstitutionAsync(Guid institutionId, UpdateInstitutionRequest request, CancellationToken cancellationToken = default)
     {
-        var institution = await _dbContext.Institutions
-            .SingleOrDefaultAsync(x => x.Id == institutionId, cancellationToken);
-
-        if (institution is null)
+        if (institutionId == Guid.Empty)
         {
-            return AdmissionOperationResult<InstitutionDto>.Failure(404, "Institution was not found.");
+            return Result<InstitutionDto>.Failure(400, "A valid institution ID is required.");
         }
 
-        if (await InstitutionHasApplicationsAsync(institutionId, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<InstitutionDto>.Failure(409, "Institution configuration is locked because admissions have already started for one of its programs.");
+            return Result<InstitutionDto>.Failure(400, "Request body is required.");
         }
 
+        string name = NormalizeRequiredText(request.Name);
         string code = NormalizeCode(request.Code);
-        if (await _dbContext.Institutions.AnyAsync(x => x.Id != institutionId && x.Code == code, cancellationToken))
+        if (!IsRequiredTextValid(name, 200) || !IsRequiredTextValid(code, 20))
         {
-            return AdmissionOperationResult<InstitutionDto>.Failure(409, $"Institution code '{code}' already exists.");
+            return Result<InstitutionDto>.Failure(
+                400,
+                "Institution name is required and must not exceed 200 characters; code is required and must not exceed 20 characters.");
         }
 
-        institution.Name = request.Name.Trim();
-        institution.Code = code;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var institution = await _dbContext.Institutions
+                    .SingleOrDefaultAsync(x => x.Id == institutionId, ct);
 
-        int programCount = await _dbContext.Programs.CountAsync(x => x.InstitutionId == institutionId, cancellationToken);
-        return AdmissionOperationResult<InstitutionDto>.Success(MapInstitution(institution, programCount), "Institution updated successfully.");
+                if (institution is null)
+                {
+                    return Result<InstitutionDto>.Failure(404, "Institution was not found.");
+                }
+
+                if (await _applicationReader.IsInstitutionConfigurationLockedAsync(institutionId, ct))
+                {
+                    return Result<InstitutionDto>.Failure(
+                        409,
+                        "Institution configuration is locked because one of its admission cycles is Active or already has applications.");
+                }
+
+                if (await _dbContext.Institutions.AnyAsync(
+                        x => x.Id != institutionId && x.Code == code,
+                        ct))
+                {
+                    return Result<InstitutionDto>.Failure(409, $"Institution code '{code}' already exists.");
+                }
+
+                institution.Name = name;
+                institution.Code = code;
+                await _dbContext.SaveChangesAsync(ct);
+
+                int programCount = await _dbContext.Programs.CountAsync(
+                    x => x.InstitutionId == institutionId,
+                    ct);
+
+                return Result<InstitutionDto>.Success(
+                    MapInstitution(institution, programCount),
+                    message: "Institution updated successfully.");
+            },
+            ("UX_Institutions_Code", $"Institution code '{code}' already exists."));
     }
 
     public async Task<IReadOnlyList<ProgramDto>> GetProgramsAsync(CancellationToken cancellationToken = default)
@@ -457,74 +497,135 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<AdmissionOperationResult<ProgramDto>> CreateProgramAsync(CreateProgramRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<ProgramDto>> CreateProgramAsync(CreateProgramRequest request, CancellationToken cancellationToken = default)
     {
+        if (request is null)
+        {
+            return Result<ProgramDto>.Failure(400, "Request body is required.");
+        }
+
+        if (request.InstitutionId == Guid.Empty)
+        {
+            return Result<ProgramDto>.Failure(400, "A valid institution ID is required.");
+        }
+
+        string name = NormalizeRequiredText(request.Name);
+        string code = NormalizeCode(request.Code);
+        if (!IsRequiredTextValid(name, 200) ||
+            !IsRequiredTextValid(code, 30) ||
+            request.DurationMonths is < 1 or > 60)
+        {
+            return Result<ProgramDto>.Failure(
+                400,
+                "Program name and code are required, and duration must be between 1 and 60 months.");
+        }
+
         var institution = await _dbContext.Institutions
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == request.InstitutionId, cancellationToken);
 
         if (institution is null)
         {
-            return AdmissionOperationResult<ProgramDto>.Failure(404, "Institution was not found.");
+            return Result<ProgramDto>.Failure(404, "Institution was not found.");
         }
 
-        string code = NormalizeCode(request.Code);
-        if (await _dbContext.Programs.AnyAsync(x => x.Code == code, cancellationToken))
-        {
-            return AdmissionOperationResult<ProgramDto>.Failure(409, $"Program code '{code}' already exists.");
-        }
+        return await ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
+            {
+                if (await _dbContext.Programs.AnyAsync(x => x.Code == code, ct))
+                {
+                    return Result<ProgramDto>.Failure(409, $"Program code '{code}' already exists.");
+                }
 
-        var program = new Program
-        {
-            Id = Guid.NewGuid(),
-            InstitutionId = request.InstitutionId,
-            Name = request.Name.Trim(),
-            Code = code,
-            DurationMonths = request.DurationMonths
-        };
+                var program = new Program
+                {
+                    Id = Guid.NewGuid(),
+                    InstitutionId = request.InstitutionId,
+                    Name = name,
+                    Code = code,
+                    DurationMonths = request.DurationMonths,
+                    CreatedAt = UtcNow
+                };
 
-        _dbContext.Programs.Add(program);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                _dbContext.Programs.Add(program);
+                await _dbContext.SaveChangesAsync(ct);
 
-        return AdmissionOperationResult<ProgramDto>.Success(
-            MapProgram(program, institution.Name, 0, 0),
-            "Program created successfully.",
-            201);
+                return Result<ProgramDto>.Success(
+                    MapProgram(program, institution.Name, 0, 0),
+                    statusCode: 201,
+                    message: "Program created successfully.");
+            },
+            ("UX_Programs_Code", $"Program code '{code}' already exists."));
     }
 
-    public async Task<AdmissionOperationResult<ProgramDto>> UpdateProgramAsync(Guid programId, UpdateProgramRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<ProgramDto>> UpdateProgramAsync(Guid programId, UpdateProgramRequest request, CancellationToken cancellationToken = default)
     {
-        var program = await _dbContext.Programs
-            .Include(x => x.Institution)
-            .SingleOrDefaultAsync(x => x.Id == programId, cancellationToken);
-
-        if (program is null)
+        if (programId == Guid.Empty)
         {
-            return AdmissionOperationResult<ProgramDto>.Failure(404, "Program was not found.");
+            return Result<ProgramDto>.Failure(400, "A valid program ID is required.");
         }
 
-        if (await ProgramHasApplicationsAsync(programId, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<ProgramDto>.Failure(409, "Program configuration is locked because admissions have already started.");
+            return Result<ProgramDto>.Failure(400, "Request body is required.");
         }
 
+        string name = NormalizeRequiredText(request.Name);
         string code = NormalizeCode(request.Code);
-        if (await _dbContext.Programs.AnyAsync(x => x.Id != programId && x.Code == code, cancellationToken))
+        if (!IsRequiredTextValid(name, 200) ||
+            !IsRequiredTextValid(code, 30) ||
+            request.DurationMonths is < 1 or > 60)
         {
-            return AdmissionOperationResult<ProgramDto>.Failure(409, $"Program code '{code}' already exists.");
+            return Result<ProgramDto>.Failure(
+                400,
+                "Program name and code are required, and duration must be between 1 and 60 months.");
         }
 
-        program.Name = request.Name.Trim();
-        program.Code = code;
-        program.DurationMonths = request.DurationMonths;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var program = await _dbContext.Programs
+                    .Include(x => x.Institution)
+                    .SingleOrDefaultAsync(x => x.Id == programId, ct);
 
-        int trackCount = await _dbContext.Tracks.CountAsync(x => x.ProgramId == programId, cancellationToken);
-        int cycleCount = await _dbContext.AdmissionCycles.CountAsync(x => x.ProgramId == programId, cancellationToken);
+                if (program is null)
+                {
+                    return Result<ProgramDto>.Failure(404, "Program was not found.");
+                }
 
-        return AdmissionOperationResult<ProgramDto>.Success(
-            MapProgram(program, program.Institution.Name, trackCount, cycleCount),
-            "Program updated successfully.");
+                if (await _applicationReader.IsProgramConfigurationLockedAsync(programId, ct))
+                {
+                    return Result<ProgramDto>.Failure(
+                        409,
+                        "Program configuration is locked because one of its cycles is Active or already has applications.");
+                }
+
+                if (await _dbContext.Programs.AnyAsync(
+                        x => x.Id != programId && x.Code == code,
+                        ct))
+                {
+                    return Result<ProgramDto>.Failure(409, $"Program code '{code}' already exists.");
+                }
+
+                program.Name = name;
+                program.Code = code;
+                program.DurationMonths = request.DurationMonths;
+                await _dbContext.SaveChangesAsync(ct);
+
+                int trackCount = await _dbContext.Tracks.CountAsync(
+                    x => x.ProgramId == programId,
+                    ct);
+                int cycleCount = await _dbContext.AdmissionCycles.CountAsync(
+                    x => x.ProgramId == programId,
+                    ct);
+
+                return Result<ProgramDto>.Success(
+                    MapProgram(program, program.Institution.Name, trackCount, cycleCount),
+                    message: "Program updated successfully.");
+            },
+            ("UX_Programs_Code", $"Program code '{code}' already exists."));
     }
 
     public async Task<IReadOnlyList<ProgramDocumentRequirementDto>?> GetProgramRequirementsAsync(Guid programId, CancellationToken cancellationToken = default)
@@ -539,30 +640,55 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             .Where(x => x.ProgramId == programId)
             .OrderBy(x => x.DocumentType)
             .ThenBy(x => x.RequiredForGender)
-            .Select(x => MapRequirement(x))
+            .Select(x => new ProgramDocumentRequirementDto
+            {
+                Id = x.Id,
+                ProgramId = x.ProgramId,
+                DocumentType = x.DocumentType,
+                RequiredForGender = x.RequiredForGender
+            })
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>> ReplaceProgramRequirementsAsync(Guid programId, UpdateProgramDocumentRequirementsRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<IReadOnlyList<ProgramDocumentRequirementDto>>> ReplaceProgramRequirementsAsync(Guid programId, UpdateProgramDocumentRequirementsRequest request, CancellationToken cancellationToken = default)
     {
-        if (!await _dbContext.Programs.AnyAsync(x => x.Id == programId, cancellationToken))
+        if (programId == Guid.Empty)
         {
-            return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(404, "Program was not found.");
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                400,
+                "A valid program ID is required.");
         }
 
-        if (await ProgramHasApplicationsAsync(programId, cancellationToken))
+        if (request?.Requirements is null)
         {
-            return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(409, "Document requirements are locked because admissions have already started for this program.");
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                400,
+                "A requirements list is required.");
         }
 
-        if (request.Requirements.Count == 0)
+        if (request.Requirements.Length == 0)
         {
-            return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(400, "At least one document requirement is required.");
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(400, "At least one document requirement is required.");
         }
 
-        if (request.Requirements.Any(x => x.DocumentType == DocumentType.None || x.RequiredForGender == Gender.None))
+        if (request.Requirements.Length > 12)
         {
-            return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(400, "DocumentType.None and Gender.None are not valid requirement values. Use null for all genders.");
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                400,
+                "A program can contain at most 12 document requirement combinations.");
+        }
+
+        if (request.Requirements.Any(input =>
+                input is null ||
+                !Enum.IsDefined(input.DocumentType) ||
+                input.DocumentType == DocumentType.None ||
+                (input.RequiredForGender.HasValue &&
+                 (!Enum.IsDefined(input.RequiredForGender.Value) ||
+                  input.RequiredForGender.Value == Gender.None))))
+        {
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                400,
+                "Every document type must be defined; gender must be Male, Female, or null for all genders.");
         }
 
         bool hasDuplicates = request.Requirements
@@ -571,33 +697,110 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
 
         if (hasDuplicates)
         {
-            return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(400, "Duplicate document requirement combinations are not allowed.");
+            return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(400, "Duplicate document requirement combinations are not allowed.");
         }
 
-        var existing = await _dbContext.ProgramDocumentRequirements
-            .Where(x => x.ProgramId == programId)
-            .ToListAsync(cancellationToken);
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                if (!await _dbContext.Programs.AnyAsync(x => x.Id == programId, ct))
+                {
+                    return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                        404,
+                        "Program was not found.");
+                }
 
-        _dbContext.ProgramDocumentRequirements.RemoveRange(existing);
+                if (await _applicationReader.IsProgramConfigurationLockedAsync(programId, ct))
+                {
+                    return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                        409,
+                        "Document requirements are locked because the program has an Active cycle or already has applications.");
+                }
 
-        var replacements = request.Requirements.Select(input => new ProgramDocumentRequirement
-        {
-            Id = Guid.NewGuid(),
-            ProgramId = programId,
-            DocumentType = input.DocumentType,
-            RequiredForGender = input.RequiredForGender
-        }).ToList();
+                var existing = await _dbContext.ProgramDocumentRequirements
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync(ct);
 
-        _dbContext.ProgramDocumentRequirements.AddRange(replacements);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                if (existing
+                    .GroupBy(requirement => new RequirementKey(
+                        requirement.DocumentType,
+                        requirement.RequiredForGender))
+                    .Any(group => group.Count() > 1))
+                {
+                    return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                        409,
+                        "Existing document requirements contain duplicate keys. Resolve the database duplicates before updating this program.");
+                }
 
-        IReadOnlyList<ProgramDocumentRequirementDto> data = replacements
-            .OrderBy(x => x.DocumentType)
-            .ThenBy(x => x.RequiredForGender)
-            .Select(MapRequirement)
-            .ToList();
+                var existingByKey = existing.ToDictionary(
+                    requirement => new RequirementKey(
+                        requirement.DocumentType,
+                        requirement.RequiredForGender));
 
-        return AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>.Success(data, "Program document requirements updated successfully.");
+                var requestedKeys = request.Requirements
+                    .Select(input => new RequirementKey(
+                        input.DocumentType,
+                        input.RequiredForGender))
+                    .ToHashSet();
+
+                var removed = existing
+                    .Where(requirement =>
+                        !requestedKeys.Contains(new RequirementKey(
+                            requirement.DocumentType,
+                            requirement.RequiredForGender)))
+                    .ToList();
+
+                _dbContext.ProgramDocumentRequirements.RemoveRange(removed);
+
+                var effectiveRequirements = new List<ProgramDocumentRequirement>(
+                    request.Requirements.Length);
+
+                foreach (var input in request.Requirements)
+                {
+                    var key = new RequirementKey(
+                        input.DocumentType,
+                        input.RequiredForGender);
+
+                    if (existingByKey.TryGetValue(key, out var retained))
+                    {
+                        effectiveRequirements.Add(retained);
+                        continue;
+                    }
+
+                    var added = new ProgramDocumentRequirement
+                    {
+                        Id = Guid.NewGuid(),
+                        ProgramId = programId,
+                        DocumentType = input.DocumentType,
+                        RequiredForGender = input.RequiredForGender,
+                        CreatedAt = UtcNow,
+                        UpdatedAt = UtcNow
+                    };
+
+                    _dbContext.ProgramDocumentRequirements.Add(added);
+                    effectiveRequirements.Add(added);
+                }
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                IReadOnlyList<ProgramDocumentRequirementDto> data =
+                    effectiveRequirements
+                        .OrderBy(x => x.DocumentType)
+                        .ThenBy(x => x.RequiredForGender)
+                        .Select(MapRequirement)
+                        .ToList();
+
+                return Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Success(
+                    data,
+                    message: "Program document requirements updated successfully.");
+            },
+            (
+                "UX_ProgramDocumentRequirements_AllGenders",
+                "A duplicate all-genders document requirement already exists."),
+            (
+                "UX_ProgramDocumentRequirements_GenderScoped",
+                "A duplicate gender-specific document requirement already exists."));
     }
 
     public async Task<IReadOnlyList<TrackDto>> GetAdminTracksAsync(CancellationToken cancellationToken = default)
@@ -610,62 +813,148 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
         return tracks.Select(x => MapTrack(x, Array.Empty<BranchOfferingDto>())).ToList();
     }
 
-    public async Task<AdmissionOperationResult<TrackDto>> CreateTrackAsync(CreateTrackRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<TrackDto>> CreateTrackAsync(CreateTrackRequest request, CancellationToken cancellationToken = default)
     {
-        if (!await _dbContext.Programs.AnyAsync(x => x.Id == request.ProgramId, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<TrackDto>.Failure(404, "Program was not found.");
+            return Result<TrackDto>.Failure(400, "Request body is required.");
         }
 
-        string name = request.Name.Trim();
-        if (await _dbContext.Tracks.AnyAsync(x => x.ProgramId == request.ProgramId && x.Name == name, cancellationToken))
+        if (request.ProgramId == Guid.Empty)
         {
-            return AdmissionOperationResult<TrackDto>.Failure(409, "A track with the same name already exists in this program.");
+            return Result<TrackDto>.Failure(400, "A valid program ID is required.");
         }
 
-        var track = new Track
+        string name = NormalizeRequiredText(request.Name);
+        string? description = NormalizeOptionalText(request.Description);
+        if (!IsRequiredTextValid(name, 200) || description?.Length > 4000)
         {
-            Id = Guid.NewGuid(),
-            ProgramId = request.ProgramId,
-            Name = name,
-            Description = NormalizeOptionalText(request.Description),
-            PrerequisiteTopics = NormalizeTopics(request.PrerequisiteTopics),
-            IsActive = request.IsActive
-        };
+            return Result<TrackDto>.Failure(
+                400,
+                "Track name is required and must not exceed 200 characters; description must not exceed 4000 characters.");
+        }
 
-        _dbContext.Tracks.Add(track);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var topicValidation = ValidateAndNormalizeTopics(request.PrerequisiteTopics);
+        if (!topicValidation.IsValid)
+        {
+            return Result<TrackDto>.Failure(400, topicValidation.ErrorMessage);
+        }
 
-        return AdmissionOperationResult<TrackDto>.Success(MapTrack(track, Array.Empty<BranchOfferingDto>()), "Track created successfully.", 201);
+        return await ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
+            {
+                if (!await _dbContext.Programs.AnyAsync(x => x.Id == request.ProgramId, ct))
+                {
+                    return Result<TrackDto>.Failure(404, "Program was not found.");
+                }
+
+                if (await _dbContext.Tracks.AnyAsync(
+                        x => x.ProgramId == request.ProgramId && x.Name == name,
+                        ct))
+                {
+                    return Result<TrackDto>.Failure(
+                        409,
+                        "A track with the same name already exists in this program.");
+                }
+
+                var track = new Track
+                {
+                    Id = Guid.NewGuid(),
+                    ProgramId = request.ProgramId,
+                    Name = name,
+                    Description = description,
+                    PrerequisiteTopics = topicValidation.Topics,
+                    IsActive = request.IsActive,
+                    CreatedAt = UtcNow,
+                    UpdatedAt = UtcNow
+                };
+
+                _dbContext.Tracks.Add(track);
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<TrackDto>.Success(
+                    MapTrack(track, Array.Empty<BranchOfferingDto>()),
+                    statusCode: 201,
+                    message: "Track created successfully.");
+            },
+            (
+                "UX_Tracks_Program_Name",
+                "A track with the same name already exists in this program."));
     }
 
-    public async Task<AdmissionOperationResult<TrackDto>> UpdateTrackAsync(Guid trackId, UpdateTrackRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<TrackDto>> UpdateTrackAsync(Guid trackId, UpdateTrackRequest request, CancellationToken cancellationToken = default)
     {
-        var track = await _dbContext.Tracks.SingleOrDefaultAsync(x => x.Id == trackId, cancellationToken);
-        if (track is null)
+        if (trackId == Guid.Empty)
         {
-            return AdmissionOperationResult<TrackDto>.Failure(404, "Track was not found.");
+            return Result<TrackDto>.Failure(400, "A valid track ID is required.");
         }
 
-        if (await TrackHasApplicationsAsync(trackId, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<TrackDto>.Failure(409, "Track configuration is locked because an application already references one of its offerings.");
+            return Result<TrackDto>.Failure(400, "Request body is required.");
         }
 
-        string name = request.Name.Trim();
-        if (await _dbContext.Tracks.AnyAsync(x => x.Id != trackId && x.ProgramId == track.ProgramId && x.Name == name, cancellationToken))
+        string name = NormalizeRequiredText(request.Name);
+        string? description = NormalizeOptionalText(request.Description);
+        if (!IsRequiredTextValid(name, 200) || description?.Length > 4000)
         {
-            return AdmissionOperationResult<TrackDto>.Failure(409, "A track with the same name already exists in this program.");
+            return Result<TrackDto>.Failure(
+                400,
+                "Track name is required and must not exceed 200 characters; description must not exceed 4000 characters.");
         }
 
-        track.Name = name;
-        track.Description = NormalizeOptionalText(request.Description);
-        track.PrerequisiteTopics = NormalizeTopics(request.PrerequisiteTopics);
-        track.IsActive = request.IsActive;
-        track.UpdatedAt = DateTimeOffset.UtcNow;
+        var topicValidation = ValidateAndNormalizeTopics(request.PrerequisiteTopics);
+        if (!topicValidation.IsValid)
+        {
+            return Result<TrackDto>.Failure(400, topicValidation.ErrorMessage);
+        }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return AdmissionOperationResult<TrackDto>.Success(MapTrack(track, Array.Empty<BranchOfferingDto>()), "Track updated successfully.");
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var track = await _dbContext.Tracks.SingleOrDefaultAsync(
+                    x => x.Id == trackId,
+                    ct);
+                if (track is null)
+                {
+                    return Result<TrackDto>.Failure(404, "Track was not found.");
+                }
+
+                if (await _applicationReader.IsTrackConfigurationLockedAsync(trackId, ct))
+                {
+                    return Result<TrackDto>.Failure(
+                        409,
+                        "Track configuration is locked because it belongs to an Active cycle or a cycle that already has applications.");
+                }
+
+                if (await _dbContext.Tracks.AnyAsync(
+                        x =>
+                            x.Id != trackId &&
+                            x.ProgramId == track.ProgramId &&
+                            x.Name == name,
+                        ct))
+                {
+                    return Result<TrackDto>.Failure(
+                        409,
+                        "A track with the same name already exists in this program.");
+                }
+
+                track.Name = name;
+                track.Description = description;
+                track.PrerequisiteTopics = topicValidation.Topics;
+                track.IsActive = request.IsActive;
+                track.UpdatedAt = UtcNow;
+
+                await _dbContext.SaveChangesAsync(ct);
+                return Result<TrackDto>.Success(
+                    MapTrack(track, Array.Empty<BranchOfferingDto>()),
+                    message: "Track updated successfully.");
+            },
+            (
+                "UX_Tracks_Program_Name",
+                "A track with the same name already exists in this program."));
     }
 
     public async Task<IReadOnlyList<BranchDto>> GetBranchesAsync(CancellationToken cancellationToken = default)
@@ -673,57 +962,122 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
         return await _dbContext.Branches
             .AsNoTracking()
             .OrderBy(x => x.Name)
-            .Select(x => MapBranch(x))
+            .Select(x => new BranchDto
+            {
+                Id = x.Id,
+                Name = x.Name,
+                Governorate = x.Governorate,
+                IsActive = x.IsActive
+            })
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<AdmissionOperationResult<BranchDto>> CreateBranchAsync(CreateBranchRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<BranchDto>> CreateBranchAsync(CreateBranchRequest request, CancellationToken cancellationToken = default)
     {
-        string name = request.Name.Trim();
-        if (await _dbContext.Branches.AnyAsync(x => x.Name == name, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<BranchDto>.Failure(409, "A branch with the same name already exists.");
+            return Result<BranchDto>.Failure(400, "Request body is required.");
         }
 
-        var branch = new Branch
+        string name = NormalizeRequiredText(request.Name);
+        string? governorate = NormalizeOptionalText(request.Governorate);
+        if (!IsRequiredTextValid(name, 200) || governorate?.Length > 100)
         {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Governorate = NormalizeOptionalText(request.Governorate),
-            IsActive = request.IsActive
-        };
+            return Result<BranchDto>.Failure(
+                400,
+                "Branch name is required and must not exceed 200 characters; governorate must not exceed 100 characters.");
+        }
 
-        _dbContext.Branches.Add(branch);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
+            {
+                if (await _dbContext.Branches.AnyAsync(x => x.Name == name, ct))
+                {
+                    return Result<BranchDto>.Failure(
+                        409,
+                        "A branch with the same name already exists.");
+                }
 
-        return AdmissionOperationResult<BranchDto>.Success(MapBranch(branch), "Branch created successfully.", 201);
+                var branch = new Branch
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    Governorate = governorate,
+                    IsActive = request.IsActive,
+                    CreatedAt = UtcNow
+                };
+
+                _dbContext.Branches.Add(branch);
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<BranchDto>.Success(
+                    MapBranch(branch),
+                    statusCode: 201,
+                    message: "Branch created successfully.");
+            },
+            ("UX_Branches_Name", "A branch with the same name already exists."));
     }
 
-    public async Task<AdmissionOperationResult<BranchDto>> UpdateBranchAsync(Guid branchId, UpdateBranchRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<BranchDto>> UpdateBranchAsync(Guid branchId, UpdateBranchRequest request, CancellationToken cancellationToken = default)
     {
-        var branch = await _dbContext.Branches.SingleOrDefaultAsync(x => x.Id == branchId, cancellationToken);
-        if (branch is null)
+        if (branchId == Guid.Empty)
         {
-            return AdmissionOperationResult<BranchDto>.Failure(404, "Branch was not found.");
+            return Result<BranchDto>.Failure(400, "A valid branch ID is required.");
         }
 
-        if (await BranchHasApplicationsAsync(branchId, cancellationToken))
+        if (request is null)
         {
-            return AdmissionOperationResult<BranchDto>.Failure(409, "Branch configuration is locked because an application already references one of its offerings.");
+            return Result<BranchDto>.Failure(400, "Request body is required.");
         }
 
-        string name = request.Name.Trim();
-        if (await _dbContext.Branches.AnyAsync(x => x.Id != branchId && x.Name == name, cancellationToken))
+        string name = NormalizeRequiredText(request.Name);
+        string? governorate = NormalizeOptionalText(request.Governorate);
+        if (!IsRequiredTextValid(name, 200) || governorate?.Length > 100)
         {
-            return AdmissionOperationResult<BranchDto>.Failure(409, "A branch with the same name already exists.");
+            return Result<BranchDto>.Failure(
+                400,
+                "Branch name is required and must not exceed 200 characters; governorate must not exceed 100 characters.");
         }
 
-        branch.Name = name;
-        branch.Governorate = NormalizeOptionalText(request.Governorate);
-        branch.IsActive = request.IsActive;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var branch = await _dbContext.Branches.SingleOrDefaultAsync(
+                    x => x.Id == branchId,
+                    ct);
+                if (branch is null)
+                {
+                    return Result<BranchDto>.Failure(404, "Branch was not found.");
+                }
 
-        return AdmissionOperationResult<BranchDto>.Success(MapBranch(branch), "Branch updated successfully.");
+                if (await _applicationReader.IsBranchConfigurationLockedAsync(branchId, ct))
+                {
+                    return Result<BranchDto>.Failure(
+                        409,
+                        "Branch configuration is locked because it belongs to an Active cycle or a cycle that already has applications.");
+                }
+
+                if (await _dbContext.Branches.AnyAsync(
+                        x => x.Id != branchId && x.Name == name,
+                        ct))
+                {
+                    return Result<BranchDto>.Failure(
+                        409,
+                        "A branch with the same name already exists.");
+                }
+
+                branch.Name = name;
+                branch.Governorate = governorate;
+                branch.IsActive = request.IsActive;
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<BranchDto>.Success(
+                    MapBranch(branch),
+                    message: "Branch updated successfully.");
+            },
+            ("UX_Branches_Name", "A branch with the same name already exists."));
     }
 
     public async Task<IReadOnlyList<AdmissionCycleDto>> GetCyclesAsync(CancellationToken cancellationToken = default)
@@ -742,289 +1096,512 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
         return cycles.Select(MapCycle).ToList();
     }
 
-    public async Task<AdmissionOperationResult<AdmissionCycleDto>> CreateCycleAsync(CreateAdmissionCycleRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<AdmissionCycleDto>> CreateCycleAsync(CreateAdmissionCycleRequest request, CancellationToken cancellationToken = default)
     {
-        var program = await _dbContext.Programs
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == request.ProgramId, cancellationToken);
-
-        if (program is null)
+        if (request is null)
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(404, "Program was not found.");
+            return Result<AdmissionCycleDto>.Failure(400, "Request body is required.");
+        }
+
+        if (request.ProgramId == Guid.Empty)
+        {
+            return Result<AdmissionCycleDto>.Failure(400, "A valid program ID is required.");
         }
 
         if (request.StartDate == default)
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "StartDate is required.");
+            return Result<AdmissionCycleDto>.Failure(400, "StartDate is required.");
         }
 
-        if (request.DeadlineUtc <= DateTimeOffset.UtcNow)
+        string label = NormalizeRequiredText(request.Label);
+        if (!IsRequiredTextValid(label, 200))
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "The application deadline must be in the future.");
+            return Result<AdmissionCycleDto>.Failure(
+                400,
+                "Cycle label is required and must not exceed 200 characters.");
         }
 
-        if (request.StartDate > DateOnly.FromDateTime(request.DeadlineUtc.UtcDateTime))
+        DateTimeOffset deadlineUtc = request.DeadlineUtc.ToUniversalTime();
+        if (deadlineUtc <= UtcNow)
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "StartDate cannot be after the application deadline.");
+            return Result<AdmissionCycleDto>.Failure(400, "The application deadline must be in the future.");
         }
 
-        string label = request.Label.Trim();
-        if (await _dbContext.AdmissionCycles.AnyAsync(x => x.ProgramId == request.ProgramId && x.Label == label, cancellationToken))
+        if (request.StartDate > DateOnly.FromDateTime(deadlineUtc.UtcDateTime))
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "A cycle with the same label already exists for this program.");
+            return Result<AdmissionCycleDto>.Failure(400, "StartDate cannot be after the application deadline.");
         }
 
-        var cycle = new AdmissionCycle
-        {
-            Id = Guid.NewGuid(),
-            ProgramId = request.ProgramId,
-            Label = label,
-            StartDate = request.StartDate,
-            DeadlineUtc = request.DeadlineUtc.ToUniversalTime(),
-            Status = CycleStatus.Draft
-        };
-
-        _dbContext.AdmissionCycles.Add(cycle);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        cycle.Program = program;
-        return AdmissionOperationResult<AdmissionCycleDto>.Success(MapCycle(cycle), "Admission cycle created as Draft.", 201);
-    }
-
-    public async Task<AdmissionOperationResult<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(Guid cycleId, UpdateCycleEligibilityRuleRequest request, CancellationToken cancellationToken = default)
-    {
-        var cycle = await _dbContext.AdmissionCycles.SingleOrDefaultAsync(x => x.Id == cycleId, cancellationToken);
-        if (cycle is null)
-        {
-            return AdmissionOperationResult<CycleEligibilityRuleDto>.Failure(404, "Admission cycle was not found.");
-        }
-
-        var configurationError = await ValidateCycleIsConfigurableAsync(cycle, cancellationToken);
-        if (configurationError is not null)
-        {
-            return AdmissionOperationResult<CycleEligibilityRuleDto>.Failure(409, configurationError);
-        }
-
-        if (request.MinGrade == CumulativeGrade.None)
-        {
-            return AdmissionOperationResult<CycleEligibilityRuleDto>.Failure(400, "MinGrade.None is not valid.");
-        }
-
-        string nationality = request.RequiredNationality.Trim().ToUpperInvariant();
-        string degreeLevel = request.RequiredDegreeLevel.Trim();
-
-        var rule = await _dbContext.CycleEligibilityRules.SingleOrDefaultAsync(x => x.CycleId == cycleId, cancellationToken);
-        if (rule is null)
-        {
-            rule = new CycleEligibilityRule
+        return await ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
             {
-                Id = Guid.NewGuid(),
-                CycleId = cycleId
-            };
-            _dbContext.CycleEligibilityRules.Add(rule);
-        }
+                var program = await _dbContext.Programs
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.Id == request.ProgramId, ct);
 
-        rule.RequiredNationality = nationality;
-        rule.RequiredDegreeLevel = degreeLevel;
-        rule.MaxYearsSinceGraduation = request.MaxYearsSinceGraduation;
-        rule.MinGrade = request.MinGrade;
-        rule.UpdatedAt = DateTimeOffset.UtcNow;
+                if (program is null)
+                {
+                    return Result<AdmissionCycleDto>.Failure(404, "Program was not found.");
+                }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return AdmissionOperationResult<CycleEligibilityRuleDto>.Success(MapEligibilityRule(rule), "Cycle eligibility rule saved successfully.");
+                if (await _dbContext.AdmissionCycles.AnyAsync(
+                        x => x.ProgramId == request.ProgramId && x.Label == label,
+                        ct))
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        409,
+                        "A cycle with the same label already exists for this program.");
+                }
+
+                var cycle = new AdmissionCycle
+                {
+                    Id = Guid.NewGuid(),
+                    ProgramId = request.ProgramId,
+                    Label = label,
+                    StartDate = request.StartDate,
+                    DeadlineUtc = deadlineUtc,
+                    Status = CycleStatus.Draft,
+                    CreatedAt = UtcNow,
+                    UpdatedAt = UtcNow
+                };
+
+                _dbContext.AdmissionCycles.Add(cycle);
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<AdmissionCycleDto>.Success(
+                    MapCycle(cycle, program.Name),
+                    statusCode: 201,
+                    message: "Admission cycle created as Draft.");
+            },
+            (
+                "UX_AdmissionCycles_Program_Label",
+                "A cycle with the same label already exists for this program."));
     }
 
-    public async Task<AdmissionOperationResult<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(Guid cycleId, ConfigureOfferingsRequest request, CancellationToken cancellationToken = default)
+    public async Task<Result<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(Guid cycleId, UpdateCycleEligibilityRuleRequest request, CancellationToken cancellationToken = default)
     {
-        var cycle = await _dbContext.AdmissionCycles.SingleOrDefaultAsync(x => x.Id == cycleId, cancellationToken);
-        if (cycle is null)
+        if (cycleId == Guid.Empty)
         {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(404, "Admission cycle was not found.");
+            return Result<CycleEligibilityRuleDto>.Failure(400, "A valid cycle ID is required.");
         }
 
-        var configurationError = await ValidateCycleIsConfigurableAsync(cycle, cancellationToken);
-        if (configurationError is not null)
+        if (request is null)
         {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(409, configurationError);
+            return Result<CycleEligibilityRuleDto>.Failure(400, "Request body is required.");
         }
 
-        if (request.Offerings.Count == 0)
+        if (!Enum.IsDefined(request.MinGrade) ||
+            request.MinGrade == CumulativeGrade.None)
         {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "At least one track/branch offering is required.");
+            return Result<CycleEligibilityRuleDto>.Failure(
+                400,
+                "Minimum grade must be Acceptable, Good, VeryGood, or Excellent.");
         }
 
-        if (request.Offerings.Any(x => x.TrackId == Guid.Empty || x.BranchId == Guid.Empty || x.Capacity <= 0))
+        string nationality = NormalizeCode(request.RequiredNationality);
+        string degreeLevel = NormalizeRequiredText(request.RequiredDegreeLevel);
+        if (!IsRequiredTextValid(nationality, 5) ||
+            !IsRequiredTextValid(degreeLevel, 30) ||
+            request.MaxYearsSinceGraduation is < 0 or > 100)
         {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "Every offering requires a valid track, branch, and positive capacity.");
+            return Result<CycleEligibilityRuleDto>.Failure(
+                400,
+                "Nationality and degree level are required, and graduation recency must be between 0 and 100 years.");
+        }
+
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var cycle = await _dbContext.AdmissionCycles.SingleOrDefaultAsync(
+                    x => x.Id == cycleId,
+                    ct);
+                if (cycle is null)
+                {
+                    return Result<CycleEligibilityRuleDto>.Failure(
+                        404,
+                        "Admission cycle was not found.");
+                }
+
+                var configurationError = await ValidateCycleIsConfigurableAsync(cycle, ct);
+                if (configurationError is not null)
+                {
+                    return Result<CycleEligibilityRuleDto>.Failure(409, configurationError);
+                }
+
+                var rule = await _dbContext.CycleEligibilityRules
+                    .SingleOrDefaultAsync(x => x.CycleId == cycleId, ct);
+
+                var now = UtcNow;
+                if (rule is null)
+                {
+                    rule = new CycleEligibilityRule
+                    {
+                        Id = Guid.NewGuid(),
+                        CycleId = cycleId,
+                        CreatedAt = now
+                    };
+                    _dbContext.CycleEligibilityRules.Add(rule);
+                }
+
+                rule.RequiredNationality = nationality;
+                rule.RequiredDegreeLevel = degreeLevel;
+                rule.MaxYearsSinceGraduation = request.MaxYearsSinceGraduation;
+                rule.MinGrade = request.MinGrade;
+                rule.UpdatedAt = now;
+                cycle.UpdatedAt = now;
+
+                await _dbContext.SaveChangesAsync(ct);
+                return Result<CycleEligibilityRuleDto>.Success(
+                    MapEligibilityRule(rule),
+                    message: "Cycle eligibility rule saved successfully.");
+            },
+            (
+                "UX_CycleEligibilityRules_Cycle",
+                "An eligibility rule already exists for this cycle. Reload and try again."));
+    }
+
+    public async Task<Result<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(Guid cycleId, ConfigureOfferingsRequest request, CancellationToken cancellationToken = default)
+    {
+        if (cycleId == Guid.Empty)
+        {
+            return Result<IReadOnlyList<OfferingDto>>.Failure(
+                400,
+                "A valid cycle ID is required.");
+        }
+
+        if (request?.Offerings is null)
+        {
+            return Result<IReadOnlyList<OfferingDto>>.Failure(
+                400,
+                "An offerings list is required.");
+        }
+
+        if (request.Offerings.Length == 0)
+        {
+            return Result<IReadOnlyList<OfferingDto>>.Failure(400, "At least one track/branch offering is required.");
+        }
+
+        if (request.Offerings.Length > 500)
+        {
+            return Result<IReadOnlyList<OfferingDto>>.Failure(
+                400,
+                "A cycle can contain at most 500 track/branch offerings.");
+        }
+
+        if (request.Offerings.Any(x =>
+                x is null ||
+                x.TrackId == Guid.Empty ||
+                x.BranchId == Guid.Empty ||
+                x.Capacity <= 0))
+        {
+            return Result<IReadOnlyList<OfferingDto>>.Failure(400, "Every offering requires a valid track, branch, and positive capacity.");
         }
 
         if (request.Offerings.GroupBy(x => new { x.TrackId, x.BranchId }).Any(group => group.Count() > 1))
         {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "Duplicate track/branch combinations are not allowed.");
+            return Result<IReadOnlyList<OfferingDto>>.Failure(400, "Duplicate track/branch combinations are not allowed.");
         }
 
-        var trackIds = request.Offerings.Select(x => x.TrackId).Distinct().ToList();
-        var branchIds = request.Offerings.Select(x => x.BranchId).Distinct().ToList();
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var cycle = await _dbContext.AdmissionCycles.SingleOrDefaultAsync(
+                    x => x.Id == cycleId,
+                    ct);
+                if (cycle is null)
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        404,
+                        "Admission cycle was not found.");
+                }
 
-        var tracks = await _dbContext.Tracks
-            .Where(x => trackIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+                var configurationError = await ValidateCycleIsConfigurableAsync(cycle, ct);
+                if (configurationError is not null)
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        409,
+                        configurationError);
+                }
 
-        var branches = await _dbContext.Branches
-            .Where(x => branchIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+                var trackIds = request.Offerings
+                    .Select(x => x.TrackId)
+                    .Distinct()
+                    .ToList();
+                var branchIds = request.Offerings
+                    .Select(x => x.BranchId)
+                    .Distinct()
+                    .ToList();
 
-        if (tracks.Count != trackIds.Count || branches.Count != branchIds.Count)
-        {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "One or more tracks or branches do not exist.");
-        }
+                var tracks = await _dbContext.Tracks
+                    .Where(x => trackIds.Contains(x.Id))
+                    .ToDictionaryAsync(x => x.Id, ct);
 
-        if (tracks.Values.Any(x => x.ProgramId != cycle.ProgramId))
-        {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "Every offered track must belong to the cycle's program.");
-        }
+                var branches = await _dbContext.Branches
+                    .Where(x => branchIds.Contains(x.Id))
+                    .ToDictionaryAsync(x => x.Id, ct);
 
-        if (tracks.Values.Any(x => !x.IsActive) || branches.Values.Any(x => !x.IsActive))
-        {
-            return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Failure(400, "Inactive tracks or branches cannot be offered.");
-        }
+                if (tracks.Count != trackIds.Count || branches.Count != branchIds.Count)
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        400,
+                        "One or more tracks or branches do not exist.");
+                }
 
-        var existing = await _dbContext.TrackBranchOfferings
-            .Where(x => x.CycleId == cycleId)
-            .ToListAsync(cancellationToken);
+                if (tracks.Values.Any(x => x.ProgramId != cycle.ProgramId))
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        400,
+                        "Every offered track must belong to the cycle's program.");
+                }
 
-        _dbContext.TrackBranchOfferings.RemoveRange(existing);
+                if (tracks.Values.Any(x => !x.IsActive) ||
+                    branches.Values.Any(x => !x.IsActive))
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        400,
+                        "Inactive tracks or branches cannot be offered.");
+                }
 
-        var replacements = request.Offerings.Select(input => new TrackBranchOffering
-        {
-            Id = Guid.NewGuid(),
-            CycleId = cycleId,
-            TrackId = input.TrackId,
-            BranchId = input.BranchId,
-            Capacity = input.Capacity
-        }).ToList();
+                var existing = await _dbContext.TrackBranchOfferings
+                    .Where(x => x.CycleId == cycleId)
+                    .ToListAsync(ct);
+                var now = UtcNow;
 
-        _dbContext.TrackBranchOfferings.AddRange(replacements);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                if (existing
+                    .GroupBy(offering => new OfferingKey(
+                        offering.TrackId,
+                        offering.BranchId))
+                    .Any(group => group.Count() > 1))
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        409,
+                        "Existing offerings contain duplicate track/branch keys. Resolve the database duplicates before updating this cycle.");
+                }
 
-        IReadOnlyList<OfferingDto> data = replacements
-            .Select(x => MapOffering(x, tracks[x.TrackId].Name, branches[x.BranchId].Name))
-            .OrderBy(x => x.TrackName)
-            .ThenBy(x => x.BranchName)
-            .ToList();
+                var existingByKey = existing.ToDictionary(
+                    offering => new OfferingKey(offering.TrackId, offering.BranchId));
 
-        return AdmissionOperationResult<IReadOnlyList<OfferingDto>>.Success(data, "Cycle offerings configured successfully.");
+                var requestedKeys = request.Offerings
+                    .Select(input => new OfferingKey(input.TrackId, input.BranchId))
+                    .ToHashSet();
+
+                var removed = existing
+                    .Where(offering =>
+                        !requestedKeys.Contains(
+                            new OfferingKey(offering.TrackId, offering.BranchId)))
+                    .ToList();
+
+                if (await _applicationReader.HasPreferencesForOfferingsAsync(
+                        removed.Select(x => x.Id).ToList(),
+                        ct))
+                {
+                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                        409,
+                        "One or more removed offerings are referenced by application preferences and cannot be deleted.");
+                }
+
+                _dbContext.TrackBranchOfferings.RemoveRange(removed);
+
+                var effectiveOfferings = new List<TrackBranchOffering>(
+                    request.Offerings.Length);
+
+                foreach (var input in request.Offerings)
+                {
+                    var key = new OfferingKey(input.TrackId, input.BranchId);
+                    if (existingByKey.TryGetValue(key, out var retained))
+                    {
+                        if (retained.Capacity != input.Capacity)
+                        {
+                            retained.Capacity = input.Capacity;
+                            retained.UpdatedAt = now;
+                        }
+
+                        effectiveOfferings.Add(retained);
+                        continue;
+                    }
+
+                    var added = new TrackBranchOffering
+                    {
+                        Id = Guid.NewGuid(),
+                        CycleId = cycleId,
+                        TrackId = input.TrackId,
+                        BranchId = input.BranchId,
+                        Capacity = input.Capacity,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    };
+
+                    _dbContext.TrackBranchOfferings.Add(added);
+                    effectiveOfferings.Add(added);
+                }
+
+                cycle.UpdatedAt = now;
+                await _dbContext.SaveChangesAsync(ct);
+
+                IReadOnlyList<OfferingDto> data = effectiveOfferings
+                    .Select(x => MapOffering(
+                        x,
+                        tracks[x.TrackId].Name,
+                        branches[x.BranchId].Name))
+                    .OrderBy(x => x.TrackName)
+                    .ThenBy(x => x.BranchName)
+                    .ToList();
+
+                return Result<IReadOnlyList<OfferingDto>>.Success(
+                    data,
+                    message: "Cycle offerings configured successfully.");
+            },
+            (
+                "UX_TrackBranchOfferings_Cycle_Track_Branch",
+                "A duplicate track/branch offering already exists for this cycle."));
     }
 
-    public async Task<AdmissionOperationResult<AdmissionCycleDto>> ActivateCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
+    public async Task<Result<AdmissionCycleDto>> ActivateCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
     {
-        var cycle = await _dbContext.AdmissionCycles
-            .Include(x => x.Program)
-            .Include(x => x.EligibilityRule)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Track)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Branch)
-            .SingleOrDefaultAsync(x => x.Id == cycleId, cancellationToken);
-
-        if (cycle is null)
+        if (cycleId == Guid.Empty)
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(404, "Admission cycle was not found.");
+            return Result<AdmissionCycleDto>.Failure(400, "A valid cycle ID is required.");
         }
 
-        if (cycle.Status != CycleStatus.Draft)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "Only a Draft cycle can be activated.");
-        }
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var cycle = await _dbContext.AdmissionCycles
+                    .Include(x => x.Program)
+                    .Include(x => x.EligibilityRule)
+                    .Include(x => x.Offerings)
+                        .ThenInclude(x => x.Track)
+                    .Include(x => x.Offerings)
+                        .ThenInclude(x => x.Branch)
+                    .SingleOrDefaultAsync(x => x.Id == cycleId, ct);
 
-        if (cycle.DeadlineUtc <= DateTimeOffset.UtcNow)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "The cycle cannot be activated because its deadline has passed.");
-        }
+                if (cycle is null)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        404,
+                        "Admission cycle was not found.");
+                }
 
-        if (cycle.EligibilityRule is null)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "Configure the cycle eligibility rule before activation.");
-        }
+                if (cycle.Status != CycleStatus.Draft)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        409,
+                        "Only a Draft cycle can be activated.");
+                }
 
-        if (!await _dbContext.ProgramDocumentRequirements.AnyAsync(x => x.ProgramId == cycle.ProgramId, cancellationToken))
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "Configure program document requirements before activation.");
-        }
+                if (cycle.DeadlineUtc <= UtcNow)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        400,
+                        "The cycle cannot be activated because its deadline has passed.");
+                }
 
-        if (cycle.Offerings.Count == 0)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "Configure at least one track/branch offering before activation.");
-        }
+                if (cycle.EligibilityRule is null)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        400,
+                        "Configure the cycle eligibility rule before activation.");
+                }
 
-        if (cycle.Offerings.Any(x =>
-            x.Capacity <= 0 ||
-            !x.Track.IsActive ||
-            !x.Branch.IsActive ||
-            x.Track.ProgramId != cycle.ProgramId))
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(400, "All offerings must use active tracks and branches, positive capacity, and tracks belonging to the cycle's program.");
-        }
+                if (!await _dbContext.ProgramDocumentRequirements.AnyAsync(
+                        x => x.ProgramId == cycle.ProgramId,
+                        ct))
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        400,
+                        "Configure program document requirements before activation.");
+                }
 
-        if (await _dbContext.AdmissionCycles.AnyAsync(x => x.Id != cycleId && x.Status == CycleStatus.Active, cancellationToken))
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "Another admission cycle is already active.");
-        }
+                if (cycle.Offerings.Count == 0)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        400,
+                        "Configure at least one track/branch offering before activation.");
+                }
 
-        cycle.Status = CycleStatus.Active;
-        cycle.UpdatedAt = DateTimeOffset.UtcNow;
+                if (cycle.Offerings.Any(x =>
+                        x.Capacity <= 0 ||
+                        !x.Track.IsActive ||
+                        !x.Branch.IsActive ||
+                        x.Track.ProgramId != cycle.ProgramId))
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        400,
+                        "All offerings must use active tracks and branches, positive capacity, and tracks belonging to the cycle's program.");
+                }
 
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "The cycle was changed by another administrator. Reload it and try again.");
-        }
-        catch (DbUpdateException)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "The cycle could not be activated because another cycle became active at the same time.");
-        }
+                if (await _dbContext.AdmissionCycles.AnyAsync(
+                        x => x.Id != cycleId && x.Status == CycleStatus.Active,
+                        ct))
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        409,
+                        "Another admission cycle is already active.");
+                }
 
-        return AdmissionOperationResult<AdmissionCycleDto>.Success(MapCycle(cycle), "Admission cycle activated successfully.");
+                cycle.Status = CycleStatus.Active;
+                cycle.ClosedAt = null;
+                cycle.UpdatedAt = UtcNow;
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<AdmissionCycleDto>.Success(
+                    MapCycle(cycle),
+                    message: "Admission cycle activated successfully.");
+            },
+            (
+                "uq_cycle_active",
+                "The cycle could not be activated because another cycle became active at the same time."));
     }
 
-    public async Task<AdmissionOperationResult<AdmissionCycleDto>> CloseCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
+    public async Task<Result<AdmissionCycleDto>> CloseCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
     {
-        var cycle = await _dbContext.AdmissionCycles
-            .Include(x => x.Program)
-            .Include(x => x.EligibilityRule)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Track)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Branch)
-            .SingleOrDefaultAsync(x => x.Id == cycleId, cancellationToken);
-
-        if (cycle is null)
+        if (cycleId == Guid.Empty)
         {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(404, "Admission cycle was not found.");
+            return Result<AdmissionCycleDto>.Failure(400, "A valid cycle ID is required.");
         }
 
-        if (cycle.Status != CycleStatus.Active)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "Only an Active cycle can be closed.");
-        }
+        return await ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var cycle = await _dbContext.AdmissionCycles
+                    .Include(x => x.Program)
+                    .Include(x => x.EligibilityRule)
+                    .Include(x => x.Offerings)
+                        .ThenInclude(x => x.Track)
+                    .Include(x => x.Offerings)
+                        .ThenInclude(x => x.Branch)
+                    .SingleOrDefaultAsync(x => x.Id == cycleId, ct);
 
-        cycle.Status = CycleStatus.Closed;
-        cycle.ClosedAt = DateTimeOffset.UtcNow;
-        cycle.UpdatedAt = DateTimeOffset.UtcNow;
+                if (cycle is null)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        404,
+                        "Admission cycle was not found.");
+                }
 
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return AdmissionOperationResult<AdmissionCycleDto>.Failure(409, "The cycle was changed by another administrator. Reload it and try again.");
-        }
+                if (cycle.Status != CycleStatus.Active)
+                {
+                    return Result<AdmissionCycleDto>.Failure(
+                        409,
+                        "Only an Active cycle can be closed.");
+                }
 
-        return AdmissionOperationResult<AdmissionCycleDto>.Success(MapCycle(cycle), "Admission cycle closed successfully.");
+                var now = UtcNow;
+                cycle.Status = CycleStatus.Closed;
+                cycle.ClosedAt = now;
+                cycle.UpdatedAt = now;
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<AdmissionCycleDto>.Success(
+                    MapCycle(cycle),
+                    message: "Admission cycle closed successfully.");
+            });
     }
 
     public async Task<AdminAdmissionDashboardDto> GetDashboardAsync(CancellationToken cancellationToken = default)
@@ -1047,7 +1624,7 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             ActiveBranchCount = await _dbContext.Branches.CountAsync(x => x.IsActive, cancellationToken),
             DraftCycleCount = await _dbContext.AdmissionCycles.CountAsync(x => x.Status == CycleStatus.Draft, cancellationToken),
             ClosedCycleCount = await _dbContext.AdmissionCycles.CountAsync(x => x.Status == CycleStatus.Closed, cancellationToken),
-            ApplicationCount = await _dbContext.Applications.CountAsync(cancellationToken),
+            ApplicationCount = await _applicationReader.CountApplicationsAsync(cancellationToken),
             ActiveCycle = activeCycle is null ? null : MapCycle(activeCycle),
             ActiveCycleOfferingCount = activeCycle?.Offerings.Count ?? 0,
             ActiveCycleCapacity = activeCycle?.Offerings.Sum(x => x.Capacity) ?? 0
@@ -1061,7 +1638,9 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
             return "Only Draft cycles can be configured.";
         }
 
-        if (await _dbContext.Applications.AnyAsync(x => x.CycleId == cycle.Id, cancellationToken))
+        if (await _applicationReader.HasApplicationsForCycleAsync(
+                cycle.Id,
+                cancellationToken))
         {
             return "Cycle configuration is locked because applications already exist for this cycle.";
         }
@@ -1069,60 +1648,206 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
         return null;
     }
 
-    private async Task<bool> InstitutionHasApplicationsAsync(Guid institutionId, CancellationToken cancellationToken)
+    private async Task<Result<T>> ExecuteWriteAsync<T>(
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<Result<T>>> operation,
+        params (string ConstraintName, string Message)[] uniqueConflicts)
     {
-        var programIds = _dbContext.Programs
-            .Where(x => x.InstitutionId == institutionId)
-            .Select(x => x.Id);
+        try
+        {
+            return await operation(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result<T>.Failure(
+                409,
+                "The configuration was changed by another administrator. Reload it and try again.");
+        }
+        catch (DbUpdateException exception)
+        {
+            var mapped = MapDatabaseException<T>(exception, uniqueConflicts);
+            if (mapped is not null)
+            {
+                return mapped;
+            }
 
-        var cycleIds = _dbContext.AdmissionCycles
-            .Where(x => programIds.Contains(x.ProgramId))
-            .Select(x => x.Id);
+            throw;
+        }
+        catch (PostgresException exception)
+        {
+            var mapped = MapDatabaseException<T>(exception, uniqueConflicts);
+            if (mapped is not null)
+            {
+                return mapped;
+            }
 
-        return await _dbContext.Applications.AnyAsync(x => cycleIds.Contains(x.CycleId), cancellationToken);
+            throw;
+        }
     }
 
-    private async Task<bool> ProgramHasApplicationsAsync(Guid programId, CancellationToken cancellationToken)
+    private Task<Result<T>> ExecuteSerializableAsync<T>(
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<Result<T>>> operation,
+        params (string ConstraintName, string Message)[] uniqueConflicts)
     {
-        var cycleIds = _dbContext.AdmissionCycles
-            .Where(x => x.ProgramId == programId)
-            .Select(x => x.Id);
+        return ExecuteWriteAsync(
+            cancellationToken,
+            async ct =>
+            {
+                await using var transaction = await _dbContext.Database
+                    .BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
-        return await _dbContext.Applications.AnyAsync(x => cycleIds.Contains(x.CycleId), cancellationToken);
+                var result = await operation(ct);
+                if (result.IsSuccess)
+                {
+                    await transaction.CommitAsync(ct);
+                }
+
+                return result;
+            },
+            uniqueConflicts);
     }
 
-    private async Task<bool> TrackHasApplicationsAsync(Guid trackId, CancellationToken cancellationToken)
+    private static Result<T>? MapDatabaseException<T>(
+        Exception exception,
+        IReadOnlyCollection<(string ConstraintName, string Message)> uniqueConflicts)
     {
-        var cycleIds = _dbContext.TrackBranchOfferings
-            .Where(x => x.TrackId == trackId)
-            .Select(x => x.CycleId);
+        var postgresException = FindPostgresException(exception);
+        if (postgresException is null)
+        {
+            return null;
+        }
 
-        return await _dbContext.Applications.AnyAsync(x => cycleIds.Contains(x.CycleId), cancellationToken);
+        if (postgresException.SqlState is
+            PostgresErrorCodes.SerializationFailure or
+            PostgresErrorCodes.DeadlockDetected)
+        {
+            return Result<T>.Failure(
+                409,
+                "The configuration changed concurrently. Reload it and try again.");
+        }
+
+        if (postgresException.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            var conflict = uniqueConflicts.FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.ConstraintName,
+                    postgresException.ConstraintName,
+                    StringComparison.Ordinal));
+
+            return string.IsNullOrEmpty(conflict.ConstraintName)
+                ? null
+                : Result<T>.Failure(409, conflict.Message);
+        }
+
+        if (postgresException.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+        {
+            return Result<T>.Failure(
+                409,
+                "A referenced configuration item changed or no longer exists. Reload and try again.");
+        }
+
+        if (postgresException.SqlState == PostgresErrorCodes.CheckViolation)
+        {
+            return Result<T>.Failure(
+                400,
+                "The submitted configuration violates a database validation rule.");
+        }
+
+        return null;
     }
 
-    private async Task<bool> BranchHasApplicationsAsync(Guid branchId, CancellationToken cancellationToken)
+    private static PostgresException? FindPostgresException(Exception exception)
     {
-        var cycleIds = _dbContext.TrackBranchOfferings
-            .Where(x => x.BranchId == branchId)
-            .Select(x => x.CycleId);
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException postgresException)
+            {
+                return postgresException;
+            }
+        }
 
-        return await _dbContext.Applications.AnyAsync(x => cycleIds.Contains(x.CycleId), cancellationToken);
+        return null;
     }
 
-    private static string NormalizeCode(string value) => value.Trim().ToUpperInvariant();
+    private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
+
+    private static string NormalizeRequiredText(string? value)
+    {
+        return value?.Trim() ?? string.Empty;
+    }
+
+    private static string NormalizeCode(string? value)
+    {
+        return NormalizeRequiredText(value).ToUpperInvariant();
+    }
 
     private static string? NormalizeOptionalText(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private static List<string> NormalizeTopics(IEnumerable<string>? topics)
+    private static bool IsRequiredTextValid(string? value, int maxLength)
     {
-        return topics?
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList() ?? new List<string>();
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
+    }
+
+    internal static TopicValidationResult ValidateAndNormalizeTopics(
+        IEnumerable<string>? topics)
+    {
+        var suppliedTopics = topics?.ToList() ?? new List<string>();
+        if (suppliedTopics.Count > 50)
+        {
+            return TopicValidationResult.Invalid(
+                "A track can contain at most 50 prerequisite topics.");
+        }
+
+        var normalized = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string? suppliedTopic in suppliedTopics)
+        {
+            if (string.IsNullOrWhiteSpace(suppliedTopic))
+            {
+                continue;
+            }
+
+            string topic = suppliedTopic.Trim();
+            if (topic.Length > 100)
+            {
+                return TopicValidationResult.Invalid(
+                    "Each prerequisite topic must not exceed 100 characters.");
+            }
+
+            if (seen.Add(topic))
+            {
+                normalized.Add(topic);
+            }
+        }
+
+        return TopicValidationResult.Valid(normalized);
+    }
+
+    private readonly record struct RequirementKey(
+        DocumentType DocumentType,
+        Gender? RequiredForGender);
+
+    private readonly record struct OfferingKey(Guid TrackId, Guid BranchId);
+
+    internal readonly record struct TopicValidationResult(
+        bool IsValid,
+        List<string> Topics,
+        string ErrorMessage)
+    {
+        public static TopicValidationResult Valid(List<string> topics)
+        {
+            return new TopicValidationResult(true, topics, string.Empty);
+        }
+
+        public static TopicValidationResult Invalid(string errorMessage)
+        {
+            return new TopicValidationResult(false, new List<string>(), errorMessage);
+        }
     }
 
     private static InstitutionDto MapInstitution(Institution institution, int programCount)
@@ -1226,13 +1951,15 @@ public sealed class AdmissionConfigurationService : IAdmissionConfigurationServi
         };
     }
 
-    private static AdmissionCycleDto MapCycle(AdmissionCycle cycle)
+    private static AdmissionCycleDto MapCycle(
+        AdmissionCycle cycle,
+        string? programName = null)
     {
         return new AdmissionCycleDto
         {
             Id = cycle.Id,
             ProgramId = cycle.ProgramId,
-            ProgramName = cycle.Program?.Name ?? string.Empty,
+            ProgramName = programName ?? cycle.Program?.Name ?? string.Empty,
             Label = cycle.Label,
             StartDate = cycle.StartDate,
             DeadlineUtc = cycle.DeadlineUtc,

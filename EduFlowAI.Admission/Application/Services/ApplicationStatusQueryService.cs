@@ -29,5 +29,22 @@ namespace EduFlowAI.Admission.Application.Services
                 StatusMessage = "Status retrieved successfully."
             };
         }
+
+        public async Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.ApplicantUserId == applicantUserId);
+            if(application == null)
+            {
+                return null;
+            }
+
+            return new ApplicationStatusDto
+            {
+                ApplicationId = application.Id,
+                CurrentStatus = application.Status.ToString(),
+                LastUpdatedAt = application.UpdatedAt,
+                StatusMessage = "Status retrieved successfully."
+            };
+        }
     }
 }

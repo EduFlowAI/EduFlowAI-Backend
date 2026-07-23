@@ -8,7 +8,17 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<AdmissionCycle> builder)
         {
-            builder.ToTable("AdmissionCycles", "admissions");
+            builder.ToTable("AdmissionCycles", "admissions", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_AdmissionCycle_Status",
+                    "\"Status\" IN ('Draft', 'Active', 'Closed')");
+
+                table.HasCheckConstraint(
+                    "CK_AdmissionCycle_ClosedAt",
+                    "(\"Status\" = 'Closed' AND \"ClosedAt\" IS NOT NULL) OR " +
+                    "(\"Status\" <> 'Closed' AND \"ClosedAt\" IS NULL)");
+            });
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Label)
@@ -23,10 +33,6 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(x => x.RowVersion)
                 .IsRowVersion()
                 .HasColumnName("xmin");
-
-            builder.ToTable(t => t.HasCheckConstraint(
-                "CK_AdmissionCycle_Status",
-                "\"Status\" IN ('Draft', 'Active', 'Closed')"));
 
             builder.Property(x => x.StartDate)
                 .HasColumnType("date")

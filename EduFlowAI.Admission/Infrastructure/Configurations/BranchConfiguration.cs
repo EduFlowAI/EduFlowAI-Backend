@@ -31,3 +31,4 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
         }
     }
 }
+

@@ -11,13 +11,20 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.ToTable("TrackBranchOfferings", "admissions");
             builder.HasKey(x => x.Id);
 
-            // Capacity must be valid
             builder.ToTable(t => t.HasCheckConstraint("CK_TrackBranchOffering_Capacity", "\"Capacity\" > 0"));
 
-            // Prevent duplicating the exact same track in the same branch for the same cycle
-            builder.HasIndex(x => new { x.CycleId, x.TrackId, x.BranchId }).IsUnique();
+            builder.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
 
-            // Relationships
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.HasIndex(x => new { x.CycleId, x.TrackId, x.BranchId })
+                .HasDatabaseName("UX_TrackBranchOfferings_Cycle_Track_Branch")
+                .IsUnique();
+
             builder.HasOne(x => x.Cycle)
                 .WithMany(x => x.Offerings)
                 .HasForeignKey(x => x.CycleId)

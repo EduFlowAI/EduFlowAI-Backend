@@ -25,7 +25,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _documentHumanReviewService.GetAllDocumentsReviewsAsync(queryParameters);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Message);
+                return StatusCode(result.StatusCode, result.Message);
             }
 
             return StatusCode(result.StatusCode, result.Data);
@@ -38,7 +38,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _documentHumanReviewService.GetDocumentReviewAsync(documentId);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Message);
+                return StatusCode(result.StatusCode, result.Message);
             }
             return StatusCode(result.StatusCode, result.Data);
         }
@@ -50,7 +50,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _documentHumanReviewService.GetDocumentFileAsync(documentId);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Message);
+                return StatusCode(result.StatusCode, result.Message);
             }
             return File(result.Data.Content, result.Data.ContentType, enableRangeProcessing: true);
         }
@@ -64,7 +64,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _documentHumanReviewService.ApproveReviewAsync(documentId, userId);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Message);
+                return StatusCode(result.StatusCode, result.Message);
             }
             return StatusCode(result.StatusCode, result.Message);
         }
@@ -78,21 +78,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _documentHumanReviewService.RejectReviewAsync(documentId, userId);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Message);
-            }
-            return StatusCode(result.StatusCode, result.Message);
-        }
-
-        [HttpPost("send-replacement-request")]
-        //[Authorize]
-        public async Task<IActionResult> SendReplacementRequest([FromBody] ReplacementRequestDto request)
-        {
-            //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userId = "1"; // for test
-            var result = await _documentHumanReviewService.SendReplacementRequest(request, userId);
-            if (!result.IsSuccess)
-            {
-                return BadRequest(result.Message);
+                return StatusCode(result.StatusCode, result.Message);
             }
             return StatusCode(result.StatusCode, result.Message);
         }

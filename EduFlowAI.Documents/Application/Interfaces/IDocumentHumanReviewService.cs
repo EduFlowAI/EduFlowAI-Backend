@@ -15,6 +15,5 @@ namespace EduFlowAI.Documents.Application.Interfaces
         Task<Result<DocumentFileDto>> GetDocumentFileAsync(Guid documentId);
         Task<Result<string>> ApproveReviewAsync(Guid documentId, string approvedById);
         Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById);
-        Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById);
     }
 }

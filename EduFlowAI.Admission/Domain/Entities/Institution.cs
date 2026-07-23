@@ -15,3 +15,4 @@ namespace EduFlowAI.Admission.Domain.Entities
         public ICollection<Program> Programs { get; set; } = new List<Program>();
     }
 }
+

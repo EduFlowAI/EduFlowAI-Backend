@@ -14,6 +14,7 @@ namespace EduFlowAI.Documents
         {
             services.AddScoped<IDocumentHumanReviewService, DocumentHumanReviewService>();
             services.AddScoped<IFileStorageService, FileStorageService>();
+            services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
 
             return services;
         }

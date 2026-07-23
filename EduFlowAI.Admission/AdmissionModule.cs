@@ -7,6 +7,7 @@ using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.Admission.Infrastructure.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace EduFlowAI.Admission
 {
@@ -20,6 +21,9 @@ namespace EduFlowAI.Admission
 
             // Admission catalog, configuration, cycles and Super Admin operations.
             services.AddScoped<IAdmissionConfigurationService, AdmissionConfigurationService>();
+            services.AddScoped<IProgramRequirementReader, ProgramRequirementReader>();
+            services.AddScoped<IAdmissionApplicationReader, AdmissionApplicationReader>();
+            services.TryAddSingleton(TimeProvider.System);
 
             // Application Layer services.
             services.AddScoped<IApplicationService, ApplicationService>();

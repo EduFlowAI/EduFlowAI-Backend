@@ -1,4 +1,5 @@
 using EduFlowAI.Admission.Application.Services.Configuration;
+using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,20 +18,25 @@ public sealed class TracksController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<ActionResult<IReadOnlyList<TrackDto>>> GetTracks(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<TrackDto>>>> GetTracks(
+        CancellationToken cancellationToken)
     {
         var tracks = await _configurationService.GetPublicTracksAsync(cancellationToken);
-        return Ok(tracks);
+        return Ok(Result<IReadOnlyList<TrackDto>>.Success(tracks));
     }
 
     [HttpGet("{trackId:guid}")]
     [AllowAnonymous]
-    public async Task<ActionResult<TrackDto>> GetTrack(Guid trackId, CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<TrackDto>>> GetTrack(
+        Guid trackId,
+        CancellationToken cancellationToken)
     {
         var track = await _configurationService.GetPublicTrackAsync(trackId, cancellationToken);
         return track is null
-            ? NotFound(new { message = "Track was not found in the active admission cycle." })
-            : Ok(track);
+            ? NotFound(Result<TrackDto>.Failure(
+                404,
+                "Track was not found in the active admission cycle."))
+            : Ok(Result<TrackDto>.Success(track));
     }
 }
 
@@ -47,13 +53,15 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("institutions")]
-    public async Task<ActionResult<IReadOnlyList<InstitutionDto>>> GetInstitutions(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<InstitutionDto>>>> GetInstitutions(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetInstitutionsAsync(cancellationToken));
+        var institutions = await _configurationService.GetInstitutionsAsync(cancellationToken);
+        return Ok(Result<IReadOnlyList<InstitutionDto>>.Success(institutions));
     }
 
     [HttpPost("institutions")]
-    public async Task<ActionResult<AdmissionOperationResult<InstitutionDto>>> CreateInstitution(
+    public async Task<ActionResult<Result<InstitutionDto>>> CreateInstitution(
         [FromBody] CreateInstitutionRequest request,
         CancellationToken cancellationToken)
     {
@@ -61,7 +69,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPut("institutions/{institutionId:guid}")]
-    public async Task<ActionResult<AdmissionOperationResult<InstitutionDto>>> UpdateInstitution(
+    public async Task<ActionResult<Result<InstitutionDto>>> UpdateInstitution(
         Guid institutionId,
         [FromBody] UpdateInstitutionRequest request,
         CancellationToken cancellationToken)
@@ -70,13 +78,15 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("programs")]
-    public async Task<ActionResult<IReadOnlyList<ProgramDto>>> GetPrograms(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<ProgramDto>>>> GetPrograms(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetProgramsAsync(cancellationToken));
+        var programs = await _configurationService.GetProgramsAsync(cancellationToken);
+        return Ok(Result<IReadOnlyList<ProgramDto>>.Success(programs));
     }
 
     [HttpPost("programs")]
-    public async Task<ActionResult<AdmissionOperationResult<ProgramDto>>> CreateProgram(
+    public async Task<ActionResult<Result<ProgramDto>>> CreateProgram(
         [FromBody] CreateProgramRequest request,
         CancellationToken cancellationToken)
     {
@@ -84,7 +94,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPut("programs/{programId:guid}")]
-    public async Task<ActionResult<AdmissionOperationResult<ProgramDto>>> UpdateProgram(
+    public async Task<ActionResult<Result<ProgramDto>>> UpdateProgram(
         Guid programId,
         [FromBody] UpdateProgramRequest request,
         CancellationToken cancellationToken)
@@ -93,18 +103,20 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("programs/{programId:guid}/document-requirements")]
-    public async Task<ActionResult<IReadOnlyList<ProgramDocumentRequirementDto>>> GetProgramDocumentRequirements(
+    public async Task<ActionResult<Result<IReadOnlyList<ProgramDocumentRequirementDto>>>> GetProgramDocumentRequirements(
         Guid programId,
         CancellationToken cancellationToken)
     {
         var requirements = await _configurationService.GetProgramRequirementsAsync(programId, cancellationToken);
         return requirements is null
-            ? NotFound(new { message = "Program was not found." })
-            : Ok(requirements);
+            ? NotFound(Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Failure(
+                404,
+                "Program was not found."))
+            : Ok(Result<IReadOnlyList<ProgramDocumentRequirementDto>>.Success(requirements));
     }
 
     [HttpPut("programs/{programId:guid}/document-requirements")]
-    public async Task<ActionResult<AdmissionOperationResult<IReadOnlyList<ProgramDocumentRequirementDto>>>> UpdateProgramDocumentRequirements(
+    public async Task<ActionResult<Result<IReadOnlyList<ProgramDocumentRequirementDto>>>> UpdateProgramDocumentRequirements(
         Guid programId,
         [FromBody] UpdateProgramDocumentRequirementsRequest request,
         CancellationToken cancellationToken)
@@ -113,13 +125,15 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("tracks")]
-    public async Task<ActionResult<IReadOnlyList<TrackDto>>> GetAdminTracks(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<TrackDto>>>> GetAdminTracks(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetAdminTracksAsync(cancellationToken));
+        var tracks = await _configurationService.GetAdminTracksAsync(cancellationToken);
+        return Ok(Result<IReadOnlyList<TrackDto>>.Success(tracks));
     }
 
     [HttpPost("tracks")]
-    public async Task<ActionResult<AdmissionOperationResult<TrackDto>>> CreateTrack(
+    public async Task<ActionResult<Result<TrackDto>>> CreateTrack(
         [FromBody] CreateTrackRequest request,
         CancellationToken cancellationToken)
     {
@@ -127,7 +141,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPut("tracks/{trackId:guid}")]
-    public async Task<ActionResult<AdmissionOperationResult<TrackDto>>> UpdateTrack(
+    public async Task<ActionResult<Result<TrackDto>>> UpdateTrack(
         Guid trackId,
         [FromBody] UpdateTrackRequest request,
         CancellationToken cancellationToken)
@@ -136,13 +150,15 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("branches")]
-    public async Task<ActionResult<IReadOnlyList<BranchDto>>> GetBranches(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<BranchDto>>>> GetBranches(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetBranchesAsync(cancellationToken));
+        var branches = await _configurationService.GetBranchesAsync(cancellationToken);
+        return Ok(Result<IReadOnlyList<BranchDto>>.Success(branches));
     }
 
     [HttpPost("branches")]
-    public async Task<ActionResult<AdmissionOperationResult<BranchDto>>> CreateBranch(
+    public async Task<ActionResult<Result<BranchDto>>> CreateBranch(
         [FromBody] CreateBranchRequest request,
         CancellationToken cancellationToken)
     {
@@ -150,7 +166,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPut("branches/{branchId:guid}")]
-    public async Task<ActionResult<AdmissionOperationResult<BranchDto>>> UpdateBranch(
+    public async Task<ActionResult<Result<BranchDto>>> UpdateBranch(
         Guid branchId,
         [FromBody] UpdateBranchRequest request,
         CancellationToken cancellationToken)
@@ -159,13 +175,15 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("cycles")]
-    public async Task<ActionResult<IReadOnlyList<AdmissionCycleDto>>> GetCycles(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<IReadOnlyList<AdmissionCycleDto>>>> GetCycles(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetCyclesAsync(cancellationToken));
+        var cycles = await _configurationService.GetCyclesAsync(cancellationToken);
+        return Ok(Result<IReadOnlyList<AdmissionCycleDto>>.Success(cycles));
     }
 
     [HttpPost("cycles")]
-    public async Task<ActionResult<AdmissionOperationResult<AdmissionCycleDto>>> CreateCycle(
+    public async Task<ActionResult<Result<AdmissionCycleDto>>> CreateCycle(
         [FromBody] CreateAdmissionCycleRequest request,
         CancellationToken cancellationToken)
     {
@@ -173,7 +191,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPut("cycles/{cycleId:guid}/eligibility-rule")]
-    public async Task<ActionResult<AdmissionOperationResult<CycleEligibilityRuleDto>>> UpdateEligibilityRule(
+    public async Task<ActionResult<Result<CycleEligibilityRuleDto>>> UpdateEligibilityRule(
         Guid cycleId,
         [FromBody] UpdateCycleEligibilityRuleRequest request,
         CancellationToken cancellationToken)
@@ -182,7 +200,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPost("cycles/{cycleId:guid}/offerings")]
-    public async Task<ActionResult<AdmissionOperationResult<IReadOnlyList<OfferingDto>>>> ConfigureOfferings(
+    public async Task<ActionResult<Result<IReadOnlyList<OfferingDto>>>> ConfigureOfferings(
         Guid cycleId,
         [FromBody] ConfigureOfferingsRequest request,
         CancellationToken cancellationToken)
@@ -191,7 +209,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPost("cycles/{cycleId:guid}/activate")]
-    public async Task<ActionResult<AdmissionOperationResult<AdmissionCycleDto>>> ActivateCycle(
+    public async Task<ActionResult<Result<AdmissionCycleDto>>> ActivateCycle(
         Guid cycleId,
         CancellationToken cancellationToken)
     {
@@ -199,7 +217,7 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpPost("cycles/{cycleId:guid}/close")]
-    public async Task<ActionResult<AdmissionOperationResult<AdmissionCycleDto>>> CloseCycle(
+    public async Task<ActionResult<Result<AdmissionCycleDto>>> CloseCycle(
         Guid cycleId,
         CancellationToken cancellationToken)
     {
@@ -207,12 +225,14 @@ public sealed class AdminAdmissionController : ControllerBase
     }
 
     [HttpGet("dashboard")]
-    public async Task<ActionResult<AdminAdmissionDashboardDto>> GetDashboard(CancellationToken cancellationToken)
+    public async Task<ActionResult<Result<AdminAdmissionDashboardDto>>> GetDashboard(
+        CancellationToken cancellationToken)
     {
-        return Ok(await _configurationService.GetDashboardAsync(cancellationToken));
+        var dashboard = await _configurationService.GetDashboardAsync(cancellationToken);
+        return Ok(Result<AdminAdmissionDashboardDto>.Success(dashboard));
     }
 
-    private ActionResult<AdmissionOperationResult<T>> ToActionResult<T>(AdmissionOperationResult<T> result)
+    private ActionResult<Result<T>> ToActionResult<T>(Result<T> result)
     {
         return StatusCode(result.StatusCode, result);
     }
