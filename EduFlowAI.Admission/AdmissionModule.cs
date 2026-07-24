@@ -6,7 +6,6 @@ using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.Admission.Infrastructure.Repositories;
-using EduFlowAI.AI.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

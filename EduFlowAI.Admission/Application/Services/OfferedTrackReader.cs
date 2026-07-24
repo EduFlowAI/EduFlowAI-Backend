@@ -1,9 +1,9 @@
 using System.Linq.Expressions;
 using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
-using EduFlowAI.AI.Application.DTOs;
-using EduFlowAI.AI.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Admission.Application.Services;

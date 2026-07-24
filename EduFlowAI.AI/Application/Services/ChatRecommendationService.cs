@@ -1,4 +1,5 @@
-﻿using EduFlowAI.AI.Application.DTOs;
+﻿using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
 
