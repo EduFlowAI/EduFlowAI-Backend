@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Infrastructure.Configurations;
 using EduFlowAI.AI.Application.DbContextAbstraction;
@@ -31,6 +31,7 @@ namespace EduFlowAI.Persistence
 
         #region DbSets
         // Identity
+        public DbSet<AppUser> AppUsers => Set<AppUser>();
         public DbSet<ApplicantProfile> ApplicantProfiles => Set<ApplicantProfile>();
 
         // Admission

@@ -17,5 +17,6 @@
   </Folder>
   <Folder Name="/src/Tests/">
     <Project Path="EduFlowAI.AI.Tests/EduFlowAI.AI.Tests.csproj" />
+    <Project Path="EduFlowAI.Identity.Tests/EduFlowAI.Identity.Tests.csproj" />
   </Folder>
 </Solution>
