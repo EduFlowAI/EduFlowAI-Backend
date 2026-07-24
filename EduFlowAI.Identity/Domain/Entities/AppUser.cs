@@ -4,7 +4,7 @@ using System;
 namespace EduFlowAI.Identity.Domain.Entities
 {
     // Inheriting from IdentityUser automatically gives us Id, Email, PasswordHash, etc.
-    public sealed class AppUser : IdentityUser
+    public sealed class AppUser : IdentityUser<Guid>
     {
         public bool IsActive { get; set; } = true;
         public string PreferredLanguage { get; set; } = "en";
@@ -14,7 +14,7 @@ namespace EduFlowAI.Identity.Domain.Entities
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? DeactivatedAt { get; set; }
-        
+
         // Navigation property (1-to-1 relationship with Profile)
         public ApplicantProfile? ApplicantProfile { get; set; }
     }

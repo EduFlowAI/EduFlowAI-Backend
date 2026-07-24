@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Infrastructure.Configurations;
 using EduFlowAI.AI.Application.DbContextAbstraction;
@@ -24,13 +24,14 @@ using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence
 {
-    public class EduFlowAIDbContext : IdentityDbContext<AppUser>, IAdmissionDbContext, IAIDbContext
+    public class EduFlowAIDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>, IAdmissionDbContext, IAIDbContext
         , ICommunicationDbContext, IDocumentDbContext, IIdentityDbContext
     {
         public EduFlowAIDbContext(DbContextOptions<EduFlowAIDbContext> options) : base(options) { }
 
         #region DbSets
         // Identity
+        public DbSet<AppUser> AppUsers => Set<AppUser>();
         public DbSet<ApplicantProfile> ApplicantProfiles => Set<ApplicantProfile>();
 
         // Admission
@@ -61,6 +62,14 @@ namespace EduFlowAI.Persistence
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {        
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<IdentityRole<Guid>>().ToTable("ApplicationRoles", "identity");
+            modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("ApplicationUserRoles", "identity");
+            modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("ApplicationUserClaims", "identity");
+            modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("ApplicationUserLogins", "identity");
+            modelBuilder.Entity<IdentityRoleClaim<Guid>>().ToTable("ApplicationRoleClaims", "identity");
+            modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("ApplicationUserTokens", "identity");
+
 
             // Enable pgvector extension for PostgreSQL to support AI embeddings
             modelBuilder.HasPostgresExtension("vector");

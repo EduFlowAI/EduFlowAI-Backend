@@ -17,8 +17,13 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(x => x.Code)
                 .HasMaxLength(20).IsRequired();
 
-            // Code must be unique (e.g., "ITI")
-            builder.HasIndex(x => x.Code).IsUnique();
+            builder.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.HasIndex(x => x.Code)
+                .HasDatabaseName("UX_Institutions_Code")
+                .IsUnique();
         }
     }
 }
