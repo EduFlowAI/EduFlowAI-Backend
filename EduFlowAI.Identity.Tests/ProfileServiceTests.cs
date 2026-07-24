@@ -1,31 +1,34 @@
-using System.Security.Claims;
 using EduFlowAI.Identity.Application.DTOs;
+using EduFlowAI.Identity.Application.Services;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Identity.Domain.Enums;
-using EduFlowAI.Identity.Presentation.Controllers;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Identity.Tests;
 
-public sealed class ProfileControllerTests
+public sealed class ProfileServiceTests
 {
     [Fact]
     public async Task Put_RejectsProtectedFieldChangesAfterLock()
     {
         await using var dbContext = CreateDbContext();
         var user = await SeedLockedUserAsync(dbContext);
-        var controller = CreateController(dbContext, user.Id);
+        var service = new ProfileService(dbContext);
         var request = CreateMatchingRequest() with
         {
             FullNameEn = "Changed Name",
             Address = "New address"
         };
 
-        var result = await controller.Put(request, CancellationToken.None);
+        var result = await service.UpdateAsync(
+            user.Id,
+            request,
+            CancellationToken.None);
 
-        Assert.IsType<ConflictObjectResult>(result.Result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            IdentityFailureKind.Conflict,
+            result.Failure!.Kind);
         var profile = await dbContext.ApplicantProfiles.SingleAsync();
         Assert.Equal("Karim Test", profile.FullNameEn);
         Assert.Equal("Old address", profile.Address);
@@ -36,7 +39,7 @@ public sealed class ProfileControllerTests
     {
         await using var dbContext = CreateDbContext();
         var user = await SeedLockedUserAsync(dbContext);
-        var controller = CreateController(dbContext, user.Id);
+        var service = new ProfileService(dbContext);
         var request = CreateMatchingRequest() with
         {
             Address = "New address",
@@ -46,9 +49,12 @@ public sealed class ProfileControllerTests
             GmailNotificationsEnabled = true
         };
 
-        var result = await controller.Put(request, CancellationToken.None);
+        var result = await service.UpdateAsync(
+            user.Id,
+            request,
+            CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True(result.IsSuccess);
         var savedUser = await dbContext.AppUsers
             .Include(item => item.ApplicantProfile)
             .SingleAsync();
@@ -90,28 +96,6 @@ public sealed class ProfileControllerTests
         dbContext.AppUsers.Add(user);
         await dbContext.SaveChangesAsync();
         return user;
-    }
-
-    private static ProfileController CreateController(
-        TestIdentityDbContext dbContext,
-        Guid userId)
-    {
-        var controller = new ProfileController(dbContext);
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(
-                    new ClaimsIdentity(
-                    [
-                        new Claim(
-                            ClaimTypes.NameIdentifier,
-                            userId.ToString())
-                    ],
-                    "Test"))
-            }
-        };
-        return controller;
     }
 
     private static UpdateProfileRequest CreateMatchingRequest() => new()

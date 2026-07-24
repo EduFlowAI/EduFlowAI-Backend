@@ -102,6 +102,10 @@ public static class IdentityModule
             });
 
         services.AddAuthorization();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<IOperationsManagerService,
+            OperationsManagerService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddSingleton<IIdentityEmailSender,
             DevelopmentIdentityEmailSender>();
