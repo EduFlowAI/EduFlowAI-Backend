@@ -1,11 +1,7 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
 using EduFlowAI.Identity.Application.DTOs;
 using EduFlowAI.Identity.Application.Interfaces;
-using EduFlowAI.Identity.Domain.Constants;
-using EduFlowAI.Identity.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -16,11 +12,7 @@ namespace EduFlowAI.Identity.Presentation.Controllers;
 [EnableRateLimiting("Authentication")]
 [Route("api/auth")]
 public sealed class AuthController(
-    UserManager<AppUser> userManager,
-    SignInManager<AppUser> signInManager,
-    IJwtTokenService jwtTokenService,
-    IIdentityEmailSender emailSender,
-    IHostEnvironment environment) : ControllerBase
+    IAuthService authService) : IdentityControllerBase
 {
     [HttpPost("register")]
     [ProducesResponseType<RegisterResponse>(StatusCodes.Status201Created)]
@@ -30,52 +22,13 @@ public sealed class AuthController(
         [FromBody] RegisterRequest request,
         CancellationToken cancellationToken)
     {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var now = DateTimeOffset.UtcNow;
-        var user = new AppUser
-        {
-            Id = Guid.NewGuid(),
-            UserName = email,
-            Email = email,
-            PreferredLanguage = request.PreferredLanguage,
-            IsActive = true,
-            LockoutEnabled = true,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        var createResult = await userManager.CreateAsync(
-            user,
-            request.Password);
-        if (!createResult.Succeeded)
-        {
-            return IdentityValidationProblem(createResult);
-        }
-
-        var roleResult = await userManager.AddToRoleAsync(
-            user,
-            AppRoles.Applicant);
-        if (!roleResult.Succeeded)
-        {
-            await userManager.DeleteAsync(user);
-            return IdentityValidationProblem(roleResult);
-        }
-
-        var token = await userManager
-            .GenerateEmailConfirmationTokenAsync(user);
-        await emailSender.SendConfirmationTokenAsync(
-            user,
-            token,
+        var result = await authService.RegisterAsync(
+            request,
             cancellationToken);
 
-        return StatusCode(
-            StatusCodes.Status201Created,
-            new RegisterResponse(
-                user.Id,
-                email,
-                RequiresEmailConfirmation: true,
-                DevelopmentConfirmationToken:
-                    environment.IsDevelopment() ? token : null));
+        return result.IsSuccess
+            ? StatusCode(StatusCodes.Status201Created, result.Value)
+            : ToErrorResult(result.Failure!);
     }
 
     [HttpPost("login")]
@@ -87,57 +40,13 @@ public sealed class AuthController(
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await userManager.FindByEmailAsync(
-            request.Email.Trim());
-
-        if (user is null)
-        {
-            return UnauthorizedProblem();
-        }
-
-        if (!user.IsActive)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Account inactive",
-                detail: "This account has been deactivated.");
-        }
-
-        var signInResult = await signInManager.CheckPasswordSignInAsync(
-            user,
-            request.Password,
-            lockoutOnFailure: true);
-
-        if (signInResult.IsLockedOut)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status423Locked,
-                title: "Account locked",
-                detail: "Too many failed attempts. Try again later.");
-        }
-
-        if (signInResult.IsNotAllowed)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Email confirmation required",
-                detail: "Confirm the account email before signing in.");
-        }
-
-        if (!signInResult.Succeeded)
-        {
-            return UnauthorizedProblem();
-        }
-
-        var token = await jwtTokenService.CreateAsync(
-            user,
+        var result = await authService.LoginAsync(
+            request,
             cancellationToken);
 
-        return Ok(new LoginResponse(
-            token.AccessToken,
-            token.TokenType,
-            token.ExpiresAtUtc,
-            token.Roles));
+        return result.IsSuccess
+            ? Ok(result.Value)
+            : ToErrorResult(result.Failure!);
     }
 
     [HttpPost("confirm-email")]
@@ -147,65 +56,26 @@ public sealed class AuthController(
     public async Task<IActionResult> ConfirmEmail(
         [FromBody] ConfirmEmailRequest request)
     {
-        var user = await userManager.FindByEmailAsync(
-            request.Email.Trim());
-        if (user is null)
-        {
-            ModelState.AddModelError(
-                nameof(request.Token),
-                "The email confirmation request is invalid.");
-            return ValidationProblem(ModelState);
-        }
-
-        if (user.EmailConfirmed)
-        {
-            return NoContent();
-        }
-
-        var result = await userManager.ConfirmEmailAsync(
-            user,
-            request.Token);
-        if (!result.Succeeded)
-        {
-            return IdentityValidationProblem(result);
-        }
-
-        user.UpdatedAt = DateTimeOffset.UtcNow;
-        await userManager.UpdateAsync(user);
-        return NoContent();
+        var result = await authService.ConfirmEmailAsync(request);
+        return result.IsSuccess
+            ? NoContent()
+            : ToErrorResult(result.Failure!);
     }
 
     [HttpPost("forgot-password")]
-    [ProducesResponseType<ForgotPasswordResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ForgotPasswordResponse>(
+        StatusCodes.Status202Accepted)]
     public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword(
         [FromBody] ForgotPasswordRequest request,
         CancellationToken cancellationToken)
     {
-        const string message =
-            "If an eligible account exists, password reset instructions " +
-            "have been issued.";
+        var result = await authService.ForgotPasswordAsync(
+            request,
+            cancellationToken);
 
-        var user = await userManager.FindByEmailAsync(request.Email.Trim());
-        string? developmentToken = null;
-
-        if (user is { IsActive: true, EmailConfirmed: true })
-        {
-            var token = await userManager
-                .GeneratePasswordResetTokenAsync(user);
-            await emailSender.SendPasswordResetTokenAsync(
-                user,
-                token,
-                cancellationToken);
-
-            if (environment.IsDevelopment())
-            {
-                developmentToken = token;
-            }
-        }
-
-        return Accepted(new ForgotPasswordResponse(
-            message,
-            developmentToken));
+        return result.IsSuccess
+            ? Accepted(result.Value)
+            : ToErrorResult(result.Failure!);
     }
 
     [HttpPost("reset-password")]
@@ -215,50 +85,9 @@ public sealed class AuthController(
     public async Task<IActionResult> ResetPassword(
         [FromBody] ResetPasswordRequest request)
     {
-        var user = await userManager.FindByEmailAsync(
-            request.Email.Trim());
-        if (user is null || !user.IsActive)
-        {
-            ModelState.AddModelError(
-                nameof(request.Token),
-                "The password reset request is invalid.");
-            return ValidationProblem(ModelState);
-        }
-
-        var result = await userManager.ResetPasswordAsync(
-            user,
-            request.Token,
-            request.NewPassword);
-        if (!result.Succeeded)
-        {
-            return IdentityValidationProblem(result);
-        }
-
-        user.UpdatedAt = DateTimeOffset.UtcNow;
-        await userManager.UpdateAsync(user);
-        return NoContent();
-    }
-
-    private ActionResult UnauthorizedProblem() => Problem(
-        statusCode: StatusCodes.Status401Unauthorized,
-        title: "Invalid credentials",
-        detail: "The email or password is incorrect.");
-
-    private ActionResult IdentityValidationProblem(
-        IdentityResult result)
-    {
-        var errors = result.Errors
-            .GroupBy(error => error.Code)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .Select(error => error.Description)
-                    .ToArray());
-
-        return BadRequest(new ValidationProblemDetails(errors)
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Title = "Identity validation failed"
-        });
+        var result = await authService.ResetPasswordAsync(request);
+        return result.IsSuccess
+            ? NoContent()
+            : ToErrorResult(result.Failure!);
     }
 }

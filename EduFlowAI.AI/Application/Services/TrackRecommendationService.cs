@@ -107,30 +107,30 @@ private const int MaximumRecommendations = 3;
             .ToDictionary(group => group.Key, group => group.First());
 
         return modelResponse.Recommendations
-            .Where(item =>
-                item.TrackId != Guid.Empty &&
-                item.Rank > 0 &&
-                !string.IsNullOrWhiteSpace(item.Reason) &&
-                offeredTracksById.ContainsKey(item.TrackId))
-            .GroupBy(item => item.TrackId)
-            .Select(group => group
-                .OrderBy(item => item.Rank)
-                .First())
-            .OrderBy(item => item.Rank)
-            .Take(MaximumRecommendations)
-            .Select((item, index) =>
-            {
-                var track = offeredTracksById[item.TrackId];
+                            .Where(item =>
+                                             item.TrackId != Guid.Empty &&
+                                             item.Rank > 0 &&
+                                             !string.IsNullOrWhiteSpace(item.Reason) &&
+                                             offeredTracksById.ContainsKey(item.TrackId))
+                            .GroupBy(item => item.TrackId)
+                            .Select(group => group
+                                .OrderBy(item => item.Rank)
+                                .First())
+                            .OrderBy(item => item.Rank)
+                            .Take(MaximumRecommendations)
+                            .Select((item, index) =>
+                                                    {
+                                                        var track = offeredTracksById[item.TrackId];
 
-                return new RecommendedTrackResultDto
-                {
-                    TrackId = track.TrackId,
-                    TrackName = track.Name,
-                    Rank = index + 1,
-                    Reason = item.Reason.Trim()
-                };
-            })
-            .ToList();
+                                                        return new RecommendedTrackResultDto
+                                                        {
+                                                            TrackId = track.TrackId,
+                                                            TrackName = track.Name,
+                                                            Rank = index + 1,
+                                                            Reason = item.Reason.Trim()
+                                                        };
+                                                    })
+                            .ToList();
     }
 
     private static TrackRecommendationResultDto CreateFallback(
