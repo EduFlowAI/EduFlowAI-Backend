@@ -15,7 +15,7 @@ public sealed class CreateOperationsManagerRequest
 }
 
 public sealed record OperationsManagerResponse(
-    Guid UserId,
+    string UserId,
     string Email,
     bool IsActive,
     DateTimeOffset CreatedAt,

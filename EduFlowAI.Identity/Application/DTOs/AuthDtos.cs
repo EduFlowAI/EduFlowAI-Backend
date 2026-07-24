@@ -16,7 +16,7 @@ public sealed class RegisterRequest
 }
 
 public sealed record RegisterResponse(
-    Guid UserId,
+    string UserId,
     string Email,
     bool RequiresEmailConfirmation,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

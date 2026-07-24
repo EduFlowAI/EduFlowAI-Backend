@@ -7,5 +7,5 @@ public interface IOperationsManagerService
     Task<IdentityOperationResult<OperationsManagerResponse>> CreateAsync(
         CreateOperationsManagerRequest request);
 
-    Task<IdentityOperationResult<bool>> DeactivateAsync(Guid userId);
+    Task<IdentityOperationResult<bool>> DeactivateAsync(string userId);
 }

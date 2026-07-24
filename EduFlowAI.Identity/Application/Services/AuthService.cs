@@ -22,7 +22,7 @@ internal sealed class AuthService(
         var now = DateTimeOffset.UtcNow;
         var user = new AppUser
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             UserName = email,
             Email = email,
             PreferredLanguage = request.PreferredLanguage,

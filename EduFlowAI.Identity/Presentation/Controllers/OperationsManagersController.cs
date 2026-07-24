@@ -28,10 +28,10 @@ public sealed class OperationsManagersController(
             : ToErrorResult(result.Failure!);
     }
 
-    [HttpPatch("{userId:guid}/deactivate")]
+    [HttpPatch("{userId}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Deactivate(Guid userId)
+    public async Task<IActionResult> Deactivate(string userId)
     {
         var result = await operationsManagerService.DeactivateAsync(userId);
         return result.IsSuccess

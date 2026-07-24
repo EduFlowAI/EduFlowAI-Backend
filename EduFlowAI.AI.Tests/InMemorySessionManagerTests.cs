@@ -24,7 +24,7 @@ public class InMemorySessionManagerTests
     public void CreateSession_ReturnsSessionWithIdUserAndEmptyHistory()
     {
         var mgr = new InMemorySessionManager();
-        var userId = Guid.NewGuid();
+        var userId = Guid.NewGuid().ToString();
 
         var session = mgr.CreateSession(userId);
 
@@ -44,7 +44,7 @@ public class InMemorySessionManagerTests
     public void AddTurn_AppendsToHistory()
     {
         var mgr = new InMemorySessionManager();
-        var session = mgr.CreateSession(Guid.NewGuid());
+        var session = mgr.CreateSession(Guid.NewGuid().ToString());
 
         mgr.AddTurn(session.SessionId, Turn("Q1"));
 
@@ -57,7 +57,7 @@ public class InMemorySessionManagerTests
     public void GetHistory_ReturnsLastNInChronologicalOrder()
     {
         var mgr = new InMemorySessionManager();
-        var session = mgr.CreateSession(Guid.NewGuid());
+        var session = mgr.CreateSession(Guid.NewGuid().ToString());
         for (int i = 1; i <= 5; i++)
             mgr.AddTurn(session.SessionId, Turn($"Q{i}"));
 
@@ -73,7 +73,7 @@ public class InMemorySessionManagerTests
     public void GetHistory_LastNLargerThanCount_ReturnsAllTurns()
     {
         var mgr = new InMemorySessionManager();
-        var session = mgr.CreateSession(Guid.NewGuid());
+        var session = mgr.CreateSession(Guid.NewGuid().ToString());
         mgr.AddTurn(session.SessionId, Turn("only"));
 
         Assert.Single(mgr.GetHistory(session.SessionId, lastN: 100));
@@ -90,7 +90,7 @@ public class InMemorySessionManagerTests
     public void EndSession_RemovesSession()
     {
         var mgr = new InMemorySessionManager();
-        var session = mgr.CreateSession(Guid.NewGuid());
+        var session = mgr.CreateSession(Guid.NewGuid().ToString());
 
         mgr.EndSession(session.SessionId);
 
@@ -101,7 +101,7 @@ public class InMemorySessionManagerTests
     public void EndSession_CalledTwice_DoesNotThrow()
     {
         var mgr = new InMemorySessionManager();
-        var session = mgr.CreateSession(Guid.NewGuid());
+        var session = mgr.CreateSession(Guid.NewGuid().ToString());
 
         mgr.EndSession(session.SessionId);
         mgr.EndSession(session.SessionId); // second removal is a no-op
@@ -113,8 +113,8 @@ public class InMemorySessionManagerTests
     public void SeparateSessions_KeepIndependentHistories()
     {
         var mgr = new InMemorySessionManager();
-        var a = mgr.CreateSession(Guid.NewGuid());
-        var b = mgr.CreateSession(Guid.NewGuid());
+        var a = mgr.CreateSession(Guid.NewGuid().ToString());
+        var b = mgr.CreateSession(Guid.NewGuid().ToString());
 
         mgr.AddTurn(a.SessionId, Turn("a-only"));
 
@@ -133,7 +133,7 @@ public class InMemorySessionManagerTests
     public void AddTurn_KnownSession_ReturnsTrue()
     {
         var mgr = new InMemorySessionManager();
-        var s = mgr.CreateSession(Guid.NewGuid());
+        var s = mgr.CreateSession(Guid.NewGuid().ToString());
         Assert.True(mgr.AddTurn(s.SessionId, Turn("hi")));
     }
 
@@ -142,7 +142,7 @@ public class InMemorySessionManagerTests
     {
         var clock = new TestClock { Now = DateTimeOffset.UtcNow };
         var mgr = WithOptions(new ChatSessionOptions { IdleTimeout = TimeSpan.FromMinutes(30) }, clock);
-        var s = mgr.CreateSession(Guid.NewGuid());
+        var s = mgr.CreateSession(Guid.NewGuid().ToString());
 
         clock.Now = clock.Now.AddMinutes(31); // idle past the timeout
 
@@ -155,7 +155,7 @@ public class InMemorySessionManagerTests
     {
         var clock = new TestClock { Now = DateTimeOffset.UtcNow };
         var mgr = WithOptions(new ChatSessionOptions { IdleTimeout = TimeSpan.FromMinutes(30) }, clock);
-        var s = mgr.CreateSession(Guid.NewGuid());
+        var s = mgr.CreateSession(Guid.NewGuid().ToString());
 
         clock.Now = clock.Now.AddMinutes(20);
         Assert.True(mgr.AddTurn(s.SessionId, Turn("keepalive"))); // refreshes LastActivityAt
@@ -168,7 +168,7 @@ public class InMemorySessionManagerTests
     public void History_IsCappedToMaxTurns_DroppingOldest()
     {
         var mgr = WithOptions(new ChatSessionOptions { MaxHistoryTurns = 3 });
-        var s = mgr.CreateSession(Guid.NewGuid());
+        var s = mgr.CreateSession(Guid.NewGuid().ToString());
 
         for (int i = 1; i <= 5; i++)
             mgr.AddTurn(s.SessionId, Turn($"Q{i}"));

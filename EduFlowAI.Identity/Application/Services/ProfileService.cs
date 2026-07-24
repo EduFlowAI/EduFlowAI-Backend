@@ -11,7 +11,7 @@ internal sealed class ProfileService(
     IIdentityDbContext dbContext) : IProfileService
 {
     public async Task<IdentityOperationResult<ProfileResponse>> GetAsync(
-        Guid userId,
+        string userId,
         CancellationToken cancellationToken = default)
     {
         var user = await dbContext.AppUsers
@@ -28,7 +28,7 @@ internal sealed class ProfileService(
     }
 
     public async Task<IdentityOperationResult<ProfileResponse>> UpdateAsync(
-        Guid userId,
+        string userId,
         UpdateProfileRequest request,
         CancellationToken cancellationToken = default)
     {
