@@ -110,7 +110,6 @@ public static class AIModule
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
-        // Temporary until the admission catalog provides the real reader.
-        services.AddScoped<IOfferedTrackReader, DevelopmentOfferedTrackReader>();
+        // IOfferedTrackReader is supplied by the Admission catalog module.
     }
 }
