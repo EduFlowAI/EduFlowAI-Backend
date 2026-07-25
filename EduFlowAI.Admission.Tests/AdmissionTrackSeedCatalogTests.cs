@@ -21,11 +21,17 @@ public sealed class AdmissionTrackSeedCatalogTests
         {
             Assert.NotEqual(Guid.Empty, track.Id);
             Assert.False(string.IsNullOrWhiteSpace(track.Name));
+            Assert.InRange(track.Name.Length, 1, 200);
             Assert.False(string.IsNullOrWhiteSpace(track.Description));
+            Assert.InRange(track.Description.Length, 1, 4000);
             Assert.NotEmpty(track.PrerequisiteTopics);
+            Assert.InRange(track.PrerequisiteTopics.Count, 1, 50);
             Assert.DoesNotContain(
                 track.PrerequisiteTopics,
                 topic => string.IsNullOrWhiteSpace(topic));
+            Assert.All(
+                track.PrerequisiteTopics,
+                topic => Assert.InRange(topic.Length, 1, 100));
             Assert.Equal(
                 track.PrerequisiteTopics.Count,
                 track.PrerequisiteTopics
