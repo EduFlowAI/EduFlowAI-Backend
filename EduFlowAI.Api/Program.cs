@@ -3,6 +3,7 @@ using EduFlowAI.Admission;
 using EduFlowAI.AI;
 using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
+using EduFlowAI.Communication.Infrastructure.Hubs;
 using EduFlowAI.Documents;
 using EduFlowAI.Identity;
 using EduFlowAI.Persistence;
@@ -120,6 +121,8 @@ public class Program
                 });
         });
 
+        builder.Services.AddSignalR();
+
         var app = builder.Build();
 
         app.UseExceptionHandler();
@@ -136,6 +139,8 @@ public class Program
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
+
+        app.MapHub<NotificationHub>("/hubs/notifications");
 
         app.MapControllers();
         app.Run();

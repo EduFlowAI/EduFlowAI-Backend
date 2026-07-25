@@ -5,7 +5,6 @@ using EduFlowAI.Identity.Application.Services;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Identity.Infrastructure;
 using EduFlowAI.Identity.Infrastructure.Options;
-using EduFlowAI.Shared.Kernel.Contracts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
