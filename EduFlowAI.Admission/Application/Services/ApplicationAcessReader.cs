@@ -27,5 +27,15 @@ namespace EduFlowAI.Admission.Application.Services
 
             return true;    // This user owns this application
         }
+
+        public async Task<Guid> GetProgramIdAsync(Guid applicationId, CancellationToken cancellationToken)
+        {
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
+            if (application == null)
+            {
+                throw new Exception("This application is not found");
+            }
+            return application.Cycle.ProgramId;
+        }
     }
 }
