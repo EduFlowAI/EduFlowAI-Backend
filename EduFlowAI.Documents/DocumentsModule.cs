@@ -1,3 +1,10 @@
+using EduFlowAI.Documents.Application.DTOs;
+using EduFlowAI.Documents.Application.Interfaces;
+using EduFlowAI.Documents.Application.Services;
+using EduFlowAI.Documents.Application.Validators;
+using EduFlowAI.Documents.Infrastructure.Auth;
+using EduFlowAI.Documents.Infrastructure.Fakes;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -10,6 +17,17 @@ namespace EduFlowAI.Documents
         public static IServiceCollection AddDocumentsModule(this IServiceCollection services)
         {
             // Application + Infrastructure services registrations go here later
+            services.AddScoped<IFileStorageService, IFileStorageService>();
+            services.AddScoped<IApplicantDocumentService, IApplicantDocumentService>();
+            services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
+            services.AddScoped<IApplicantDocumentService, ApplicantDocumentService>();
+            services.AddScoped<IValidator<UploadDocumentDto>, UploadDocumentDtoValidator>();
+            // fake
+            services.AddScoped<IProgramRequirementReader, FakeProgramRequirementReader>();
+            services.AddScoped<IApplicationAccessReader, FakeApplicationAccessReader>();
+            services.AddScoped<IApplicantProfileReader, FakeApplicantProfileReader>();
+
+
             return services;
         }
 
