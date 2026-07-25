@@ -10,7 +10,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Documents.V1
     public sealed record DocumentReplacementRequestedV1(
         Guid MessageId, Guid CorrelationId, Guid? CausationId,
         Guid ReplacementRequestId, Guid DocumentId, Guid ApplicationId,
-        Guid ApplicantUserId, Guid RequestedByUserId,
+        string ApplicantUserId, string RequestedByUserId,
         string DocumentType, string Reason,
         DateTimeOffset RequestedAtUtc, DateTimeOffset OccurredAtUtc
     ) : IIntegrationMessage;

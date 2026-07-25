@@ -6,7 +6,7 @@ namespace EduFlowAI.AI.Application.Interfaces;
 
 public interface ISessionManager
 {
-    ChatSessionDto CreateSession(Guid userId);
+    ChatSessionDto CreateSession(string userId);
     ChatSessionDto? GetSession(string sessionId);
 
     // False when the session is missing or expired.

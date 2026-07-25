@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Identity.Domain.Entities;
+using EduFlowAI.Identity.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
@@ -15,6 +15,23 @@ namespace EduFlowAI.Identity.Infrastructure.Configurations
 
             builder.HasKey(x => x.Id);
 
+            builder.Property(x => x.CreatedAt)
+                    .HasDefaultValueSql("now()")
+                    .IsRequired();
+
+            builder.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .IsRequired();
+
+            builder.Property(x => x.IsProfileLocked)
+                .HasDefaultValue(false)
+                .IsRequired();
+
+            builder.Property(x => x.DateOfBirth)
+                .HasColumnType("date");
+
+            builder.Property(x => x.GraduationYear)
+                .IsRequired();
             // String lengths and requirements
             builder.Property(x => x.FullNameEn).HasMaxLength(300).IsRequired();
             builder.Property(x => x.FullNameAr).HasMaxLength(300).IsRequired();

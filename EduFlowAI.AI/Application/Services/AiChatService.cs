@@ -21,10 +21,17 @@ public class AiChatService : IRagAnswerService
 
     public async Task<RagAnswerDto> AnswerWithContextAsync(
         string userQuestion,
+        IReadOnlyList<ConversationTurnDto> context,
         string language,
         CancellationToken cancellationToken = default)
     {
-        var chunks = await _retrievalService.RetrieveContextAsync(userQuestion, limit: 5, cancellationToken);
+        // Mask national IDs and other long digit runs before any user text reaches the model.
+        userQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
+
+        // A follow-up like "what about its prerequisites?" embeds poorly on its own, so retrieval
+        // runs on the recent turns joined with the question - the vector then reflects the topic.
+        var retrievalQuery = BuildRetrievalQuery(userQuestion, context);
+        var chunks = await _retrievalService.RetrieveContextAsync(retrievalQuery, limit: 5, cancellationToken);
 
         if (chunks.Count == 0)
         {
@@ -50,6 +57,19 @@ public class AiChatService : IRagAnswerService
         var languageInstruction = language == "ar"
             ? "Respond in Arabic only."
             : "Respond in English only.";
+
+        // Prior turns let the model resolve references ("its", "that track") to what was just
+        // discussed. Framed as dialogue, never as documents, so the guardrail below still holds.
+        var conversationSection = context.Count == 0
+            ? string.Empty
+            : $"""
+
+# CONVERSATION SO FAR
+This is the dialogue with the applicant up to now. Use it only to understand what the current
+question refers to (for example, what "it" or "that track" means). Do not repeat it back.
+
+{RenderTurns(context)}
+""";
 
         var systemPrompt = $"""
 # ROLE
@@ -79,7 +99,7 @@ Never use phrasing such as "based on the available documents", "in the current m
 - When asked what is offered or available, name the specific programs or tracks you know of.
   If you know of exactly one, present it plainly as what we currently offer.
 - Use a short bullet list only when listing several items; otherwise write plain prose.
-
+{conversationSection}
 # OFFICIAL ITI INFORMATION
 Each section below is internal reference material for you, labelled with its origin so you know
 what we currently offer. Use it to answer, but never mention it or its labels to the applicant.
@@ -98,5 +118,27 @@ what we currently offer. Use it to answer, but never mention it or its labels to
                 : answer,
             Sources = sources
         };
+    }
+
+    // The last couple of turns joined with the question, so the retrieval embedding carries the
+    // topic the follow-up depends on. Empty context leaves the question untouched.
+    private static string BuildRetrievalQuery(string userQuestion, IReadOnlyList<ConversationTurnDto> context)
+    {
+        if (context.Count == 0)
+            return userQuestion;
+
+        var recent = context.TakeLast(2);
+        return $"{RenderTurns(recent)}\n{userQuestion}";
+    }
+
+    private static string RenderTurns(IEnumerable<ConversationTurnDto> turns) =>
+        string.Join("\n", turns.Select(t =>
+            $"Q: {InputSanitizerService.MaskSensitiveNumbers(t.Question)}\nA: {Trim(InputSanitizerService.MaskSensitiveNumbers(t.Answer))}"));
+
+    // A stale, long prior answer shouldn't dominate the retrieval vector or bloat the prompt.
+    private static string Trim(string answer)
+    {
+        answer = answer.Trim();
+        return answer.Length <= 200 ? answer : answer.Substring(0, 200);
     }
 }

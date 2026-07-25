@@ -9,6 +9,7 @@ namespace EduFlowAI.Admission.Domain.Enums
         None = 0,
         Pending = 1,
         Passed = 2,
-        NotPassed = 3
+        NotPassed = 3,
+        Missed = 4
     }
 }

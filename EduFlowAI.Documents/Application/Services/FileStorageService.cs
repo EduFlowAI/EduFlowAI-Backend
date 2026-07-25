@@ -94,6 +94,47 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
             return Task.CompletedTask;
         }
 
+        public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(storageKey))
+            {
+                throw new ArgumentException(
+                    "Storage key cannot be empty.",
+                    nameof(storageKey));
+            }
+
+            var safeFileName = Path.GetFileName(storageKey);
+
+            if (!string.Equals(
+                    safeFileName,
+                    storageKey,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Invalid storage key.");
+            }
+
+            var fullFilePath = Path.Combine(_storageDirectory, safeFileName);
+
+            if (!File.Exists(fullFilePath))
+            {
+                throw new FileNotFoundException(
+                    "The requested file was not found.");
+            }
+
+            Stream stream = new FileStream(
+                fullFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 81920,
+                options:
+                    FileOptions.Asynchronous |
+                    FileOptions.SequentialScan);
+
+            return Task.FromResult(stream);
+        }
+
 
         /// Reads the first few bytes of the file to guarantee it matches its stated extension.
         private async Task<bool> IsValidFileSignatureAsync(Stream stream, string extension, CancellationToken cancellationToken)

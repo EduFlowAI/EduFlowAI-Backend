@@ -14,12 +14,21 @@ namespace EduFlowAI.Admission.Presentation.Controllers
     {
         private readonly IApplicationService _applicationService;
         private readonly IAdmissionEligibilityService _eligibilityService;
+        private readonly IApplicationStatusQueryService _statusQueryService;
+        private readonly IStatusTransitionCoordinator _statusTransitionCoordinator;
+        private readonly IAssessmentSimulationService _simulationService;
 
         public ApplicationsController(IApplicationService applicationService,
-            IAdmissionEligibilityService eligibilityService)
+            IAdmissionEligibilityService eligibilityService,
+            IApplicationStatusQueryService statusQueryService,
+            IStatusTransitionCoordinator statusTransitionCoordinator,
+            IAssessmentSimulationService simulationService)
         {
             _applicationService = applicationService;
             _eligibilityService = eligibilityService;
+            _statusQueryService=statusQueryService;
+            _statusTransitionCoordinator = statusTransitionCoordinator;
+            _simulationService = simulationService;
         }
 
         // POST: api/modules/admission/applications/draft
@@ -63,6 +72,92 @@ namespace EduFlowAI.Admission.Presentation.Controllers
                 var errorResult = Result<EligibilityResult>.Failure(500, $"An error occurred during evaluation: {ex.Message}");
                 return StatusCode(errorResult.StatusCode, errorResult);
             }
+        }
+
+
+        [HttpGet("{applicationId}/status")]
+        public async Task<ActionResult<ApplicationStatusDto>> GetApplicationStatus(Guid applicationId)
+        {
+            var statusDto = await _statusQueryService.GetApplicationStatusAsync(applicationId);
+            if(statusDto == null)
+            {
+                var error = Result<ApplicationStatusDto>.Failure(400, "Invalid application ID!");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            // Return OK 200
+            var res = Result<ApplicationStatusDto>.Success(statusDto, message: "Application status is retreived successfully");
+            return StatusCode(res.StatusCode, res);
+        }
+
+        [HttpPost("{applicationId}/withdraw")]
+        public async Task<ActionResult<Result<ApplicationStatusDto>>> WithdrawApplication(Guid applicationId)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+
+            // Execute the business logic via the coordinator service
+            var (isSuccess, errorMessage, data) = await _statusTransitionCoordinator.WithdrawApplicationAsync(applicationId, userId);
+
+            if (!isSuccess)
+            {
+                int statusCode = 400; // Default to bad request
+                if(errorMessage.Contains("not found"))
+                {
+                    statusCode = 404;   // Not Found
+                }
+                else if(errorMessage.Contains("authorized"))
+                {
+                    statusCode = 403;   // Forbidden
+                }
+
+                var failureResult = Result<ApplicationStatusDto>.Failure(statusCode, errorMessage);
+                return StatusCode(statusCode, failureResult);
+            }
+
+            var successResult = Result<ApplicationStatusDto>.Success(data!, 200, message: "Application withdrawn successfully.");
+            return Ok(successResult);
+        }
+
+        [HttpPost("{applicationId}/process-document-review")]
+        public async Task<ActionResult<Result<ApplicationStatusDto>>> ProcessDocumentReview(Guid applicationId, [FromBody] DocumentReviewResultDto reviewResult)
+        {
+            if (!ModelState.IsValid)
+            {
+                var validationFailure = Result<ApplicationStatusDto>.Failure(400, "Invalid review data provided.");
+                return BadRequest(validationFailure);
+            }
+
+            // 2. Execute the business logic via the coordinator service
+            var (isSuccess, errorMessage, data) = await _statusTransitionCoordinator.ProcessDocumentReviewAsync(applicationId, reviewResult);
+
+            // 3. Handle failure scenarios and map to appropriate HTTP Status Codes
+            if (!isSuccess)
+            {
+                int statusCode = 400;
+                if (errorMessage.Contains("not found"))
+                {
+                    statusCode = 404;   // Not Found
+
+                }
+                
+                var failureResult = Result<ApplicationStatusDto>.Failure(statusCode, errorMessage);
+                return StatusCode(statusCode, failureResult);
+            }
+
+            // 4. Construct the Result object for a successful operation and return 200 OK
+            var successResult = Result<ApplicationStatusDto>.Success(data!, 200, message: "Document review processed successfully.");
+            return Ok(successResult);
+        }
+
+        [HttpGet("{applicationId}/stages")]
+        public async Task<ActionResult<Result<List<SimulatedStageDto>>>> GetStagesResults(Guid applicationId)
+        {
+            var stagesResultDto = await _simulationService.GetApplicantStagesAsync(applicationId);
+
+            // Return OK 200
+            var res = Result<IEnumerable<SimulatedStageDto>>.Success(stagesResultDto, message: "Applicant stages results are retreived successfully");
+            return StatusCode(res.StatusCode, res);
         }
     }
 }

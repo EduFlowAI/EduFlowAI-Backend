@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Infrastructure.Configurations;
 using EduFlowAI.AI.Application.DbContextAbstraction;
@@ -31,6 +31,7 @@ namespace EduFlowAI.Persistence
 
         #region DbSets
         // Identity
+        public DbSet<AppUser> AppUsers => Set<AppUser>();
         public DbSet<ApplicantProfile> ApplicantProfiles => Set<ApplicantProfile>();
 
         // Admission
@@ -62,11 +63,16 @@ namespace EduFlowAI.Persistence
         {        
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<IdentityRole>().ToTable("AspNetRoles", "public");
+            modelBuilder.Entity<IdentityUserRole<string>>().ToTable("AspNetUserRoles", "public");
+            modelBuilder.Entity<IdentityUserClaim<string>>().ToTable("AspNetUserClaims", "public");
+            modelBuilder.Entity<IdentityUserLogin<string>>().ToTable("AspNetUserLogins", "public");
+            modelBuilder.Entity<IdentityRoleClaim<string>>().ToTable("AspNetRoleClaims", "public");
+            modelBuilder.Entity<IdentityUserToken<string>>().ToTable("AspNetUserTokens", "public");
+
+
             // Enable pgvector extension for PostgreSQL to support AI embeddings
             modelBuilder.HasPostgresExtension("vector");
-
-            // mapping Wolverine messaging storage
-            modelBuilder.MapWolverineEnvelopeStorage();
 
             // Module entity configs applied here (The Modular Monolith Way)
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppUserConfiguration).Assembly);

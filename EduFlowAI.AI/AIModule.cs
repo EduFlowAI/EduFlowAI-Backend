@@ -1,14 +1,12 @@
 using EduFlowAI.AI.Application.Interfaces;
-using EduFlowAI.AI.Application.Recommendation;
-using EduFlowAI.AI.Application.Recommendation.Contracts;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
+using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 using EduFlowAI.AI.Infrastructure.Indexing;
 using EduFlowAI.AI.Infrastructure.Options;
 using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
-using EduFlowAI.AI.Infrastructure.Recommendation;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
@@ -68,10 +66,16 @@ public static class AIModule
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
 
+        // IApplicationStatusReader is supplied by the Admission module.
+        services.AddScoped<IStatusAnswerService, StatusAnswerService>();
+
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
         services.AddSingleton<KnowledgeBaseSyncState>();
+
+        // Registered before the worker so a dimension mismatch fails startup before anything indexes.
+        services.AddHostedService<EmbeddingDimensionGuard>();
 
         services.AddSingleton<IIndexingQueue, IndexingQueue>();
         services.AddHostedService<KnowledgeIndexingWorker>();
@@ -109,7 +113,6 @@ public static class AIModule
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
-        // Temporary until the admission catalog provides the real reader.
-        services.AddScoped<IOfferedTrackReader, DevelopmentOfferedTrackReader>();
+        // IOfferedTrackReader is supplied by the Admission catalog module.
     }
 }
