@@ -13,7 +13,7 @@ public class IntentClassifierParsingTests
 
         Assert.True(ok);
         Assert.Equal("status", dto.PrimaryIntent);
-        Assert.Equal("status_agent", dto.RoutedTo);
+        Assert.Equal("status_service", dto.RoutedTo);
         Assert.Equal(0.9m, dto.Confidence);
     }
 
@@ -71,7 +71,7 @@ public class IntentClassifierParsingTests
 
         Assert.True(ok);
         Assert.Equal("status", dto.PrimaryIntent);
-        Assert.Equal("status_agent", dto.RoutedTo);
+        Assert.Equal("status_service", dto.RoutedTo);
     }
 
     [Fact]
