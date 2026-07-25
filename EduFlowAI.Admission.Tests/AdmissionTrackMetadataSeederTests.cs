@@ -139,11 +139,11 @@ public sealed class AdmissionTrackMetadataSeederTests
 
         await context.SaveChangesAsync();
 
-        var now = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
+        var firstRunAt = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
 
         await AdmissionTrackMetadataSeeder.SeedAsync(
             context,
-            now,
+            firstRunAt,
             CancellationToken.None);
 
         var tracks = await context.Tracks
@@ -156,7 +156,20 @@ public sealed class AdmissionTrackMetadataSeederTests
             tracks,
             track => Assert.False(string.IsNullOrWhiteSpace(track.Description)));
         Assert.All(tracks, track => Assert.NotEmpty(track.PrerequisiteTopics));
-        Assert.All(tracks, track => Assert.Equal(now, track.UpdatedAt));
+        Assert.All(tracks, track => Assert.Equal(firstRunAt, track.UpdatedAt));
+
+        await AdmissionTrackMetadataSeeder.SeedAsync(
+            context,
+            firstRunAt.AddDays(1),
+            CancellationToken.None);
+
+        var tracksAfterSecondRun = await context.Tracks
+            .OrderBy(track => track.Name)
+            .ToListAsync();
+
+        Assert.All(
+            tracksAfterSecondRun,
+            track => Assert.Equal(firstRunAt, track.UpdatedAt));
     }
 
     private sealed class TestAdmissionDbContext : DbContext, IAdmissionDbContext
