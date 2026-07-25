@@ -8,7 +8,7 @@ internal sealed class ApplicantProfileLocker(
     IIdentityDbContext dbContext) : IApplicantProfileLocker
 {
     public async Task LockAsync(
-        Guid userId,
+        string userId,
         CancellationToken cancellationToken = default)
     {
         var profile = await dbContext.ApplicantProfiles

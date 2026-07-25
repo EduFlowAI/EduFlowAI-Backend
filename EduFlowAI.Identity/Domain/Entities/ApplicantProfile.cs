@@ -26,6 +26,6 @@ public sealed class ApplicantProfile
     public string Major { get; set; } = null!;
     public int GraduationYear { get; set; }
 
-    public Guid UserId { get; set; }
+    public string UserId { get; set; } = null!;
     public AppUser User { get; set; } = null!;
 }

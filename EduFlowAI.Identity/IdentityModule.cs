@@ -129,7 +129,7 @@ public static class IdentityModule
             options.Lockout.DefaultLockoutTimeSpan =
                 TimeSpan.FromMinutes(15);
         })
-        .AddRoles<IdentityRole<Guid>>()
+        .AddRoles<IdentityRole>()
         .AddSignInManager()
         .AddDefaultTokenProviders();
     }
@@ -155,7 +155,7 @@ public static class IdentityModule
         var subject = context.Principal?.FindFirstValue(
             ClaimTypes.NameIdentifier);
 
-        if (!Guid.TryParse(subject, out var userId))
+        if (string.IsNullOrWhiteSpace(subject))
         {
             context.Fail(
                 "The access token has no valid user identifier.");
@@ -164,7 +164,7 @@ public static class IdentityModule
 
         var userManager = context.HttpContext.RequestServices
             .GetRequiredService<UserManager<AppUser>>();
-        var user = await userManager.FindByIdAsync(userId.ToString());
+        var user = await userManager.FindByIdAsync(subject);
 
         if (user is null || !user.IsActive)
         {

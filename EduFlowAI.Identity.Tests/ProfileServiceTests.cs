@@ -79,7 +79,7 @@ public sealed class ProfileServiceTests
     {
         var user = new AppUser
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             UserName = "karim@example.com",
             Email = "karim@example.com",
             IsActive = true,

@@ -59,8 +59,9 @@ public sealed class ProfileController(
             : ToErrorResult(result.Failure!);
     }
 
-    private bool TryGetUserId(out Guid userId) =>
-        Guid.TryParse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier),
-            out userId);
+    private bool TryGetUserId(out string userId)
+    {
+        userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(userId);
+    }
 }

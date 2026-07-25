@@ -16,7 +16,7 @@ internal sealed class OperationsManagerService(
         var now = DateTimeOffset.UtcNow;
         var user = new AppUser
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             UserName = email,
             Email = email,
             EmailConfirmed = true,
@@ -49,7 +49,7 @@ internal sealed class OperationsManagerService(
     }
 
     public async Task<IdentityOperationResult<bool>> DeactivateAsync(
-        Guid userId)
+        string userId)
     {
         var user = await userManager.FindByIdAsync(userId.ToString());
         if (user is null ||

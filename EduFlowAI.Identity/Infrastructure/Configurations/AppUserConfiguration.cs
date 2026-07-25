@@ -10,7 +10,7 @@ namespace EduFlowAI.Identity.Infrastructure.Configurations
     {
         public void Configure(EntityTypeBuilder<AppUser> builder)
         {
-            builder.ToTable("ApplicationUsers", "identity");
+            builder.ToTable("AspNetUsers", "public");
 
             builder.Property(x => x.PreferredLanguage)
                 .HasMaxLength(5)

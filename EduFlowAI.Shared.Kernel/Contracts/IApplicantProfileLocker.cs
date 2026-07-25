@@ -3,6 +3,6 @@ namespace EduFlowAI.Shared.Kernel.Contracts;
 public interface IApplicantProfileLocker
 {
     Task LockAsync(
-        Guid userId,
+        string userId,
         CancellationToken cancellationToken = default);
 }

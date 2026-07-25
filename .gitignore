@@ -7,11 +7,12 @@
 .env
 
 appsettings.Development.json
-Migrations/
 
 # local working notes and manual test tooling
 PLAN.md
 tools/
+
+Migrations/
 
 # User-specific files
 *.rsuser
