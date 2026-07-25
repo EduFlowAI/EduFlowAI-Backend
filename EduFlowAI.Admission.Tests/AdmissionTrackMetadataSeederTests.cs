@@ -28,7 +28,9 @@ public sealed class AdmissionTrackMetadataSeederTests
 
         Assert.True(changed);
         Assert.Equal(definition.Description, track.Description);
-        Assert.Equal(definition.PrerequisiteTopics, track.PrerequisiteTopics);
+        Assert.Equal(
+            definition.PrerequisiteTopics.ToArray(),
+            track.PrerequisiteTopics);
         Assert.Equal(now, track.UpdatedAt);
     }
 
@@ -54,7 +56,7 @@ public sealed class AdmissionTrackMetadataSeederTests
 
         Assert.False(changed);
         Assert.Equal("Custom administrator description.", track.Description);
-        Assert.Equal(["Custom Topic"], track.PrerequisiteTopics);
+        Assert.Equal(new[] { "Custom Topic" }, track.PrerequisiteTopics);
         Assert.Equal(originalUpdatedAt, track.UpdatedAt);
     }
 
@@ -80,7 +82,9 @@ public sealed class AdmissionTrackMetadataSeederTests
 
         Assert.True(changed);
         Assert.Equal("Keep this description.", track.Description);
-        Assert.Equal(definition.PrerequisiteTopics, track.PrerequisiteTopics);
+        Assert.Equal(
+            definition.PrerequisiteTopics.ToArray(),
+            track.PrerequisiteTopics);
         Assert.Equal(now, track.UpdatedAt);
     }
 }
