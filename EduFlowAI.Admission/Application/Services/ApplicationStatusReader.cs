@@ -4,7 +4,7 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.Admission.Application.Services;
 
-// Fills the AI module's status port by delegating to this module's status query service.
+// Fills the AI module's status reader port from this module's status query service.
 public sealed class ApplicationStatusReader : IApplicationStatusReader
 {
     private readonly IApplicationStatusQueryService _statusQuery;

@@ -7,8 +7,7 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.AI.Application.Services;
 
-// Answers a "status" chat intent. Speaks as ITI, in the applicant's language, from a fixed set of
-// replies - no model call, so it costs nothing and reads the same every time.
+// Answers the status intent from a fixed set of bilingual messages.
 public class StatusAnswerService : IStatusAnswerService
 {
     private readonly IApplicationStatusReader _statusReader;
@@ -23,7 +22,7 @@ public class StatusAnswerService : IStatusAnswerService
         string language,
         CancellationToken cancellationToken = default)
     {
-        // Guests can't have a status - they must register to apply. The reader is never touched.
+        // Guests have no status to look up.
         if (string.IsNullOrWhiteSpace(userId))
             return new StatusAnswerDto { RequiresSignIn = true, Answer = Localize(SignIn, language) };
 
@@ -47,13 +46,12 @@ public class StatusAnswerService : IStatusAnswerService
         "You don't have an application yet. You can apply to a track to start one.",
         "لا يوجد لديك طلب حتى الآن. يمكنك التقديم على أحد المسارات لبدء طلب.");
 
-    // Shown for None or any status value this module doesn't recognise, so a new/renamed status
-    // never throws - it just gets a safe, neutral reply.
+    // Fallback for None or an unrecognised status value.
     private static readonly (string En, string Ar) Default = (
         "Your application is being processed. For more details, please contact the admissions office.",
         "طلبك قيد المعالجة. لمزيد من التفاصيل، يرجى التواصل مع مكتب القبول.");
 
-    // Keyed by the Admission ApplicationStatus enum name (case-insensitive).
+    // Keyed by the ApplicationStatus enum name.
     private static readonly Dictionary<string, (string En, string Ar)> Messages = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Draft"] = (

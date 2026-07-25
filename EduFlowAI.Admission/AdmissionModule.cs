@@ -47,7 +47,6 @@ namespace EduFlowAI.Admission
 
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
             services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
-            // Fills the AI module's IApplicationStatusReader port for the chat status intent.
             services.AddScoped<IApplicationStatusReader, ApplicationStatusReader>();
             services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
             services.AddScoped<IAdminOperationsService, AdminOperationsService>();
