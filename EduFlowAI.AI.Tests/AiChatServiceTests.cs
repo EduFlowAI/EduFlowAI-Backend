@@ -74,6 +74,19 @@ public class AiChatServiceTests
         Assert.Null(chat.LastSystemPrompt);   // never reached the model
     }
 
+    // A national ID typed into chat must not reach the embedding or the model.
+    [Fact]
+    public async Task Long_digit_runs_are_masked_before_retrieval_and_the_model()
+    {
+        var (service, retrieval, chat) = Build();
+
+        await service.AnswerWithContextAsync("my national id is 29801011234567", NoHistory, "en");
+
+        Assert.DoesNotContain("29801011234567", retrieval.LastQuery);
+        Assert.DoesNotContain("29801011234567", chat.LastUserMessage);
+        Assert.Contains("[hidden]", chat.LastUserMessage);
+    }
+
     private static (AiChatService, FakeRetrieval, StubChat) Build()
     {
         var retrieval = new FakeRetrieval();
@@ -100,10 +113,12 @@ public class AiChatServiceTests
     private sealed class StubChat : IGeminiChatClient
     {
         public string? LastSystemPrompt { get; private set; }
+        public string? LastUserMessage { get; private set; }
 
         public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
         {
             LastSystemPrompt = systemPrompt;
+            LastUserMessage = userMessage;
             return Task.FromResult("an answer");
         }
 

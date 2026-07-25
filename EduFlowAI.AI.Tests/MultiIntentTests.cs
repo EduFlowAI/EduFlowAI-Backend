@@ -39,7 +39,7 @@ public class MultiIntentTests
 
         Assert.Equal("status", dto.PrimaryIntent);
         Assert.Equal(0.95m, dto.Confidence);
-        Assert.Equal("status_agent", dto.RoutedTo);
+        Assert.Equal("status_service", dto.RoutedTo);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class MultiIntentTests
         IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.Equal(
-            new[] { "status_agent", "recommendations_agent", "knowledge_rag" },
+            new[] { "status_service", "recommendations_agent", "knowledge_rag" },
             dto.Intents.Select(i => i.RoutedTo));
     }
 
@@ -79,7 +79,7 @@ public class MultiIntentTests
         Assert.Equal("status", dto.PrimaryIntent);
         Assert.Single(dto.Intents);
         Assert.Equal("status", dto.Intents[0].Intent);
-        Assert.Equal("status_agent", dto.Intents[0].RoutedTo);
+        Assert.Equal("status_service", dto.Intents[0].RoutedTo);
     }
 
     [Fact]
@@ -182,15 +182,35 @@ public class MultiIntentTests
         Assert.Equal("status", dto.Intents[0].Intent);
     }
 
+    // A national ID typed into chat must be masked before the text is sent to the model.
+    [Fact]
+    public async Task LongDigitRuns_AreMaskedBeforeReachingTheModel()
+    {
+        var client = new FakeChatClient { JsonResponse = """{"intents":[{"intent":"status","confidence":0.9}]}""" };
+        var svc = new IntentClassifierService(
+            client,
+            Options.Create(new IntentClassificationOptions()),
+            NullLogger<IntentClassifierService>.Instance);
+
+        await svc.ClassifyAsync("my national id is 29801011234567, did I get in?", new List<ConversationTurnDto>());
+
+        Assert.DoesNotContain("29801011234567", client.LastUserMessage);
+        Assert.Contains("[hidden]", client.LastUserMessage);
+    }
+
     private sealed class FakeChatClient : IGeminiChatClient
     {
         public string JsonResponse { get; set; } = string.Empty;
+        public string? LastUserMessage { get; private set; }
 
         public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
             => Task.FromResult(string.Empty);
 
         public Task<string> GenerateJsonAsync(string systemPrompt, string userMessage, object responseSchema, CancellationToken ct = default)
-            => Task.FromResult(JsonResponse);
+        {
+            LastUserMessage = userMessage;
+            return Task.FromResult(JsonResponse);
+        }
 
         public Task<string> GenerateFromDocumentAsync(string instruction, byte[] document, string mimeType, CancellationToken ct = default)
             => Task.FromResult(string.Empty);
