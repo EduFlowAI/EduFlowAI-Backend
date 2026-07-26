@@ -1,9 +1,13 @@
+using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Application.Validators;
 using EduFlowAI.Documents.Infrastructure.Auth;
 using EduFlowAI.Documents.Infrastructure.Fakes;
+using EduFlowAI.Identity.Application.Interfaces;
+using EduFlowAI.Identity.Application.Services;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -23,9 +27,11 @@ namespace EduFlowAI.Documents
             services.AddScoped<IApplicantDocumentService, ApplicantDocumentService>();
             services.AddScoped<IValidator<UploadDocumentDto>, UploadDocumentDtoValidator>();
             // fake
-            services.AddScoped<IProgramRequirementReader, FakeProgramRequirementReader>();
-            services.AddScoped<IApplicationAccessReader, FakeApplicationAccessReader>();
+            services.AddScoped<IProgramRequirementReader, ProgramRequirementReader>();
+            services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
             services.AddScoped<IApplicantProfileReader, FakeApplicantProfileReader>();
+
+            services.AddScoped<IProfileService, ProfileService>();
 
 
             return services;

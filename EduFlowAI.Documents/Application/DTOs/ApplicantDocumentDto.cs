@@ -1,5 +1,6 @@
 ﻿using System;
 using EduFlowAI.Documents.Domain.Enums;
+using EduFlowAI.Admission.Domain.Enums;
 
 namespace EduFlowAI.Documents.Application.DTOs;
 

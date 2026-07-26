@@ -1,4 +1,6 @@
 ﻿using FluentValidation;
+using EduFlowAI.Admission.Domain.Enums;
+
 using EduFlowAI.Documents.Application.DTOs;
 
 namespace EduFlowAI.Documents.Application.Validators;
@@ -13,6 +15,6 @@ public class UploadDocumentDtoValidator : AbstractValidator<UploadDocumentDto>
 
         RuleFor(x => x.DocumentType)
             .IsInEnum().WithMessage("The specified document type is invalid.")
-            .NotEqual(Domain.Enums.DocumentType.None).WithMessage("A valid document type must be provided.");
+            .NotEqual(DocumentType.None).WithMessage("A valid document type must be provided.");
     }
 }

@@ -3,6 +3,8 @@ using EduFlowAI.Documents.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using EduFlowAI.Admission.Domain.Enums;
+
 
 namespace EduFlowAI.Documents.Domain.Entities
 {

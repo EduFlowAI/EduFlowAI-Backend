@@ -68,19 +68,19 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
             return secureFileName;
         }
 
-        public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var fullPath = ResolveStoragePath(storageKey);
-            Stream stream = new FileStream(
-                fullPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 64 * 1024,
-                options: FileOptions.Asynchronous | FileOptions.SequentialScan);
-            return Task.FromResult(stream);
-        }
+        //public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default)
+        //{
+        //    cancellationToken.ThrowIfCancellationRequested();
+        //    var fullPath = ResolveStoragePath(storageKey);
+        //    Stream stream = new FileStream(
+        //        fullPath,
+        //        FileMode.Open,
+        //        FileAccess.Read,
+        //        FileShare.Read,
+        //        bufferSize: 64 * 1024,
+        //        options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+        //    return Task.FromResult(stream);
+        //}
 
         public Task DeleteAsync(string storageKey, CancellationToken cancellationToken = default)
         {

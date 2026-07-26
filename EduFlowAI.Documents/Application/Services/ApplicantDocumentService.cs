@@ -4,8 +4,10 @@ using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
+using EduFlowAI.Documents.Application.Mapping;
 using EduFlowAI.Documents.Domain.Entities;
 using EduFlowAI.Documents.Domain.Enums;
+using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Shared.Kernel.Common;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -22,21 +24,23 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
     private readonly IDocumentDbContext _dbContext;
     private readonly IFileStorageService _fileStorageService;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IApplicationAccessReader _applicationAccessReader;
+    private readonly IApplicationAcessReader _applicationAccessReader;
     private readonly IApplicantProfileReader _applicantProfileReader; // Karim's contract
     private readonly IProgramRequirementReader _programRequirementReader; // Abdallah's contract
     private readonly IValidator<UploadDocumentDto> _validator;
     private readonly ILogger<ApplicantDocumentService> _logger;
+    private readonly IProfileService _profileService;
 
     public ApplicantDocumentService(
         IDocumentDbContext dbContext,
         IFileStorageService fileStorageService,
         ICurrentUserService currentUserService,
-        IApplicationAccessReader applicationAccessReader,
+        IApplicationAcessReader applicationAccessReader,
         IApplicantProfileReader applicantProfileReader,
         IProgramRequirementReader programRequirementReader,
         IValidator<UploadDocumentDto> validator,
-        ILogger<ApplicantDocumentService> logger)
+        ILogger<ApplicantDocumentService> logger,
+        IProfileService profileService)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _fileStorageService = fileStorageService ?? throw new ArgumentNullException(nameof(fileStorageService));
@@ -46,6 +50,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
         _programRequirementReader = programRequirementReader ?? throw new ArgumentNullException(nameof(programRequirementReader));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
     }
 
     public async Task<Result<Guid>> UploadDocumentAsync(
@@ -99,7 +104,10 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
         }
 
         // 3. Ask Karim: What is this user's gender?
-        var applicantGender = await _applicantProfileReader.GetApplicantGenderAsync(userId, cancellationToken);
+        //var applicantGender = await _applicantProfileReader.GetApplicantGenderAsync(userId, cancellationToken);
+        var applicant = await _profileService.GetAsync(userId, cancellationToken);
+        var applicantGender = GenderMapper.ToGender(applicant?.Value?.Gender) ?? Gender.None;
+
 
         // 4. Ask Abdallah: Is this specific document required for this Program/Gender?
         var requirementSet = await _programRequirementReader.ResolveAsync(
@@ -218,5 +226,58 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
             .ToListAsync(cancellationToken);
 
         return Result<IEnumerable<ApplicantDocumentDto>>.Success(documents);
+    }
+
+
+
+
+
+
+
+
+    public async Task<Result<FileDownloadDto>> DownloadDocumentAsync(
+    Guid documentId,
+    CancellationToken cancellationToken = default)
+    {
+        // 1. Authenticate
+        var userId = _currentUserService.UserId;
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Result<FileDownloadDto>.Failure(401, "User is not authenticated.");
+        }
+
+        // 2. Fetch the document metadata from the database
+        var document = await _dbContext.ApplicantDocuments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
+
+        if (document == null)
+        {
+            return Result<FileDownloadDto>.Failure(404, "Document not found.");
+        }
+
+        // 3. Prevent IDOR: Check if the current user owns the parent application
+        bool hasAccess = await _applicationAccessReader.CanUploadDocumentsAsync(
+            document.ApplicationId,
+            userId,
+            cancellationToken);
+
+        if (!hasAccess)
+        {
+            _logger.LogWarning(
+                "Security IDOR attempt: User {UserId} tried to download document {DocumentId} belonging to application {ApplicationId}.",
+                userId, documentId, document.ApplicationId);
+
+            return Result<FileDownloadDto>.Failure(403, "You do not have permission to download this document.");
+        }
+
+        // 4. Retrieve the physical file stream
+        var stream = await _fileStorageService.OpenReadAsync(document.StorageKey, cancellationToken);
+
+        // Note: We don't check for null stream here because if it fails, 
+        // IFileStorageService will throw an exception which your global ExceptionHandler will catch (500).
+
+        var dto = new FileDownloadDto(stream, document.OriginalFileName);
+        return Result<FileDownloadDto>.Success(dto);
     }
 }
