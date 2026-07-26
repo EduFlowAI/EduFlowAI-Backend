@@ -3,6 +3,8 @@ using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.AI;
+using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Application.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -64,5 +66,27 @@ public sealed class AdmissionModuleRegistrationTests
 
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
         Assert.Equal(typeof(OfferedTrackReader), registration.ImplementationType);
+    }
+
+    [Fact]
+    public void Admission_fills_the_AI_status_reader_port()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+
+        services.AddAdmissionModule();
+        services.AddAIModule(configuration);
+
+        // The AI status intent resolves only if Admission supplies the reader behind the port.
+        var reader = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IApplicationStatusReader));
+        Assert.Equal(ServiceLifetime.Scoped, reader.Lifetime);
+        Assert.Equal(typeof(ApplicationStatusReader), reader.ImplementationType);
+
+        var answerService = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IStatusAnswerService));
+        Assert.Equal(typeof(StatusAnswerService), answerService.ImplementationType);
     }
 }

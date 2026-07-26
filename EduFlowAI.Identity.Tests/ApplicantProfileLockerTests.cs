@@ -11,7 +11,7 @@ public sealed class ApplicantProfileLockerTests
     public async Task LockAsync_PermanentlyMarksTheApplicantProfile()
     {
         await using var dbContext = CreateDbContext();
-        var userId = Guid.NewGuid();
+        var userId = Guid.NewGuid().ToString();
         dbContext.ApplicantProfiles.Add(CreateProfile(userId));
         await dbContext.SaveChangesAsync();
         var locker = new ApplicantProfileLocker(dbContext);
@@ -30,7 +30,7 @@ public sealed class ApplicantProfileLockerTests
         var locker = new ApplicantProfileLocker(dbContext);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => locker.LockAsync(Guid.NewGuid()));
+            () => locker.LockAsync(Guid.NewGuid().ToString()));
 
         Assert.Contains("must exist", exception.Message);
     }
@@ -43,7 +43,7 @@ public sealed class ApplicantProfileLockerTests
         return new TestIdentityDbContext(options);
     }
 
-    internal static ApplicantProfile CreateProfile(Guid userId) => new()
+    internal static ApplicantProfile CreateProfile(string userId) => new()
     {
         Id = Guid.NewGuid(),
         UserId = userId,

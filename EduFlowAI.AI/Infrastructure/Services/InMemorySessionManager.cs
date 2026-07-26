@@ -20,7 +20,7 @@ public class InMemorySessionManager : ISessionManager
         _clock = clock ?? TimeProvider.System;
     }
 
-    public ChatSessionDto CreateSession(Guid userId)
+    public ChatSessionDto CreateSession(string userId)
     {
         lock (_lockObject)
         {

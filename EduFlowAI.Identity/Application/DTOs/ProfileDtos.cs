@@ -59,7 +59,7 @@ public sealed record UpdateProfileRequest
 }
 
 public sealed record ProfileResponse(
-    Guid UserId,
+    string UserId,
     string Email,
     string? PhoneNumber,
     string PreferredLanguage,

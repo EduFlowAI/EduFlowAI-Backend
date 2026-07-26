@@ -25,6 +25,9 @@ public class AiChatService : IRagAnswerService
         string language,
         CancellationToken cancellationToken = default)
     {
+        // Mask national IDs and other long digit runs before any user text reaches the model.
+        userQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
+
         // A follow-up like "what about its prerequisites?" embeds poorly on its own, so retrieval
         // runs on the recent turns joined with the question - the vector then reflects the topic.
         var retrievalQuery = BuildRetrievalQuery(userQuestion, context);
@@ -129,7 +132,8 @@ what we currently offer. Use it to answer, but never mention it or its labels to
     }
 
     private static string RenderTurns(IEnumerable<ConversationTurnDto> turns) =>
-        string.Join("\n", turns.Select(t => $"Q: {t.Question}\nA: {Trim(t.Answer)}"));
+        string.Join("\n", turns.Select(t =>
+            $"Q: {InputSanitizerService.MaskSensitiveNumbers(t.Question)}\nA: {Trim(InputSanitizerService.MaskSensitiveNumbers(t.Answer))}"));
 
     // A stale, long prior answer shouldn't dominate the retrieval vector or bloat the prompt.
     private static string Trim(string answer)

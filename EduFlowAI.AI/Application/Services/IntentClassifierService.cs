@@ -114,8 +114,11 @@ Multi-intent examples:
         List<ConversationTurnDto> context,
         CancellationToken cancellationToken = default)
     {
+        // Mask national IDs and other long digit runs before any user text reaches the model.
+        var maskedQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
         var contextText = context.Any()
-            ? string.Join("\n", context.TakeLast(3).Select(t => $"Q: {t.Question}\nA: {t.Answer}"))
+            ? string.Join("\n", context.TakeLast(3).Select(t =>
+                $"Q: {InputSanitizerService.MaskSensitiveNumbers(t.Question)}\nA: {InputSanitizerService.MaskSensitiveNumbers(t.Answer)}"))
             : "No prior conversation history.";
 
         var userMessage = $"""
@@ -123,7 +126,7 @@ Conversation so far:
 {contextText}
 
 Message to classify:
-{userQuestion}
+{maskedQuestion}
 """;
 
         var responseText = await _chatClient.GenerateJsonAsync(SystemPrompt, userMessage, ResponseSchema, cancellationToken);
@@ -237,7 +240,7 @@ Message to classify:
 
     private static string RouteFor(string intent) => intent switch
     {
-        "status" => "status_agent",
+        "status" => "status_service",
         "recommendation" => "recommendations_agent",
         _ => "knowledge_rag"
     };

@@ -49,7 +49,7 @@ public sealed class EndpointContractTests
             .GetCustomAttributes(typeof(HttpPatchAttribute), true)
             .Cast<HttpPatchAttribute>()
             .Single();
-        Assert.Equal("{userId:guid}/deactivate", patch.Template);
+        Assert.Equal("{userId}/deactivate", patch.Template);
         Assert.Equal(
             AppRoles.SuperAdmin,
             typeof(OperationsManagersController)

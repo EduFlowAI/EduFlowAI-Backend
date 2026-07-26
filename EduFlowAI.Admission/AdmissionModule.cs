@@ -6,6 +6,7 @@ using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.Admission.Infrastructure.Repositories;
+using EduFlowAI.AI.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -46,6 +47,7 @@ namespace EduFlowAI.Admission
 
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
             services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
+            services.AddScoped<IApplicationStatusReader, ApplicationStatusReader>();
             services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
             services.AddScoped<IAdminOperationsService, AdminOperationsService>();
             services.AddScoped<IAssessmentSimulationService, AssessmentSimulationService>();

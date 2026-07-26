@@ -42,5 +42,10 @@ public static class AdmissionSeedingExtensions
             admissionDbContext,
             timeProvider,
             cancellationToken);
+
+        await AdmissionTrackMetadataSeeder.SeedAsync(
+            admissionDbContext,
+            timeProvider.GetUtcNow(),
+            cancellationToken);
     }
 }

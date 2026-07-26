@@ -90,10 +90,10 @@ public class AssistantMessageServiceTests
         private readonly ChatSessionDto _session = new()
         {
             SessionId = "test-session",
-            UserId = Guid.Empty
+            UserId = string.Empty
         };
 
-        public ChatSessionDto CreateSession(Guid userId)
+        public ChatSessionDto CreateSession(string userId)
         {
             return _session;
         }

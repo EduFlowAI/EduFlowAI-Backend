@@ -24,7 +24,7 @@ using Wolverine.EntityFrameworkCore;
 
 namespace EduFlowAI.Persistence
 {
-    public class EduFlowAIDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>, IAdmissionDbContext, IAIDbContext
+    public class EduFlowAIDbContext : IdentityDbContext<AppUser>, IAdmissionDbContext, IAIDbContext
         , ICommunicationDbContext, IDocumentDbContext, IIdentityDbContext
     {
         public EduFlowAIDbContext(DbContextOptions<EduFlowAIDbContext> options) : base(options) { }
@@ -63,12 +63,12 @@ namespace EduFlowAI.Persistence
         {        
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<IdentityRole<Guid>>().ToTable("ApplicationRoles", "identity");
-            modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("ApplicationUserRoles", "identity");
-            modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("ApplicationUserClaims", "identity");
-            modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("ApplicationUserLogins", "identity");
-            modelBuilder.Entity<IdentityRoleClaim<Guid>>().ToTable("ApplicationRoleClaims", "identity");
-            modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("ApplicationUserTokens", "identity");
+            modelBuilder.Entity<IdentityRole>().ToTable("AspNetRoles", "public");
+            modelBuilder.Entity<IdentityUserRole<string>>().ToTable("AspNetUserRoles", "public");
+            modelBuilder.Entity<IdentityUserClaim<string>>().ToTable("AspNetUserClaims", "public");
+            modelBuilder.Entity<IdentityUserLogin<string>>().ToTable("AspNetUserLogins", "public");
+            modelBuilder.Entity<IdentityRoleClaim<string>>().ToTable("AspNetRoleClaims", "public");
+            modelBuilder.Entity<IdentityUserToken<string>>().ToTable("AspNetUserTokens", "public");
 
 
             // Enable pgvector extension for PostgreSQL to support AI embeddings

@@ -12,7 +12,7 @@ internal sealed class IdentityRoleSeeder(
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var roleManager = scope.ServiceProvider
-            .GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+            .GetRequiredService<RoleManager<IdentityRole>>();
 
         foreach (var roleName in AppRoles.All)
         {
@@ -22,7 +22,7 @@ internal sealed class IdentityRoleSeeder(
             }
 
             var result = await roleManager.CreateAsync(
-                new IdentityRole<Guid>(roleName));
+                new IdentityRole(roleName));
 
             if (!result.Succeeded)
             {

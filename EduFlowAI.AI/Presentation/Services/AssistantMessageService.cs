@@ -290,7 +290,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             }
         }
 
-        return _sessionManager.CreateSession(userId);
+        return _sessionManager.CreateSession(userId.ToString());
     }
 
     private static IReadOnlyList<DetectedIntentDto> GetDetectedIntents(
