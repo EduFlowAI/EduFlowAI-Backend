@@ -3,6 +3,7 @@ using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
+using EduFlowAI.Documents.Application.Interfaces;
 
 namespace EduFlowAI.AI.Presentation.Services;
 
@@ -14,19 +15,25 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private readonly IChatRecommendationService _chatRecommendationService;
     private readonly IApplicationStatusQueryService
         _applicationStatusQueryService;
+    private readonly IApplicantDocumentStatusQueryService
+        _applicantDocumentStatusQueryService;
 
     public AssistantMessageService(
         IIntentRouter intentRouter,
         IRagAnswerService ragAnswerService,
         ISessionManager sessionManager,
         IChatRecommendationService chatRecommendationService,
-        IApplicationStatusQueryService applicationStatusQueryService)
+        IApplicationStatusQueryService applicationStatusQueryService,
+        IApplicantDocumentStatusQueryService
+            applicantDocumentStatusQueryService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
         _chatRecommendationService = chatRecommendationService;
         _applicationStatusQueryService = applicationStatusQueryService;
+        _applicantDocumentStatusQueryService =
+            applicantDocumentStatusQueryService;
     }
 
     public async Task<AssistantResponse> HandleAsync(
@@ -125,11 +132,21 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 language,
                 cancellationToken),
 
-            "status" => await HandleStatusAsync(
-                userId,
-                isAuthenticated,
-                language,
-                cancellationToken),
+            // Temporary backward compatibility until Khorshid
+            // replaces "status" with "application_status".
+            "status" or "application_status" =>
+                await HandleApplicationStatusAsync(
+                    userId,
+                    isAuthenticated,
+                    language,
+                    cancellationToken),
+
+            "document_status" =>
+                await HandleDocumentStatusAsync(
+                    userId,
+                    isAuthenticated,
+                    language,
+                    cancellationToken),
 
             _ => CreateUnknownResult(language)
         };
@@ -186,16 +203,17 @@ public sealed class AssistantMessageService : IAssistantMessageService
             });
     }
 
-    private async Task<AssistantResultDto> HandleStatusAsync(
-        Guid userId,
-        bool isAuthenticated,
-        string language,
-        CancellationToken cancellationToken)
+    private async Task<AssistantResultDto>
+        HandleApplicationStatusAsync(
+            Guid userId,
+            bool isAuthenticated,
+            string language,
+            CancellationToken cancellationToken)
     {
         if (!isAuthenticated)
         {
             return new AssistantResultDto(
-                Intent: "status",
+                Intent: "application_status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -218,7 +236,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         if (applicationStatus is null)
         {
             return new AssistantResultDto(
-                Intent: "status",
+                Intent: "application_status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -232,15 +250,15 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 });
         }
 
-        var content = !string.IsNullOrWhiteSpace(
-            applicationStatus.StatusMessage)
+        var content =
+            !string.IsNullOrWhiteSpace(applicationStatus.StatusMessage)
                 ? applicationStatus.StatusMessage
                 : language == "ar"
                     ? $"حالة طلبك الحالية هي: {applicationStatus.CurrentStatus}."
                     : $"Your current application status is: {applicationStatus.CurrentStatus}.";
 
         return new AssistantResultDto(
-            Intent: "status",
+            Intent: "application_status",
             Title: language == "ar"
                 ? "حالة الطلب"
                 : "Application Status",
@@ -257,6 +275,78 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     applicationStatus.LastUpdatedAt,
                 ["statusMessage"] =
                     applicationStatus.StatusMessage
+            });
+    }
+
+    private async Task<AssistantResultDto>
+        HandleDocumentStatusAsync(
+            Guid userId,
+            bool isAuthenticated,
+            string language,
+            CancellationToken cancellationToken)
+    {
+        if (!isAuthenticated)
+        {
+            return new AssistantResultDto(
+                Intent: "document_status",
+                Title: language == "ar"
+                    ? "حالة المستندات"
+                    : "Document Status",
+                Content: language == "ar"
+                    ? "من فضلك سجل الدخول لعرض حالة مستنداتك."
+                    : "Please log in to view your document status.",
+                Sources: [],
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["requiresLogin"] = true
+                });
+        }
+
+        var documentStatus =
+            await _applicantDocumentStatusQueryService
+                .GetCurrentDocumentStatusForApplicantAsync(
+                    userId.ToString(),
+                    cancellationToken);
+
+        if (documentStatus is null)
+        {
+            return new AssistantResultDto(
+                Intent: "document_status",
+                Title: language == "ar"
+                    ? "حالة المستندات"
+                    : "Document Status",
+                Content: language == "ar"
+                    ? "لا يوجد طلب تقديم حالي أو مستندات مرتبطة بحسابك."
+                    : "No current application or document records were found for your account.",
+                Sources: [],
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["documentStatusFound"] = false
+                });
+        }
+
+        var content = language == "ar"
+            ? $"الحالة العامة لمستنداتك هي: {documentStatus.OverallStatus}."
+            : $"Your overall document status is: {documentStatus.OverallStatus}.";
+
+        return new AssistantResultDto(
+            Intent: "document_status",
+            Title: language == "ar"
+                ? "حالة المستندات"
+                : "Document Status",
+            Content: content,
+            Sources: [],
+            Metadata: new Dictionary<string, object?>
+            {
+                ["documentStatusFound"] = true,
+                ["applicationId"] =
+                    documentStatus.ApplicationId,
+                ["overallStatus"] =
+                    documentStatus.OverallStatus,
+                ["lastUpdatedAt"] =
+                    documentStatus.LastUpdatedAt,
+                ["documents"] =
+                    documentStatus.Documents
             });
     }
 
@@ -293,8 +383,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
         return _sessionManager.CreateSession(userId.ToString());
     }
 
-    private static IReadOnlyList<DetectedIntentDto> GetDetectedIntents(
-        IntentClassificationDto classification)
+    private static IReadOnlyList<DetectedIntentDto>
+        GetDetectedIntents(
+            IntentClassificationDto classification)
     {
         if (classification.Intents.Count > 0)
         {

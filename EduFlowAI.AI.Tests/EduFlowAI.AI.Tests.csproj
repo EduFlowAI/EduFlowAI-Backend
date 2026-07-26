@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
     <ProjectReference Include="..\EduFlowAI.AI\EduFlowAI.AI.csproj" />
+    <ProjectReference Include="..\EduFlowAI.Documents\EduFlowAI.Documents.csproj" />
   </ItemGroup>
 
 </Project>
