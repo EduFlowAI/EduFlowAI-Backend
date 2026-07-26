@@ -16,6 +16,8 @@
     <Project Path="EduFlowAI.Shared.Messaging.Contracts/EduFlowAI.Shared.Messaging.Contracts.csproj" />
   </Folder>
   <Folder Name="/src/Tests/">
+    <Project Path="EduFlowAI.Admission.Tests/EduFlowAI.Admission.Tests.csproj" />
     <Project Path="EduFlowAI.AI.Tests/EduFlowAI.AI.Tests.csproj" />
+    <Project Path="EduFlowAI.Identity.Tests/EduFlowAI.Identity.Tests.csproj" />
   </Folder>
 </Solution>

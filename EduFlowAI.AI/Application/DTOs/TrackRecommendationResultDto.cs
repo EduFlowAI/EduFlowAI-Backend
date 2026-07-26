@@ -2,9 +2,7 @@
 
 public sealed record TrackRecommendationResultDto
 {
-    public required IReadOnlyList<RecommendedTrackResultDto>
-        Recommendations
-    { get; init; }
+    public required IReadOnlyList<RecommendedTrackResultDto> Recommendations { get; init; }
 
     public required bool UsedFallback { get; init; }
 

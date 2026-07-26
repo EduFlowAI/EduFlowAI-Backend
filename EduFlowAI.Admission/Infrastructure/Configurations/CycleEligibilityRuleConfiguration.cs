@@ -14,6 +14,8 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(x => x.RequiredNationality).HasMaxLength(5).IsRequired();
             builder.Property(x => x.RequiredDegreeLevel).HasMaxLength(30).IsRequired();
             builder.Property(x => x.MinGrade).HasConversion<string>().HasMaxLength(30).IsRequired();
+            builder.Property(x => x.CreatedAt).HasDefaultValueSql("now()").IsRequired();
+            builder.Property(x => x.UpdatedAt).HasDefaultValueSql("now()").IsRequired();
 
             // Ensure valid years and grades
             builder.ToTable(t => t.HasCheckConstraint("CK_CycleEligibilityRule_MaxYears", "\"MaxYearsSinceGraduation\" >= 0"));
@@ -24,6 +26,10 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .WithOne(x => x.EligibilityRule)
                 .HasForeignKey<CycleEligibilityRule>(x => x.CycleId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(x => x.CycleId)
+                .HasDatabaseName("UX_CycleEligibilityRules_Cycle")
+                .IsUnique();
         }
     }
 }

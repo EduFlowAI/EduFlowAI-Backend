@@ -6,7 +6,7 @@ namespace EduFlowAI.AI.Application.DTOs;
 public class ChatSessionDto
 {
     public string SessionId { get; set; } = string.Empty;
-    public Guid UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
     public List<ConversationTurnDto> History { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastActivityAt { get; set; } = DateTimeOffset.UtcNow;

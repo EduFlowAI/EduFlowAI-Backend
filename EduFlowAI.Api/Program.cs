@@ -1,108 +1,143 @@
+using System.Threading.RateLimiting;
 using EduFlowAI.Admission;
-using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.AI;
-using EduFlowAI.AI.Application.DbContextAbstraction;
+using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
-using EduFlowAI.Communication.Application.DbContextAbstraction;
 using EduFlowAI.Documents;
-using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Identity;
-using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
 using EduFlowAI.Shared.Messaging.Contracts.Configuration;
 using JasperFx.Resources;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using Wolverine;
 
-namespace EduFlowAI.Api
+namespace EduFlowAI.Api;
+
+public class Program
 {
-    public class Program
+    public static void Main(string[] args)
     {
-        public static void Main(string[] args)
+        var builder = WebApplication.CreateBuilder(args);
+
+        builder.Services.AddControllers()
+            .AddApplicationPart(typeof(IdentityModule).Assembly)
+            .AddApplicationPart(typeof(AdmissionModule).Assembly)
+            .AddApplicationPart(typeof(DocumentsModule).Assembly)
+            .AddApplicationPart(typeof(AIModule).Assembly)
+            .AddApplicationPart(typeof(CommunicationModule).Assembly);
+
+        builder.Services.AddProblemDetails();
+        builder.Services.AddExceptionHandler<ExceptionHandler>();
+        builder.Services.AddOpenApi();
+        builder.Services.AddEndpointsApiExplorer();
+
+        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins")
+            .Get<string[]>();
+
+        var allowedOrigins = configuredOrigins is { Length: > 0 }
+            ? configuredOrigins
+            : ["http://localhost:4200"];
+
+        builder.Services.AddCors(options =>
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            builder.Services.AddControllers()
-                .AddApplicationPart(typeof(IdentityModule).Assembly)
-                .AddApplicationPart(typeof(AdmissionModule).Assembly)
-                .AddApplicationPart(typeof(DocumentsModule).Assembly)
-                .AddApplicationPart(typeof(AIModule).Assembly)
-                .AddApplicationPart(typeof(CommunicationModule).Assembly);
-           
-            builder.Services.AddOpenApi();
-            builder.Services.AddEndpointsApiExplorer();
-
-            // Register EduFlowAIDbContext with Npgsql provider, and DbContext interfaces
-            builder.Services.AddPersistence(builder.Configuration);
-
-            // register modules
-            var identityBuilder = builder.Services.AddIdentityModule();
-            identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
-            builder.Services.AddAdmissionModule();
-            builder.Services.AddDocumentsModule();
-            builder.Services.AddAIModule(builder.Configuration);
-            builder.Services.AddCommunicationModule();
-
-            // messaging -> ensure running rabbitmq before un-comment it
-            builder.ConfigureCommonMessaging("EduFlowAI.Api");
-            builder.Services.ConfigureWolverine(options =>
+            options.AddPolicy("Frontend", policy =>
             {
-                MessagingConfiguration.ConfigureApiListeners(options);
+                policy.WithOrigins(allowedOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod();
             });
+        });
 
-            // messaging dev only
-            if (builder.Environment.IsDevelopment())
-            {
-                builder.Services.AddResourceSetupOnStartup();
-            }
-
-            #region Swagger
-            builder.Services.AddSwaggerGen(options =>
-                {
-                    options.SwaggerDoc("v1", new OpenApiInfo
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode =
+                StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("Authentication", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString()
+                        ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
                     {
-                        Title = "EduFlowAI API",
-                        Version = "v1"
-                    });
-                    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-                    {
-                        Name = "Authorization",
-                        Description = "Please enter a valid token (without writing bearer)",
-                        In = ParameterLocation.Header,
-                        Type = SecuritySchemeType.Http,
-                        Scheme = JwtBearerDefaults.AuthenticationScheme,
-                        BearerFormat = "JWT"
-                    });
-                    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-                    {
-                        [new OpenApiSecuritySchemeReference("Bearer", doc)] = []
-                    });
-                });
-            #endregion
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+        });
 
-            var app = builder.Build();
+        builder.Services.AddPersistence(builder.Configuration);
 
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.MapOpenApi();
+        var identityBuilder = builder.Services.AddIdentityModule(
+            builder.Configuration);
+        identityBuilder.AddEntityFrameworkStores<EduFlowAIDbContext>();
+        builder.Services.AddAdmissionModule();
+        builder.Services.AddDocumentsModule();
+        builder.Services.AddAIModule(builder.Configuration);
+        builder.Services.AddCommunicationModule();
 
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+        builder.ConfigureCommonMessaging("EduFlowAI.Api");
+        builder.Services.ConfigureWolverine(options =>
+        {
+            MessagingConfiguration.ConfigureApiListeners(options);
+        });
 
-            app.UseHttpsRedirection();
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-
-            app.MapControllers();
-
-
-            app.Run();
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Services.AddResourceSetupOnStartup();
         }
+
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.CustomSchemaIds(type =>
+                type.FullName?.Replace("+", ".") ?? type.Name);
+
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "EduFlowAI API",
+                Version = "v1"
+            });
+            options.AddSecurityDefinition(
+                "Bearer",
+                new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Description =
+                        "Enter the JWT access token without the Bearer prefix.",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.Http,
+                    Scheme = JwtBearerDefaults.AuthenticationScheme,
+                    BearerFormat = "JWT"
+                });
+            options.AddSecurityRequirement(
+                document => new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference(
+                        "Bearer",
+                        document)] = []
+                });
+        });
+
+        var app = builder.Build();
+
+        app.UseExceptionHandler();
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapOpenApi();
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
+
+        app.UseHttpsRedirection();
+        app.UseCors("Frontend");
+        app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.MapControllers();
+        app.Run();
     }
 }

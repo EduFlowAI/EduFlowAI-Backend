@@ -1,39 +1,31 @@
-﻿using EduFlowAI.Identity.Domain.Enums;
-using System;
+using EduFlowAI.Identity.Domain.Enums;
 
-namespace EduFlowAI.Identity.Domain.Entities
+namespace EduFlowAI.Identity.Domain.Entities;
+
+public sealed class ApplicantProfile
 {
-    // Stores the academic and personal payload used for admission eligibility
-    public sealed class ApplicantProfile
-    {
-        // Explicit primary key and timestamps
-        public Guid Id { get; set; }
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-        public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Guid Id { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public bool IsProfileLocked { get; set; }
 
-        // Foreign Key
-        public required string UserId { get; set; }
-        public string FullNameEn { get; set; } = null!;
-        public string FullNameAr { get; set; } = null!;
-        public string NationalId { get; set; } = null!;
-        public string Nationality { get; set; } = null!;
+    public string FullNameEn { get; set; } = null!;
+    public string FullNameAr { get; set; } = null!;
+    public string NationalId { get; set; } = null!;
+    public string Nationality { get; set; } = null!;
+    public DateOnly DateOfBirth { get; set; }
+    public Gender Gender { get; set; }
+    public CumulativeGrade CumulativeGrade { get; set; }
+    public MilitaryStatus? MilitaryStatus { get; set; }
 
-        public DateOnly DateOfBirth { get; set; }
+    public string? Address { get; set; }
+    public string? Governorate { get; set; }
+    public string University { get; set; } = null!;
+    public string Faculty { get; set; } = null!;
+    public string DegreeLevel { get; set; } = null!;
+    public string Major { get; set; } = null!;
+    public int GraduationYear { get; set; }
 
-        // Using Enums for strict type safety in code
-        public Gender Gender { get; set; }
-        public CumulativeGrade CumulativeGrade { get; set; }
-        public MilitaryStatus? MilitaryStatus { get; set; }
-
-        public string? Address { get; set; }
-        public string? Governorate { get; set; }
-        public string University { get; set; } = null!;
-        public string Faculty { get; set; } = null!;
-        public string DegreeLevel { get; set; } = null!;
-        public string Major { get; set; } = null!;
-        public int GraduationYear { get; set; }
-
-        // Navigation property back to User
-        public AppUser User { get; set; } = null!;
-    }
+    public string UserId { get; set; } = null!;
+    public AppUser User { get; set; } = null!;
 }
