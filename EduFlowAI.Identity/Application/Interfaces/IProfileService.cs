@@ -2,7 +2,7 @@ using EduFlowAI.Identity.Application.DTOs;
 
 namespace EduFlowAI.Identity.Application.Interfaces;
 
-public interface IProfileService
+public interface IProfileService    
 {
     Task<IdentityOperationResult<ProfileResponse>> GetAsync(
         string userId,
