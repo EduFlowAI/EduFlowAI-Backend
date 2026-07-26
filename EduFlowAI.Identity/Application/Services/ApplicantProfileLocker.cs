@@ -1,5 +1,5 @@
 using EduFlowAI.Identity.Application.DbContextAbstraction;
-using EduFlowAI.Shared.Kernel.Contracts;
+using EduFlowAI.Identity.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Identity.Application.Services;

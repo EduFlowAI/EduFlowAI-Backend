@@ -81,8 +81,8 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             //    .ToRabbitQueue(MessagingQueueNames.CreateNotification);
 
 
-            //options.PublishMessage<NotificationCreatedV1>()
-            //    .ToRabbitQueue(MessagingQueueNames.RealtimeNotification);
+            options.PublishMessage<NotificationCreatedV1>()
+                .ToRabbitQueue(MessagingQueueNames.RealtimeNotification);
         }
 
         public static void ConfigureWorkerListeners(WolverineOptions options)
@@ -93,12 +93,12 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentStatusNotifications);
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentReplacementFulfilled);
             options.ListenToRabbitQueue(MessagingQueueNames.SendEmail);
-            //options.ListenToRabbitQueue(MessagingQueueNames.CreateNotification);
+            options.ListenToRabbitQueue(MessagingQueueNames.CreateNotification);
         }
 
         public static void ConfigureApiListeners(WolverineOptions options)
         {
-            //options.ListenToRabbitQueue(MessagingQueueNames.RealtimeNotification);
+            options.ListenToRabbitQueue(MessagingQueueNames.RealtimeNotification);
         }
     }
 }

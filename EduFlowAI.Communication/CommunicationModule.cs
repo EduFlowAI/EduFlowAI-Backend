@@ -1,3 +1,5 @@
+using EduFlowAI.Communication.Application.Interfaces;
+using EduFlowAI.Communication.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -9,7 +11,8 @@ namespace EduFlowAI.Communication
     {
         public static IServiceCollection AddCommunicationModule(this IServiceCollection services)
         {
-            // Application + Infrastructure services registrations go here later
+            services.AddScoped<INotificationService, NotificationService>();
+
             return services;
         }
 

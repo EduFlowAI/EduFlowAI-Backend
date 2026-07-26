@@ -1,4 +1,6 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Communication.Application.Interfaces;
+using EduFlowAI.Communication.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
@@ -15,7 +17,7 @@ using System.Text;
 namespace EduFlowAI.Documents.Application.Services
 {
     public class DocumentHumanReviewService(IDocumentDbContext dbContext, UserManager<AppUser> userManager, 
-        IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService)
+        IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService, INotificationService notificationService)
         : IDocumentHumanReviewService
     {
         public async Task<Result<PaginatedResult<HumanReviewDto>>> GetAllDocumentsReviewsAsync(QueryParameters queryParameters)
@@ -102,7 +104,7 @@ namespace EduFlowAI.Documents.Application.Services
             }
         }
 
-        public async Task<Result<string>> ApproveReviewAsync(Guid documentId, string approvedById)
+        public async Task<Result<string>> ApproveReviewAsync(Guid documentId, string approvedById, CancellationToken cancellationToken)
         {
             try
             {
@@ -118,10 +120,18 @@ namespace EduFlowAI.Documents.Application.Services
                     return Result<string>.Failure(403, "User is not authorized to approve reviews");
                 }
 
+
                 doc.Status = DocumentStatus.Approved;
                 await dbContext.SaveChangesAsync();
 
-                // may send notification/email to applicant about approval here
+                var applicantId = await GetApplicantId(doc.ApplicationId);
+                // send notification
+                await notificationService.NotifyAsync(new CreateNotificationRequest(
+                    UserId: applicantId,
+                    ApplicationId: doc.ApplicationId,
+                    Type: NotificationType.DocumentApproved,
+                    Message: $"Your {doc.DocumentType.ToString()} approved successfully."),
+                    cancellationToken);
 
                 return Result<string>.Success("Document approved successfully");
             }
@@ -131,7 +141,7 @@ namespace EduFlowAI.Documents.Application.Services
             }
         }
 
-        public async Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById)
+        public async Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById, CancellationToken cancellationToken)
         {
             try
             {
@@ -150,7 +160,14 @@ namespace EduFlowAI.Documents.Application.Services
                 doc.Status = DocumentStatus.Rejected;
                 await dbContext.SaveChangesAsync();
 
-                // may send notification/email to applicant about rejection here
+                var applicantId = await GetApplicantId(doc.ApplicationId);
+                // send notification
+                await notificationService.NotifyAsync(new CreateNotificationRequest(
+                    UserId: applicantId,
+                    ApplicationId: doc.ApplicationId,
+                    Type: NotificationType.DocumentRejected,
+                    Message: $"Unfortunately, your {doc.DocumentType.ToString()} rejected, see details."),
+                    cancellationToken);
 
                 return Result<string>.Success("Document rejected successfully");
             }

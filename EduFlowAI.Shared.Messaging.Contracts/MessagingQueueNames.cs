@@ -14,7 +14,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts
         public const string KnowledgeIndexing = "eduflow.knowledge.indexing.v1";
         public const string KnowledgeIndexingResults = "eduflow.communication.knowledge-results.v1";
         public const string SendEmail = "eduflow.communication.send-email.v1";
-        //public const string CreateNotification = "eduflow.communication.create-notification.v1";
-        //public const string RealtimeNotification = "eduflow.communication.realtime.v1";
+        public const string CreateNotification = "eduflow.communication.create-notification.v1";
+        public const string RealtimeNotification = "eduflow.communication.realtime.v1";
     }
 }
