@@ -172,8 +172,7 @@ public static class TextChunker
         return tail.Trim();
     }
 
-    // Splitting a wide table can leave a remnant like "23% | |" that costs an embedding
-    // but carries nothing, so fold it into a neighbour when there is room.
+    // A split wide table can leave a remnant like "23% | |" that costs an embedding but carries nothing - fold it into a neighbour.
     private static List<string> MergeTinyFragments(List<string> chunks, int maxChars)
     {
         var merged = new List<string>();

@@ -19,7 +19,7 @@ public class IntentClassifierService : IIntentRouter
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly string[] ValidIntents = { "knowledge", "status", "recommendation" };
+    private static readonly string[] ValidIntents = { "knowledge", "application_status", "document_status", "recommendation" };
 
     // The enum constraint makes an out-of-vocabulary intent impossible.
     private static readonly object ResponseSchema = new
@@ -35,7 +35,7 @@ public class IntentClassifierService : IIntentRouter
                     type = "OBJECT",
                     properties = new
                     {
-                        intent = new { type = "STRING", @enum = new[] { "knowledge", "status", "recommendation" } },
+                        intent = new { type = "STRING", @enum = new[] { "knowledge", "application_status", "document_status", "recommendation" } },
                         confidence = new { type = "NUMBER" },
                         reason = new { type = "STRING" }
                     },
@@ -61,14 +61,20 @@ admission requirements, eligibility, grades, fees, dates, locations, the selecti
 to apply. The answer is identical for every applicant and comes from official documents. Listing,
 describing or explaining things belongs here.
 
-status - the state of THIS user's own application or records: whether they were accepted, how far
-their application has progressed, whether their documents were received.
+application_status - the state or outcome of THIS user's own application: whether they were accepted,
+rejected or waitlisted, and how far their application has progressed.
+
+document_status - the state of THIS user's uploaded documents: whether they were received, are under
+verification, were approved or rejected, and which documents are still required.
 
 recommendation - asks the assistant to CHOOSE or ADVISE which option suits THIS user personally,
 based on their background, interests, skills or preferences.
 
 Critical rule: asking WHICH TRACKS EXIST is knowledge. Asking WHICH TRACK SUITS ME is
 recommendation. The word "track" never decides the intent by itself - the user's goal does.
+
+Disambiguation: the overall application outcome is application_status; the state of the uploaded
+files is document_status.
 
 Set each confidence honestly. Use a low value when the message is vague, very short, or when you
 cannot tell which intent it belongs to. A message that is ambiguous between two intents is NOT a
@@ -85,14 +91,17 @@ Examples:
 "Which track should I choose?" -> recommendation
 "Which track fits someone with a design background?" -> recommendation
 "ما هو المسار المناسب لي؟" -> recommendation
-"What is my application status?" -> status
-"هل تم قبولي؟" -> status
-"Did you receive my documents?" -> status
+"What is my application status?" -> application_status
+"هل تم قبولي؟" -> application_status
+"Did you receive my documents?" -> document_status
+"Was my transcript approved?" -> document_status
+"هل تم قبول مستنداتي؟" -> document_status
+"Which documents do I still need?" -> document_status
 
 Multi-intent examples:
-"What is my application status, and which track should I choose?" -> status, recommendation
-"ما هي المسارات المتاحة وهل تم قبولي؟" -> knowledge, status
-"Tell me the admission requirements and whether my documents arrived" -> knowledge, status
+"What is my application status, and which track should I choose?" -> application_status, recommendation
+"ما هي المسارات المتاحة وهل تم قبولي؟" -> knowledge, application_status
+"Tell me the admission requirements and whether my documents arrived" -> knowledge, document_status
 """;
 
     private readonly IGeminiChatClient _chatClient;
@@ -153,8 +162,7 @@ Message to classify:
         return classification;
     }
 
-    // Tolerates Markdown fences and stray prose in case a model ignores the schema, and still
-    // accepts the older single-intent shape.
+    // Tolerates Markdown fences/stray prose and still accepts the older single-intent shape.
     internal static bool TryParseIntentResponse(string? responseText, out IntentClassificationDto result)
     {
         result = KnowledgeFallback();
@@ -214,11 +222,10 @@ Message to classify:
     }
 
     public string GetClarificationMessage(string language) => language == "ar"
-        ? "لم أتأكد تماماً من سؤالك. هل تسأل عن معلومات عامة عن المعهد والمسارات، أم عن حالة طلبك أنت، أم تريد ترشيح المسار المناسب لك؟"
-        : "I'm not sure I understood. Are you asking about general information on ITI and its tracks, about the status of your own application, or for a recommendation on which track suits you?";
+        ? "لم أتأكد تماماً من سؤالك. هل تسأل عن معلومات عامة عن المعهد والمسارات، أم عن حالة طلبك، أم عن حالة مستنداتك، أم تريد ترشيح المسار المناسب لك؟"
+        : "I'm not sure I understood. Are you asking about general information on ITI and its tracks, about your application status, about your document status, or for a recommendation on which track suits you?";
 
-    // Dispatching a barely-detected second intent costs an extra call and answers something the
-    // user did not ask. The primary is always kept, however weak - clarification covers that case.
+    // A barely-detected second intent costs a call and answers something unasked. The primary is always kept - clarification covers a weak one.
     private void DropWeakSecondaryIntents(IntentClassificationDto classification)
     {
         if (classification.Intents.Count < 2)
@@ -240,7 +247,8 @@ Message to classify:
 
     private static string RouteFor(string intent) => intent switch
     {
-        "status" => "status_service",
+        "application_status" => "application_status_service",
+        "document_status" => "document_status_service",
         "recommendation" => "recommendations_agent",
         _ => "knowledge_rag"
     };

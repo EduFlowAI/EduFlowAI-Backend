@@ -13,8 +13,7 @@ namespace EduFlowAI.AI.Infrastructure.ExternalServices;
 
 public class GeminiChatClient : IGeminiChatClient
 {
-    // Attempts on a single (model, key) before moving on - covers a per-minute rate blip or a
-    // transient 5xx without labouring a combo that is genuinely out of quota.
+    // Attempts on one (model, key) before moving on - rides out a rate blip or transient 5xx.
     private const int MaxAttemptsPerCombo = 2;
 
     private readonly HttpClient _httpClient;
@@ -79,9 +78,8 @@ public class GeminiChatClient : IGeminiChatClient
         return SendAsync(request, cancellationToken);
     }
 
-    // Walks the model chain, and the keys within each model, until one combination succeeds.
-    // A model has its own free-tier quota bucket, so switching model is the real quota lever;
-    // switching key helps once separate-project keys are configured.
+    // Walks each model, then the keys within it, until one combination succeeds. A model has its
+    // own quota bucket, so switching model is the real quota lever.
     private async Task<string> SendAsync(GeminiGenerateRequest payload, CancellationToken cancellationToken)
     {
         var models = _options.ResolvedChatModels;
@@ -119,8 +117,7 @@ public class GeminiChatClient : IGeminiChatClient
                         break;
                     }
 
-                    // Rate-limited or a server blip: one short backoff on the same combo, then
-                    // move to the next key.
+                    // Rate-limited or a server blip: one short backoff, then move to the next key.
                     if (lastStatus == 429 || lastStatus >= 500)
                     {
                         if (attempt < MaxAttemptsPerCombo)

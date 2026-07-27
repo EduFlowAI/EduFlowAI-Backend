@@ -28,8 +28,7 @@ public class AiChatService : IRagAnswerService
         // Mask national IDs and other long digit runs before any user text reaches the model.
         userQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
 
-        // A follow-up like "what about its prerequisites?" embeds poorly on its own, so retrieval
-        // runs on the recent turns joined with the question - the vector then reflects the topic.
+        // A bare follow-up embeds poorly, so retrieval runs on recent turns joined with the question.
         var retrievalQuery = BuildRetrievalQuery(userQuestion, context);
         var chunks = await _retrievalService.RetrieveContextAsync(retrievalQuery, limit: 5, cancellationToken);
 
@@ -49,8 +48,7 @@ public class AiChatService : IRagAnswerService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Labelling each excerpt with its document is what lets the assistant answer
-        // "what do you offer" questions instead of seeing anonymous text.
+        // Labelling each excerpt with its document lets the assistant answer "what do you offer" instead of seeing anonymous text.
         var contextText = string.Join("\n\n---\n\n",
             chunks.Select(c => $"[Source document: {c.SourceTitle}]\n{c.Content}"));
 
@@ -58,8 +56,7 @@ public class AiChatService : IRagAnswerService
             ? "Respond in Arabic only."
             : "Respond in English only.";
 
-        // Prior turns let the model resolve references ("its", "that track") to what was just
-        // discussed. Framed as dialogue, never as documents, so the guardrail below still holds.
+        // Prior turns let the model resolve references ("its", "that track"), framed as dialogue not documents so the guardrail holds.
         var conversationSection = context.Count == 0
             ? string.Empty
             : $"""
@@ -120,8 +117,7 @@ what we currently offer. Use it to answer, but never mention it or its labels to
         };
     }
 
-    // The last couple of turns joined with the question, so the retrieval embedding carries the
-    // topic the follow-up depends on. Empty context leaves the question untouched.
+    // Recent turns joined with the question so the embedding carries the topic a follow-up needs.
     private static string BuildRetrievalQuery(string userQuestion, IReadOnlyList<ConversationTurnDto> context)
     {
         if (context.Count == 0)

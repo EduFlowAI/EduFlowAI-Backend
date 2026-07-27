@@ -10,23 +10,20 @@ public class GeminiOptions
     // Single-value config kept for back-compat; the lists below take precedence when set.
     public string ApiKey { get; set; } = string.Empty;
 
-    // One project's free quota runs out fast. Extra keys (from separate projects) are tried in
-    // order on quota/auth failures. Empty falls back to the single ApiKey.
+    // Extra keys (separate projects) tried in order on quota/auth failures. Empty falls back to ApiKey.
     public List<string> ApiKeys { get; set; } = new();
 
     public string EmbeddingModel { get; set; } = "models/gemini-embedding-001";
 
-    // Must match the vector column width; changing it needs a migration and a full re-sync.
-    // Embeddings never fall back to another model - a different model means a different vector
-    // space, which silently breaks retrieval.
+    // Must match the vector column width; changing it needs a migration + full re-sync. No model
+    // fallback for embeddings - a different model is a different vector space.
     public int EmbeddingDimensions { get; set; } = 1536;
 
     // gemini-2.5-flash returns 404 for newly issued keys.
     public string ChatModel { get; set; } = "gemini-3.1-flash-lite";
 
-    // Tried in order when a model is rate-limited, quota-exhausted or unavailable. Each model has
-    // its own free-tier quota bucket, so this is the main quota lever on a single key. Empty falls
-    // back to the single ChatModel. Every entry must be document-capable (extraction shares them).
+    // Tried in order on rate-limit/quota/unavailable - each model has its own quota bucket, the
+    // main quota lever. Empty falls back to ChatModel; every entry must be document-capable.
     public List<string> ChatModels { get; set; } = new();
 
     public double ChatTemperature { get; set; } = 0.2;

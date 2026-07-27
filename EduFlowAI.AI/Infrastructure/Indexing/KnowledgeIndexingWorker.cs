@@ -43,8 +43,7 @@ public class KnowledgeIndexingWorker : BackgroundService
         }
     }
 
-    // The queue lives in memory, so a restart mid-index leaves documents stuck in Pending or
-    // Indexing with nothing coming to finish them.
+    // The queue lives in memory, so a restart mid-index leaves documents stuck in Pending/Indexing.
     private async Task RequeueStrandedDocumentsAsync(CancellationToken cancellationToken)
     {
         try
@@ -73,8 +72,7 @@ public class KnowledgeIndexingWorker : BackgroundService
     {
         try
         {
-            // The queue is a singleton and the indexing service is scoped, so each document
-            // gets its own scope and its own DbContext.
+            // Queue is a singleton, indexing service is scoped: each document gets its own scope and DbContext.
             using var scope = _scopeFactory.CreateScope();
             var knowledgeBase = scope.ServiceProvider.GetRequiredService<KnowledgeBaseService>();
 
@@ -86,8 +84,7 @@ public class KnowledgeIndexingWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            // IngestDocumentAsync already recorded Failed + ErrorMessage for the caller to poll;
-            // swallowing here keeps one bad document from stopping the queue.
+            // IngestDocumentAsync already recorded Failed + ErrorMessage; swallow so one bad document doesn't stop the queue.
             _logger.LogError(ex, "Indexing failed for document {DocumentId}.", documentId);
         }
     }

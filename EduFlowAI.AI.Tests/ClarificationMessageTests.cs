@@ -26,14 +26,15 @@ public class ClarificationMessageTests
         Assert.StartsWith("I'm not sure I understood", Build().GetClarificationMessage("fr"));
     }
 
-    // It has to name all three options, otherwise it isn't a usable clarifying question.
+    // It has to name every option, otherwise it isn't a usable clarifying question.
     [Fact]
-    public void Message_offers_all_three_intents()
+    public void Message_offers_all_intents()
     {
         var message = Build().GetClarificationMessage("en");
 
         Assert.Contains("general information", message);
-        Assert.Contains("status", message);
+        Assert.Contains("application status", message);
+        Assert.Contains("document status", message);
         Assert.Contains("recommendation", message);
     }
 

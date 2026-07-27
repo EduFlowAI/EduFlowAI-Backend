@@ -11,9 +11,8 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Infrastructure.Persistence;
 
-// Fails startup if the live Embedding column width doesn't match Gemini:EmbeddingDimensions.
-// Catches the column drifting from the config on any database (as Neon sat at vector(768) while the
-// app expected 1536) before a single bad insert or silently wrong retrieval can happen.
+// Fails startup if the live Embedding column width doesn't match Gemini:EmbeddingDimensions,
+// before a bad insert or silently wrong retrieval can happen.
 public sealed class EmbeddingDimensionGuard : IHostedService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -35,8 +34,7 @@ public sealed class EmbeddingDimensionGuard : IHostedService
         var expected = _options.EmbeddingDimensions;
         int? actual;
 
-        // Reading the column is best-effort: a DB that is unreachable or not yet migrated is
-        // inconclusive, not a proven mismatch, so it must not block startup.
+        // Best-effort: an unreachable or un-migrated DB is inconclusive, not a mismatch, so it must not block startup.
         try
         {
             actual = await ReadColumnDimensionAsync(cancellationToken);
@@ -69,8 +67,7 @@ public sealed class EmbeddingDimensionGuard : IHostedService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<IAIDbContext>();
 
-        // The abstraction is narrow, but the real implementation is an EF DbContext, so we can run
-        // the catalog query without depending on the persistence assembly.
+        // The real implementation is an EF DbContext, so we can run the catalog query without depending on persistence.
         if (context is not DbContext db)
         {
             _logger.LogWarning("The AI DB context is not an EF DbContext; skipping the dimension check.");
