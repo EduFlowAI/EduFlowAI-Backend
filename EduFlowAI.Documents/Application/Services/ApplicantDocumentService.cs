@@ -24,33 +24,34 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
     private readonly IDocumentDbContext _dbContext;
     private readonly IFileStorageService _fileStorageService;
     private readonly ICurrentUserService _currentUserService;
-    private readonly IApplicationAcessReader _applicationAccessReader;
-    private readonly IApplicantProfileReader _applicantProfileReader; // Karim's contract
+    private readonly IApplicationAcessReader _applicationAccessReader; // Halim's contract
+    private readonly IStatusTransitionCoordinator _statusTransitionCoordinator; // Halim's contract
+    private readonly IProfileService _profileService; // Karim's contract
     private readonly IProgramRequirementReader _programRequirementReader; // Abdallah's contract
     private readonly IValidator<UploadDocumentDto> _validator;
     private readonly ILogger<ApplicantDocumentService> _logger;
-    private readonly IProfileService _profileService;
 
     public ApplicantDocumentService(
         IDocumentDbContext dbContext,
         IFileStorageService fileStorageService,
         ICurrentUserService currentUserService,
         IApplicationAcessReader applicationAccessReader,
-        IApplicantProfileReader applicantProfileReader,
         IProgramRequirementReader programRequirementReader,
         IValidator<UploadDocumentDto> validator,
         ILogger<ApplicantDocumentService> logger,
-        IProfileService profileService)
+        IProfileService profileService,
+        IStatusTransitionCoordinator statusTransitionCoordinator)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _fileStorageService = fileStorageService ?? throw new ArgumentNullException(nameof(fileStorageService));
         _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
         _applicationAccessReader = applicationAccessReader ?? throw new ArgumentNullException(nameof(applicationAccessReader));
-        _applicantProfileReader = applicantProfileReader ?? throw new ArgumentNullException(nameof(applicantProfileReader));
         _programRequirementReader = programRequirementReader ?? throw new ArgumentNullException(nameof(programRequirementReader));
+        _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _statusTransitionCoordinator = statusTransitionCoordinator ?? throw new ArgumentNullException(nameof(statusTransitionCoordinator));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+
     }
 
     public async Task<Result<Guid>> UploadDocumentAsync(
@@ -81,7 +82,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
         }
 
         // 1. Ask Halim: Does the user own this and is it open for uploads?
-        var hasAccess = await _applicationAccessReader.CanUploadDocumentsAsync(
+        var hasAccess = await _applicationAccessReader.CanAccessDocumentsAsync(
             dto.ApplicationId,
             userId,
             cancellationToken);
@@ -197,7 +198,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
         }
 
         // 2. Validate authorization using Halim's contract
-        bool hasAccess = await _applicationAccessReader.CanUploadDocumentsAsync(
+        bool hasAccess = await _applicationAccessReader.CanAccessDocumentsAsync(
             applicationId,
             userId,
             cancellationToken);
@@ -214,7 +215,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
 
         // 3. Query the database using highly optimized EF Core projection
         var documents = await _dbContext.ApplicantDocuments
-            .AsNoTracking() 
+            .AsNoTracking()
             .Where(d => d.ApplicationId == applicationId)
             .Select(d => new ApplicantDocumentDto(
                 d.Id,
@@ -257,7 +258,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
         }
 
         // 3. Prevent IDOR: Check if the current user owns the parent application
-        bool hasAccess = await _applicationAccessReader.CanUploadDocumentsAsync(
+        bool hasAccess = await _applicationAccessReader.CanAccessDocumentsAsync(
             document.ApplicationId,
             userId,
             cancellationToken);

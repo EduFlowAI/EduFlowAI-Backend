@@ -1,5 +1,6 @@
 ﻿using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
+using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Presentation.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,13 @@ namespace EduFlowAI.Documents.Presentation.Controllers;
 public sealed class ApplicantDocumentsController : ControllerBase
 {
     private readonly IApplicantDocumentService _documentService;
+    private readonly IDocumentSubmissionService _submissionService;
 
-    public ApplicantDocumentsController(IApplicantDocumentService documentService)
+
+    public ApplicantDocumentsController(IApplicantDocumentService documentService, IDocumentSubmissionService submissionService)
     {
         _documentService = documentService ?? throw new ArgumentNullException(nameof(documentService));
+        _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
     }
 
     [HttpPost]
@@ -107,5 +111,23 @@ public sealed class ApplicantDocumentsController : ControllerBase
 
         // 3. Return the physical file to the browser
         return File(stream, contentType, fileName);
+    }
+
+
+    [HttpPost("submit")]
+    public async Task<IActionResult> SubmitDocumentPackage(Guid applicationId, CancellationToken cancellationToken)
+    {
+        var result = await _submissionService.SubmitPackageAsync(applicationId, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return StatusCode(result.StatusCode, new { Message = result.Message });
+        }
+
+        return StatusCode(result.StatusCode, new
+        {
+            Message = result.Message,
+            SubmittedCount = result.Data
+        });
     }
 }

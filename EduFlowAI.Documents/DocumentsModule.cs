@@ -29,7 +29,7 @@ namespace EduFlowAI.Documents
             // fake
             services.AddScoped<IProgramRequirementReader, ProgramRequirementReader>();
             services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
-            services.AddScoped<IApplicantProfileReader, FakeApplicantProfileReader>();
+            //services.AddScoped<IApplicantProfileReader, FakeApplicantProfileReader>();
 
             services.AddScoped<IProfileService, ProfileService>();
 
