@@ -9,7 +9,7 @@ namespace EduFlowAI.Documents.Application.Interfaces
 {
     public interface IReplacementRequestService
     {
-        Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById);
+        Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById, CancellationToken cancellationToken);
         Task<Result<PaginatedResult<ReplacementDto>>> GetAllReplacemntRequestsAsync(string ApplicantId, QueryParameters queryParameters);
         Task<Result<ReplacementDto>> GetReplacemntRequestAsync(Guid requestId);
     }

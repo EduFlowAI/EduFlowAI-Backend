@@ -1,4 +1,6 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Communication.Application.Interfaces;
+using EduFlowAI.Communication.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
@@ -14,9 +16,11 @@ using System.Text;
 
 namespace EduFlowAI.Documents.Application.Services
 {
-    public class ReplacementRequestService(IDocumentDbContext dbContext, UserManager<AppUser> userManager, IAdmissionDbContext admissionDbContext) : IReplacementRequestService
+    public class ReplacementRequestService(IDocumentDbContext dbContext, UserManager<AppUser> userManager, 
+        IAdmissionDbContext admissionDbContext, INotificationService notificationService) 
+        : IReplacementRequestService
     {
-        public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById)
+        public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById, CancellationToken cancellationToken)
         {
             try
             {
@@ -45,7 +49,14 @@ namespace EduFlowAI.Documents.Application.Services
                 await dbContext.DocumentReplacementRequests.AddAsync(replacementRequest);
                 await dbContext.SaveChangesAsync();
 
-                // may send notification/email to applicant about replacement request here
+                var applicantId = await GetApplicantId(doc.ApplicationId);
+                // send notification
+                await notificationService.NotifyAsync(new CreateNotificationRequest(
+                    UserId: applicantId,
+                    ApplicationId: doc.ApplicationId,
+                    Type: NotificationType.DocumentReplacementRequested,
+                    Message: $"Your {doc.DocumentType.ToString()} need to be replaced!"),
+                    cancellationToken);
 
                 return Result<string>.Success("Replacement request sent successfully");
             }
@@ -151,6 +162,15 @@ namespace EduFlowAI.Documents.Application.Services
                 return false;
             }
             return await userManager.IsInRoleAsync(user, "Admin") || await userManager.IsInRoleAsync(user, "Operation Manager");
+        }
+
+        private async Task<string> GetApplicantId(Guid applicationId)
+        {
+            var id = await admissionDbContext.Applications
+                .Where(a => a.Id == applicationId)
+                .Select(a => a.ApplicantUserId)
+                .FirstOrDefaultAsync();
+            return id ?? string.Empty;
         }
     }
 }

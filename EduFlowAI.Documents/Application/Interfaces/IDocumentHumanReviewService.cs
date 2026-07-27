@@ -13,7 +13,7 @@ namespace EduFlowAI.Documents.Application.Interfaces
         Task<Result<PaginatedResult<HumanReviewDto>>> GetAllDocumentsReviewsAsync(QueryParameters queryParameters);
         Task<Result<DocumentReviewDto>> GetDocumentReviewAsync(Guid documentId);
         Task<Result<DocumentFileDto>> GetDocumentFileAsync(Guid documentId);
-        Task<Result<string>> ApproveReviewAsync(Guid documentId, string approvedById);
-        Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById);
+        Task<Result<string>> ApproveReviewAsync(Guid documentId, string approvedById, CancellationToken cancellationToken);
+        Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById, CancellationToken cancellationToken);
     }
 }

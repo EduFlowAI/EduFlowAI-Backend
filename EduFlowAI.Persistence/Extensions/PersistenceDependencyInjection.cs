@@ -5,6 +5,7 @@ using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Persistence.Messaging;
+using EduFlowAI.Shared.Kernel.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +48,8 @@ namespace EduFlowAI.Persistence.Extensions
 
             // ensure (builder.ConfigureCommonMessaging) in program.cs is un-commented to use this outbox
             services.AddScoped<IDocumentVerificationOutbox, DocumentVerificationOutbox>();
+
+            services.AddScoped<IOutboxPublisher, OutboxPublisher>();
 
             return services;
         }

@@ -61,7 +61,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         {
             //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var userId = "1"; // for test
-            var result = await _documentHumanReviewService.ApproveReviewAsync(documentId, userId);
+            var result = await _documentHumanReviewService.ApproveReviewAsync(documentId, userId, default);
             if (!result.IsSuccess)
             {
                 return StatusCode(result.StatusCode, result.Message);
@@ -75,7 +75,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         {
             //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var userId = "1"; // for test
-            var result = await _documentHumanReviewService.RejectReviewAsync(documentId, userId);
+            var result = await _documentHumanReviewService.RejectReviewAsync(documentId, userId, default);
             if (!result.IsSuccess)
             {
                 return StatusCode(result.StatusCode, result.Message);

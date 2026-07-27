@@ -2,7 +2,7 @@
 {
     public interface IApplicationAcessReader
     {
-        Task<bool> CanUploadDocumentsAsync(Guid applicationId, string userId, CancellationToken cancellationToken);
+        Task<bool> CanAccessDocumentsAsync(Guid applicationId, string userId, CancellationToken cancellationToken);
 
         Task<Guid> GetProgramIdAsync(Guid applicationId, CancellationToken cancellationToken);
     }
