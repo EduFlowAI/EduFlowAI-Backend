@@ -2,6 +2,9 @@ using EduFlowAI.Admission;
 using EduFlowAI.AI;
 using EduFlowAI.Communication;
 using EduFlowAI.Documents;
+using EduFlowAI.Identity;
+using EduFlowAI.Identity.Application.Interfaces;
+using EduFlowAI.Identity.Application.Services;
 using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
 using EduFlowAI.Shared.Messaging.Contracts.Configuration;
@@ -23,7 +26,9 @@ namespace EduFlowAI.Worker
             builder.Services.AddAdmissionModule();
             builder.Services.AddDocumentsModule();
             builder.Services.AddAIModule(builder.Configuration);
-            builder.Services.AddCommunicationModule();
+            builder.Services.AddCommunicationModule(builder.Configuration);
+
+            builder.Services.AddScoped<IUserContactInfoReader, UserContactInfoReader>();
 
             // messaging -> ensure running rabbitmq before un-comment it
             builder.ConfigureCommonMessaging("EduFlowAI.Worker");

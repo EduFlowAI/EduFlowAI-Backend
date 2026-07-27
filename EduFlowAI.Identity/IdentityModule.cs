@@ -111,6 +111,7 @@ public static class IdentityModule
         services.AddScoped<IApplicantProfileLocker,
             ApplicantProfileLocker>();
         services.AddHostedService<IdentityRoleSeeder>();
+        services.AddScoped<IUserContactInfoReader, UserContactInfoReader>();
 
         return services.AddIdentityCore<AppUser>(options =>
         {
