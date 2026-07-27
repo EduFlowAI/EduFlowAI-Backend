@@ -16,7 +16,7 @@ using System.Text;
 
 namespace EduFlowAI.Documents.Application.Services
 {
-    public class DocumentHumanReviewService(IDocumentDbContext dbContext, UserManager<AppUser> userManager, 
+    public class DocumentHumanReviewService(IDocumentDbContext dbContext, 
         IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService, INotificationService notificationService)
         : IDocumentHumanReviewService
     {
@@ -114,13 +114,6 @@ namespace EduFlowAI.Documents.Application.Services
                     return Result<string>.Failure(404, "Document not found");
                 }
 
-                var isAuthorizedUser = await IsUserAuthorizedAsync(approvedById);
-                if (!isAuthorizedUser)
-                {
-                    return Result<string>.Failure(403, "User is not authorized to approve reviews");
-                }
-
-
                 doc.Status = DocumentStatus.Approved;
                 await dbContext.SaveChangesAsync();
 
@@ -149,12 +142,6 @@ namespace EduFlowAI.Documents.Application.Services
                 if (doc == null)
                 {
                     return Result<string>.Failure(404, "Document not found");
-                }
-
-                var isAuthorizedUser = await IsUserAuthorizedAsync(rejectedById);
-                if (!isAuthorizedUser)
-                {
-                    return Result<string>.Failure(403, "User is not authorized to reject reviews");
                 }
 
                 doc.Status = DocumentStatus.Rejected;
@@ -218,16 +205,6 @@ namespace EduFlowAI.Documents.Application.Services
 
         // helpers
         #region Helpers
-        private async Task<bool> IsUserAuthorizedAsync(string userId)
-        {
-            var user = await userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                return false;
-            }
-            return await userManager.IsInRoleAsync(user, "Admin") || await userManager.IsInRoleAsync(user, "Operation Manager");
-        }
-
         private async Task<string> GetApplicantId(Guid applicationId)
         {
             var id = await admissionDbContext.Applications
