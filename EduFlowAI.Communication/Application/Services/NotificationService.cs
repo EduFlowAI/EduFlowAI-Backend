@@ -40,7 +40,7 @@ namespace EduFlowAI.Communication.Application.Services
                 CreatedAtUtc: notification.CreatedAt,
                 OccurredAtUtc: DateTimeOffset.UtcNow));
 
-            await _outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
+            //await _outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
         }
     }
 }

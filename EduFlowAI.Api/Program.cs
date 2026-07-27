@@ -77,7 +77,7 @@ public class Program
         builder.Services.AddAdmissionModule();
         builder.Services.AddDocumentsModule();
         builder.Services.AddAIModule(builder.Configuration);
-        builder.Services.AddCommunicationModule();
+        builder.Services.AddCommunicationModule(builder.Configuration);
 
         builder.ConfigureCommonMessaging("EduFlowAI.Api");
         builder.Services.ConfigureWolverine(options =>

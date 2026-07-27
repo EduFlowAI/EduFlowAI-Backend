@@ -6,13 +6,12 @@ using Wolverine.Attributes;
 
 namespace EduFlowAI.Shared.Messaging.Contracts.Communication.V1
 {
-    [MessageIdentity("eduflow.communication.send-notification-email", Version = 1)]
-    public sealed record SendNotificationEmailV1(
-        Guid MessageId,
-        Guid CorrelationId,
-        Guid? CausationId,
-        Guid NotificationId,
-        string UserId,
+    [MessageIdentity("eduflow.communication.send-email", Version = 1)]
+    public sealed record SendEmailV1(
+        Guid MessageId, Guid CorrelationId, Guid? CausationId,
+        int EmailType,
+        string RecipientEmail,
+        string? DataJson,
         DateTimeOffset OccurredAtUtc
     ) : IIntegrationMessage;
 }

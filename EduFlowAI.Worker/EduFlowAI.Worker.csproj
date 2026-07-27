@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+    <PackageReference Include="MimeKit" Version="4.17.0" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
     <PackageReference Include="WolverineFx" Version="6.20.0" />
     <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.20.0" />
@@ -22,6 +24,7 @@
     <ProjectReference Include="..\EduFlowAI.AI\EduFlowAI.AI.csproj" />
     <ProjectReference Include="..\EduFlowAI.Communication\EduFlowAI.Communication.csproj" />
     <ProjectReference Include="..\EduFlowAI.Documents\EduFlowAI.Documents.csproj" />
+    <ProjectReference Include="..\EduFlowAI.Identity\EduFlowAI.Identity.csproj" />
     <ProjectReference Include="..\EduFlowAI.Persistence\EduFlowAI.Persistence.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Messaging.Contracts\EduFlowAI.Shared.Messaging.Contracts.csproj" />
   </ItemGroup>

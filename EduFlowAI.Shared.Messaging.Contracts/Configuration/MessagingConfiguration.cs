@@ -74,7 +74,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             options.PublishMessage<DocumentReplacementFulfilledV1>()
                 .ToRabbitQueue(MessagingQueueNames.DocumentReplacementFulfilled);
 
-            options.PublishMessage<SendNotificationEmailV1>()
+            options.PublishMessage<SendEmailV1>()
                 .ToRabbitQueue(MessagingQueueNames.SendEmail);
 
             //options.PublishMessage<CreateNotificationV1>()
@@ -93,6 +93,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentStatusNotifications);
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentReplacementFulfilled);
             options.ListenToRabbitQueue(MessagingQueueNames.SendEmail);
+            options.ListenToRabbitQueue(MessagingQueueNames.RealtimeNotification);
             options.ListenToRabbitQueue(MessagingQueueNames.CreateNotification);
         }
 
