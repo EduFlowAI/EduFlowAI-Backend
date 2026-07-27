@@ -214,7 +214,7 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
 
         // 3. Query the database using highly optimized EF Core projection
         var documents = await _dbContext.ApplicantDocuments
-            .AsNoTracking() // Bypasses EF Core change tracking for a massive read performance boost
+            .AsNoTracking() 
             .Where(d => d.ApplicationId == applicationId)
             .Select(d => new ApplicantDocumentDto(
                 d.Id,

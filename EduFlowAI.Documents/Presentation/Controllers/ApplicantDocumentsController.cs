@@ -1,11 +1,12 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using EduFlowAI.Documents.Application.DTOs;
+﻿using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Presentation.Requests;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace EduFlowAI.Documents.Presentation.Controllers;
 
@@ -76,5 +77,35 @@ public sealed class ApplicantDocumentsController : ControllerBase
         {
             error = result.Message
         });
+    }
+
+
+
+    [HttpGet("/api/documents/{documentId:guid}/file")]
+    public async Task<IActionResult> DownloadDocument(
+        [FromRoute] Guid documentId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _documentService.DownloadDocumentAsync(documentId, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return StatusCode(result.StatusCode, new { error = result.Message });
+        }
+
+        // 1. Get the stream and filename from the unwrapped result
+        var stream = result.Data.Stream;
+        var fileName = result.Data.OriginalFileName;
+
+        // 2. Safely resolve the MIME type using ASP.NET Core's built-in provider
+        var provider = new FileExtensionContentTypeProvider();
+        if (!provider.TryGetContentType(fileName, out var contentType))
+        {
+            // Fallback for unknown file types
+            contentType = "application/octet-stream";
+        }
+
+        // 3. Return the physical file to the browser
+        return File(stream, contentType, fileName);
     }
 }
