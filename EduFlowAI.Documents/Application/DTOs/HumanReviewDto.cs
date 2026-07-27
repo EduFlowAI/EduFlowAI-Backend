@@ -1,4 +1,6 @@
 ﻿using EduFlowAI.Documents.Domain.Enums;
+using EduFlowAI.Admission.Domain.Enums;
+
 using System;
 using System.Collections.Generic;
 using System.Text;

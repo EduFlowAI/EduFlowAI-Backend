@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using EduFlowAI.Admission.Domain.Enums;
+
 
 namespace EduFlowAI.Documents.Application.DTOs
 {
