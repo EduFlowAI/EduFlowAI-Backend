@@ -115,4 +115,23 @@ public static class AIModule
 
         // IOfferedTrackReader is supplied by the Admission catalog module.
     }
+
+    // for worker
+    public static IServiceCollection AddAIWorkerModule(this IServiceCollection services)
+    {
+        services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
+        services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()
+            .ConfigureHttpClient((serviceProvider, client) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<IOptions<GeminiRecommendationOptions>>()
+                    .Value;
+
+                client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            });
+
+
+        return services;
+    }
 }

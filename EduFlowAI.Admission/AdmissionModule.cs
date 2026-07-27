@@ -56,6 +56,18 @@ namespace EduFlowAI.Admission
             return services;
         }
 
+        // for worker
+        public static IServiceCollection AddAdmissionWorkerModule(this IServiceCollection services)
+        {
+            services.AddScoped<IApplicationRepository, ApplicationRepository>();
+            services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
+            services.AddScoped<IApplicationStatusReader, ApplicationStatusReader>();
+            services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
+            services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
+
+            return services;
+        }
+
         // Called only by Api — Worker never calls this.
         // public static IEndpointRouteBuilder MapAdmissionPresentation(this IEndpointRouteBuilder app) { ... }
     }

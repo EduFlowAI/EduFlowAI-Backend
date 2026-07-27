@@ -1,6 +1,8 @@
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
+using EduFlowAI.Communication.Application.Interfaces.Emails;
 using EduFlowAI.Documents.Application.DTOs;
+using EduFlowAI.Documents.Application.Emails;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Application.Validators;
@@ -36,6 +38,13 @@ namespace EduFlowAI.Documents
 
             services.AddScoped<IProfileService, ProfileService>();
 
+
+            return services;
+        }
+
+        public static IServiceCollection AddDocumentsWorkerModule(this IServiceCollection services)
+        {
+            services.AddScoped<IEmailTemplate, DocumentReplacementRequestEmailTemplate>();
 
             return services;
         }
