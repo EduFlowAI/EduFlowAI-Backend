@@ -8,10 +8,13 @@ namespace EduFlowAI.AI.Presentation.Services;
 
 public sealed class AssistantMessageService : IAssistantMessageService
 {
+    private const int RecommendationQuestionCount = 6;
+
     private readonly IIntentRouter _intentRouter;
     private readonly IRagAnswerService _ragAnswerService;
     private readonly ISessionManager _sessionManager;
-    private readonly IChatRecommendationService _chatRecommendationService;
+    private readonly ITrackRecommendationService
+        _trackRecommendationService;
     private readonly IApplicationStatusQueryService
         _applicationStatusQueryService;
 
@@ -19,13 +22,13 @@ public sealed class AssistantMessageService : IAssistantMessageService
         IIntentRouter intentRouter,
         IRagAnswerService ragAnswerService,
         ISessionManager sessionManager,
-        IChatRecommendationService chatRecommendationService,
+        ITrackRecommendationService trackRecommendationService,
         IApplicationStatusQueryService applicationStatusQueryService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
-        _chatRecommendationService = chatRecommendationService;
+        _trackRecommendationService = trackRecommendationService;
         _applicationStatusQueryService = applicationStatusQueryService;
     }
 
@@ -71,6 +74,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             var result = await DispatchAsync(
                 detectedIntent.Intent,
                 request.Message,
+                request.Recommendation,
                 history,
                 language,
                 userId,
@@ -106,6 +110,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private async Task<AssistantResultDto> DispatchAsync(
         string intent,
         string message,
+        RecommendationQuestionnaireProgressDto?
+            recommendationProgress,
         IReadOnlyList<ConversationTurnDto> history,
         string language,
         Guid userId,
@@ -121,7 +127,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 cancellationToken),
 
             "recommendation" => await HandleRecommendationAsync(
-                message,
+                recommendationProgress,
                 language,
                 cancellationToken),
 
@@ -158,31 +164,82 @@ public sealed class AssistantMessageService : IAssistantMessageService
     }
 
     private async Task<AssistantResultDto> HandleRecommendationAsync(
-        string message,
+        RecommendationQuestionnaireProgressDto? progress,
         string language,
         CancellationToken cancellationToken)
     {
-        var recommendation =
-            await _chatRecommendationService.RecommendFromMessageAsync(
-                message,
-                cancellationToken);
+        var missingQuestion = GetNextMissingQuestion(
+            progress,
+            language);
+
+        if (missingQuestion is not null)
+        {
+            return new AssistantResultDto(
+                Intent: "recommendation",
+                Title: language == "ar"
+                    ? "ترشيح المسار"
+                    : "Track Recommendation",
+                Content: missingQuestion.Question,
+                Sources: [],
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["state"] = "collecting_answers",
+                    ["questionKey"] = missingQuestion.Key,
+                    ["questionNumber"] = missingQuestion.Number,
+                    ["totalQuestions"] = RecommendationQuestionCount,
+                    ["advisory"] = true
+                });
+        }
+
+        var questionnaire = CreateQuestionnaire(progress!);
+
+        var result = await _trackRecommendationService.RecommendAsync(
+            questionnaire,
+            cancellationToken);
+
+        if (result.Recommendations.Count == 0)
+        {
+            return new AssistantResultDto(
+                Intent: "recommendation",
+                Title: language == "ar"
+                    ? "ترشيح المسار"
+                    : "Track Recommendation",
+                Content: language == "ar"
+                    ? "لا توجد مسارات متاحة حالياً يمكن ترشيحها."
+                    : "No active offered tracks are currently available.",
+                Sources: [],
+                Metadata: new Dictionary<string, object?>
+                {
+                    ["state"] = "completed",
+                    ["recommendations"] =
+                        result.Recommendations,
+                    ["usedFallback"] =
+                        result.UsedFallback,
+                    ["advisory"] = true,
+                    ["advisoryNotice"] =
+                        result.AdvisoryNotice
+                });
+        }
 
         return new AssistantResultDto(
             Intent: "recommendation",
             Title: language == "ar"
-                ? "ترشيح المسار"
-                : "Track Recommendation",
-            Content: recommendation.Message,
+                ? "المسارات المقترحة"
+                : "Recommended Tracks",
+            Content: language == "ar"
+                ? "بناءً على إجاباتك، هذه أنسب المسارات المقترحة لك."
+                : "Based on your answers, these are the most suitable track recommendations.",
             Sources: [],
             Metadata: new Dictionary<string, object?>
             {
-                ["shouldUseQuestionnaire"] =
-                    recommendation.ShouldUseQuestionnaire,
-
+                ["state"] = "completed",
                 ["recommendations"] =
-                    recommendation.Recommendations,
-
-                ["advisory"] = true
+                    result.Recommendations,
+                ["usedFallback"] =
+                    result.UsedFallback,
+                ["advisory"] = true,
+                ["advisoryNotice"] =
+                    result.AdvisoryNotice
             });
     }
 
@@ -234,7 +291,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         }
 
         var content =
-            !string.IsNullOrWhiteSpace(applicationStatus.StatusMessage)
+            !string.IsNullOrWhiteSpace(
+                applicationStatus.StatusMessage)
                 ? applicationStatus.StatusMessage
                 : language == "ar"
                     ? $"حالة طلبك الحالية هي: {applicationStatus.CurrentStatus}."
@@ -259,6 +317,118 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 ["statusMessage"] =
                     applicationStatus.StatusMessage
             });
+    }
+
+    private static RecommendationQuestionnaireDto
+        CreateQuestionnaire(
+            RecommendationQuestionnaireProgressDto progress)
+    {
+        return new RecommendationQuestionnaireDto
+        {
+            Major = progress.Major!.Trim(),
+            TechnicalCourses =
+                NormalizeValues(progress.TechnicalCourses!),
+            Skills =
+                NormalizeValues(progress.Skills!),
+            Interests =
+                NormalizeValues(progress.Interests!),
+            PreferredActivities =
+                NormalizeValues(progress.PreferredActivities!),
+            CareerGoals =
+                NormalizeValues(progress.CareerGoals!),
+            AdditionalContext =
+                string.IsNullOrWhiteSpace(
+                    progress.AdditionalContext)
+                    ? null
+                    : progress.AdditionalContext.Trim()
+        };
+    }
+
+    private static IReadOnlyCollection<string> NormalizeValues(
+        IReadOnlyCollection<string> values)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static RecommendationQuestion?
+        GetNextMissingQuestion(
+            RecommendationQuestionnaireProgressDto? progress,
+            string language)
+    {
+        if (progress is null ||
+            string.IsNullOrWhiteSpace(progress.Major))
+        {
+            return new RecommendationQuestion(
+                "major",
+                1,
+                language == "ar"
+                    ? "ما هو تخصصك الدراسي؟"
+                    : "What is your academic major?");
+        }
+
+        if (IsMissing(progress.TechnicalCourses))
+        {
+            return new RecommendationQuestion(
+                "technicalCourses",
+                2,
+                language == "ar"
+                    ? "ما هي المقررات أو الموضوعات التقنية التي درستها؟"
+                    : "Which technical courses or topics have you studied?");
+        }
+
+        if (IsMissing(progress.Skills))
+        {
+            return new RecommendationQuestion(
+                "skills",
+                3,
+                language == "ar"
+                    ? "ما هي المهارات التقنية التي تمتلكها؟"
+                    : "What technical skills do you currently have?");
+        }
+
+        if (IsMissing(progress.Interests))
+        {
+            return new RecommendationQuestion(
+                "interests",
+                4,
+                language == "ar"
+                    ? "ما هي المجالات التقنية التي تهتم بها أكثر؟"
+                    : "Which technical areas interest you the most?");
+        }
+
+        if (IsMissing(progress.PreferredActivities))
+        {
+            return new RecommendationQuestion(
+                "preferredActivities",
+                5,
+                language == "ar"
+                    ? "ما نوع الأنشطة أو المهام التي تستمتع بها؟"
+                    : "What kinds of activities or tasks do you enjoy?");
+        }
+
+        if (IsMissing(progress.CareerGoals))
+        {
+            return new RecommendationQuestion(
+                "careerGoals",
+                6,
+                language == "ar"
+                    ? "ما هي أهدافك المهنية؟"
+                    : "What are your career goals?");
+        }
+
+        return null;
+    }
+
+    private static bool IsMissing(
+        IReadOnlyCollection<string>? values)
+    {
+        return values is null ||
+               values.Count == 0 ||
+               values.All(string.IsNullOrWhiteSpace);
     }
 
     private static AssistantResultDto CreateUnknownResult(
@@ -291,7 +461,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
             }
         }
 
-        return _sessionManager.CreateSession(userId.ToString());
+        return _sessionManager.CreateSession(
+            userId.ToString());
     }
 
     private static IReadOnlyList<DetectedIntentDto>
@@ -324,4 +495,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 ? "ar"
                 : "en";
     }
+
+    private sealed record RecommendationQuestion(
+        string Key,
+        int Number,
+        string Question);
 }
