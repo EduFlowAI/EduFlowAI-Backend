@@ -169,6 +169,71 @@ public class AssistantMessageServiceTests
         Assert.Contains("major", missingContext);
     }
 
+    [Fact]
+    public async Task AuthenticatedUser_ProfileData_IsIncludedInRecommendationQuestionnaire()
+    {
+        var recommendationService =
+            new FakeTrackRecommendationService();
+
+        var service = CreateService(
+            intent: "recommendation",
+            recommendationService,
+            new RecommendationUserContextDto
+            {
+                Major = "Computer Science",
+                Faculty = "Computers and Information",
+                University = "Test University",
+                DegreeLevel = "Bachelor",
+                GraduationYear = 2025,
+                CumulativeGrade = "VeryGood",
+                HasProfileData = true
+            });
+
+        var response = await service.HandleAsync(
+            new AssistantMessageRequest(
+                Message: "Recommend based on my available information.",
+                SessionId: null,
+                Language: "en",
+                Recommendation: null,
+                RecommendWithAvailableData: true),
+            Guid.NewGuid(),
+            true);
+
+        var result = Assert.Single(response.Results);
+
+        Assert.Equal("completed", result.Metadata["state"]);
+
+        var questionnaire =
+            Assert.IsType<RecommendationQuestionnaireDto>(
+                recommendationService.LastQuestionnaire);
+
+        Assert.Equal(
+            "Computer Science",
+            questionnaire.Major);
+
+        Assert.NotNull(questionnaire.AdditionalContext);
+
+        Assert.Contains(
+            "Faculty: Computers and Information",
+            questionnaire.AdditionalContext);
+
+        Assert.Contains(
+            "University: Test University",
+            questionnaire.AdditionalContext);
+
+        Assert.Contains(
+            "Degree level: Bachelor",
+            questionnaire.AdditionalContext);
+
+        Assert.Contains(
+            "Graduation year: 2025",
+            questionnaire.AdditionalContext);
+
+        Assert.Contains(
+            "Cumulative grade: VeryGood",
+            questionnaire.AdditionalContext);
+    }
+
     private static AssistantMessageService CreateService(
         string intent,
         FakeTrackRecommendationService recommendationService,
