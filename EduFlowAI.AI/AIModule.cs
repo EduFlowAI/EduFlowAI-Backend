@@ -103,6 +103,7 @@ public static class AIModule
             .ValidateOnStart();
 
         services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
+        services.AddScoped<IRecommendationUserContextService,RecommendationUserContextService>();
         services.AddScoped<IAssistantMessageService, AssistantMessageService>();
 
         services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()

@@ -81,16 +81,108 @@ public class AssistantMessageServiceTests
             recommendationService.LastQuestionnaire.Skills);
     }
 
+    [Fact]
+    public async Task AuthenticatedUser_WithProfileMajor_DoesNotAskForMajor()
+    {
+        var service = CreateService(
+            intent: "recommendation",
+            recommendationService:
+                new FakeTrackRecommendationService(),
+            userContext:
+                new RecommendationUserContextDto
+                {
+                    Major = "Computer Science",
+                    Faculty = "Computers and Information",
+                    University = "Test University",
+                    DegreeLevel = "Bachelor",
+                    GraduationYear = 2025,
+                    CumulativeGrade = "VeryGood",
+                    HasProfileData = true
+                });
+
+        var response = await service.HandleAsync(
+            new AssistantMessageRequest(
+                Message: "Recommend me a track.",
+                SessionId: null,
+                Language: "en",
+                Recommendation: null,
+                RecommendWithAvailableData: false),
+            Guid.NewGuid(),
+            true);
+
+        var result = Assert.Single(response.Results);
+
+        Assert.Equal("recommendation", result.Intent);
+        Assert.Equal(
+            "collecting_answers",
+            result.Metadata["state"]);
+        Assert.Equal(
+            "careerGoals",
+            result.Metadata["questionKey"]);
+        Assert.Equal(1, result.Metadata["questionNumber"]);
+        Assert.Equal(3, result.Metadata["totalQuestions"]);
+
+        var missingContext =
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(
+                result.Metadata["missingContext"]);
+
+        Assert.DoesNotContain("major", missingContext);
+    }
+
+    [Fact]
+    public async Task AuthenticatedUser_WithoutProfileMajor_AsksForMajorFirst()
+    {
+        var service = CreateService(
+            intent: "recommendation",
+            recommendationService:
+                new FakeTrackRecommendationService(),
+            userContext:
+                new RecommendationUserContextDto
+                {
+                    HasProfileData = false
+                });
+
+        var response = await service.HandleAsync(
+            new AssistantMessageRequest(
+                Message: "Recommend me a track.",
+                SessionId: null,
+                Language: "en",
+                Recommendation: null,
+                RecommendWithAvailableData: false),
+            Guid.NewGuid(),
+            true);
+
+        var result = Assert.Single(response.Results);
+
+        Assert.Equal("recommendation", result.Intent);
+        Assert.Equal(
+            "collecting_answers",
+            result.Metadata["state"]);
+        Assert.Equal("major", result.Metadata["questionKey"]);
+        Assert.Equal(1, result.Metadata["questionNumber"]);
+        Assert.Equal(4, result.Metadata["totalQuestions"]);
+
+        var missingContext =
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(
+                result.Metadata["missingContext"]);
+
+        Assert.Contains("major", missingContext);
+    }
+
     private static AssistantMessageService CreateService(
         string intent,
-        FakeTrackRecommendationService recommendationService)
+        FakeTrackRecommendationService recommendationService,
+        RecommendationUserContextDto? userContext = null)
     {
         return new AssistantMessageService(
             new FakeIntentRouter(intent),
             new FakeRagAnswerService(),
             new FakeSessionManager(),
             recommendationService,
-            new FakeApplicationStatusQueryService());
+            new FakeApplicationStatusQueryService(),
+            new FakeRecommendationUserContextService(
+                userContext ??
+                new RecommendationUserContextDto()));
     }
 
     private sealed class FakeIntentRouter(
@@ -246,6 +338,18 @@ public class AssistantMessageServiceTests
                 CancellationToken cancellationToken = default)
         {
             return Task.FromResult<ApplicationStatusDto?>(null);
+        }
+    }
+
+    private sealed class FakeRecommendationUserContextService(
+        RecommendationUserContextDto context)
+        : IRecommendationUserContextService
+    {
+        public Task<RecommendationUserContextDto> GetAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(context);
         }
     }
 }

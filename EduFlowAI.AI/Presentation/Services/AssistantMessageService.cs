@@ -8,8 +8,6 @@ namespace EduFlowAI.AI.Presentation.Services;
 
 public sealed class AssistantMessageService : IAssistantMessageService
 {
-    private const int RecommendationQuestionCount = 3;
-
     private readonly IIntentRouter _intentRouter;
     private readonly IRagAnswerService _ragAnswerService;
     private readonly ISessionManager _sessionManager;
@@ -17,19 +15,24 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _trackRecommendationService;
     private readonly IApplicationStatusQueryService
         _applicationStatusQueryService;
+    private readonly IRecommendationUserContextService
+        _recommendationUserContextService;
 
     public AssistantMessageService(
         IIntentRouter intentRouter,
         IRagAnswerService ragAnswerService,
         ISessionManager sessionManager,
         ITrackRecommendationService trackRecommendationService,
-        IApplicationStatusQueryService applicationStatusQueryService)
+        IApplicationStatusQueryService applicationStatusQueryService,
+        IRecommendationUserContextService recommendationUserContextService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
         _trackRecommendationService = trackRecommendationService;
         _applicationStatusQueryService = applicationStatusQueryService;
+        _recommendationUserContextService =
+            recommendationUserContextService;
     }
 
     public async Task<AssistantResponse> HandleAsync(
@@ -131,6 +134,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
             "recommendation" => await HandleRecommendationAsync(
                 recommendationProgress,
                 recommendWithAvailableData,
+                userId,
+                isAuthenticated,
                 language,
                 cancellationToken),
 
@@ -169,15 +174,26 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private async Task<AssistantResultDto> HandleRecommendationAsync(
         RecommendationQuestionnaireProgressDto? progress,
         bool recommendWithAvailableData,
+        Guid userId,
+        bool isAuthenticated,
         string language,
         CancellationToken cancellationToken)
     {
-        var missingContext = GetMissingImportantContext(progress);
+        var userContext = isAuthenticated
+            ? await _recommendationUserContextService.GetAsync(
+                userId,
+                cancellationToken)
+            : new RecommendationUserContextDto();
+
+        var missingContext = GetMissingImportantContext(
+            progress,
+            userContext);
 
         if (!recommendWithAvailableData)
         {
             var missingQuestion = GetNextMissingQuestion(
                 progress,
+                userContext,
                 language);
 
             if (missingQuestion is not null)
@@ -194,7 +210,10 @@ public sealed class AssistantMessageService : IAssistantMessageService
                         ["state"] = "collecting_answers",
                         ["questionKey"] = missingQuestion.Key,
                         ["questionNumber"] = missingQuestion.Number,
-                        ["totalQuestions"] = RecommendationQuestionCount,
+                        ["totalQuestions"] =
+                            GetRecommendationQuestionCount(
+                                progress,
+                                userContext),
                         ["canRecommendNow"] = true,
                         ["missingContext"] = missingContext,
                         ["advisory"] = true
@@ -202,7 +221,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
             }
         }
 
-        var questionnaire = CreateQuestionnaire(progress);
+        var questionnaire = CreateQuestionnaire(
+            progress,
+            userContext);
 
         var result = await _trackRecommendationService.RecommendAsync(
             questionnaire,
@@ -340,23 +361,81 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
     private static RecommendationQuestionnaireDto
         CreateQuestionnaire(
-            RecommendationQuestionnaireProgressDto? progress)
+            RecommendationQuestionnaireProgressDto? progress,
+            RecommendationUserContextDto userContext)
     {
-        if (progress is null)
-        {
-            return new RecommendationQuestionnaireDto();
-        }
-
         return new RecommendationQuestionnaireDto
         {
-            Major = NormalizeText(progress.Major),
-            TechnicalCourses = NormalizeValues(progress.TechnicalCourses),
-            Skills = NormalizeValues(progress.Skills),
-            Interests = NormalizeValues(progress.Interests),
-            PreferredActivities = NormalizeValues(progress.PreferredActivities),
-            CareerGoals = NormalizeValues(progress.CareerGoals),
-            AdditionalContext = NormalizeText(progress.AdditionalContext)
+            Major =
+                NormalizeText(userContext.Major) ??
+                NormalizeText(progress?.Major),
+
+            TechnicalCourses =
+                NormalizeValues(progress?.TechnicalCourses),
+
+            Skills =
+                NormalizeValues(progress?.Skills),
+
+            Interests =
+                NormalizeValues(progress?.Interests),
+
+            PreferredActivities =
+                NormalizeValues(progress?.PreferredActivities),
+
+            CareerGoals =
+                NormalizeValues(progress?.CareerGoals),
+
+            AdditionalContext = CombineAdditionalContext(
+                progress?.AdditionalContext,
+                userContext)
         };
+    }
+
+    private static string? CombineAdditionalContext(
+        string? chatContext,
+        RecommendationUserContextDto userContext)
+    {
+        var values = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(chatContext))
+        {
+            values.Add(chatContext.Trim());
+        }
+
+        if (userContext.HasProfileData)
+        {
+            if (!string.IsNullOrWhiteSpace(userContext.Faculty))
+            {
+                values.Add($"Faculty: {userContext.Faculty}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(userContext.University))
+            {
+                values.Add($"University: {userContext.University}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(userContext.DegreeLevel))
+            {
+                values.Add($"Degree level: {userContext.DegreeLevel}");
+            }
+
+            if (userContext.GraduationYear.HasValue)
+            {
+                values.Add(
+                    $"Graduation year: {userContext.GraduationYear.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    userContext.CumulativeGrade))
+            {
+                values.Add(
+                    $"Cumulative grade: {userContext.CumulativeGrade}");
+            }
+        }
+
+        return values.Count == 0
+            ? null
+            : string.Join("; ", values);
     }
 
     private static IReadOnlyCollection<string> NormalizeValues(
@@ -384,14 +463,31 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private static RecommendationQuestion?
         GetNextMissingQuestion(
             RecommendationQuestionnaireProgressDto? progress,
+            RecommendationUserContextDto userContext,
             string language)
     {
+        var majorIsMissing =
+            IsEffectiveMajorMissing(progress, userContext);
+
+        if (majorIsMissing &&
+            !IsSkipped(progress, "major"))
+        {
+            return new RecommendationQuestion(
+                "major",
+                1,
+                language == "ar"
+                    ? "ما هو تخصصك الدراسي؟"
+                    : "What is your academic major?");
+        }
+
+        var questionOffset = majorIsMissing ? 1 : 0;
+
         if (IsMissing(progress?.CareerGoals) &&
             !IsSkipped(progress, "careerGoals"))
         {
             return new RecommendationQuestion(
                 "careerGoals",
-                1,
+                1 + questionOffset,
                 language == "ar"
                     ? "ما هي أهدافك المهنية؟"
                     : "What are your career goals?");
@@ -402,7 +498,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         {
             return new RecommendationQuestion(
                 "interests",
-                2,
+                2 + questionOffset,
                 language == "ar"
                     ? "ما هي المجالات التقنية التي تهتم بها أكثر؟"
                     : "Which technical areas interest you the most?");
@@ -413,13 +509,31 @@ public sealed class AssistantMessageService : IAssistantMessageService
         {
             return new RecommendationQuestion(
                 "skills",
-                3,
+                3 + questionOffset,
                 language == "ar"
                     ? "ما هي المهارات التقنية التي تمتلكها؟"
                     : "What technical skills do you currently have?");
         }
 
         return null;
+    }
+
+    private static int GetRecommendationQuestionCount(
+        RecommendationQuestionnaireProgressDto? progress,
+        RecommendationUserContextDto userContext)
+    {
+        return IsEffectiveMajorMissing(progress, userContext) &&
+               !IsSkipped(progress, "major")
+            ? 4
+            : 3;
+    }
+
+    private static bool IsEffectiveMajorMissing(
+        RecommendationQuestionnaireProgressDto? progress,
+        RecommendationUserContextDto userContext)
+    {
+        return string.IsNullOrWhiteSpace(userContext.Major) &&
+               string.IsNullOrWhiteSpace(progress?.Major);
     }
 
     private static bool IsMissing(
@@ -442,16 +556,24 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private static bool HasSkippedImportantFields(
         RecommendationQuestionnaireProgressDto? progress)
     {
-        return IsSkipped(progress, "careerGoals") ||
+        return IsSkipped(progress, "major") ||
+               IsSkipped(progress, "careerGoals") ||
                IsSkipped(progress, "interests") ||
                IsSkipped(progress, "skills");
     }
 
     private static IReadOnlyList<string>
         GetMissingImportantContext(
-            RecommendationQuestionnaireProgressDto? progress)
+            RecommendationQuestionnaireProgressDto? progress,
+            RecommendationUserContextDto userContext)
     {
         var missingContext = new List<string>();
+
+        if (IsEffectiveMajorMissing(progress, userContext) &&
+            !IsSkipped(progress, "major"))
+        {
+            missingContext.Add("major");
+        }
 
         if (IsMissing(progress?.CareerGoals) &&
             !IsSkipped(progress, "careerGoals"))
