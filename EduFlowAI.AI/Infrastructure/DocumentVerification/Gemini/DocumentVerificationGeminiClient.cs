@@ -86,7 +86,12 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await ReadDetailAsync(response, cancellationToken);
+            throw new HttpRequestException(
+                $"Gemini document verification call failed with HTTP {(int)response.StatusCode}. {detail}");
+        }
 
         var envelope = await response.Content.ReadFromJsonAsync<GeminiResponseEnvelope>(
             JsonOptions,
@@ -100,6 +105,12 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
         }
 
         return json;
+    }
+
+    private static async Task<string> ReadDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var detail = await response.Content.ReadAsStringAsync(cancellationToken);
+        return detail.Length > 500 ? detail[..500] : detail;
     }
 
     private sealed record GeminiResponseEnvelope
