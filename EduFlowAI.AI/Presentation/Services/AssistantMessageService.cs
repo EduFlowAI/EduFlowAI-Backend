@@ -134,11 +134,6 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     language,
                     cancellationToken),
 
-            "document_status" =>
-                CreateDocumentStatusPendingResult(
-                    isAuthenticated,
-                    language),
-
             _ => CreateUnknownResult(language)
         };
     }
@@ -269,43 +264,6 @@ public sealed class AssistantMessageService : IAssistantMessageService
             });
     }
 
-    private static AssistantResultDto
-        CreateDocumentStatusPendingResult(
-            bool isAuthenticated,
-            string language)
-    {
-        if (!isAuthenticated)
-        {
-            return new AssistantResultDto(
-                Intent: "document_status",
-                Title: language == "ar"
-                    ? "حالة المستندات"
-                    : "Document Status",
-                Content: language == "ar"
-                    ? "من فضلك سجل الدخول لعرض حالة مستنداتك."
-                    : "Please log in to view your document status.",
-                Sources: [],
-                Metadata: new Dictionary<string, object?>
-                {
-                    ["requiresLogin"] = true
-                });
-        }
-
-        return new AssistantResultDto(
-            Intent: "document_status",
-            Title: language == "ar"
-                ? "حالة المستندات"
-                : "Document Status",
-            Content: language == "ar"
-                ? "تكامل حالة المستندات قيد التحديث حالياً."
-                : "Document status integration is currently being updated.",
-            Sources: [],
-            Metadata: new Dictionary<string, object?>
-            {
-                ["integrationPending"] = true
-            });
-    }
-
     private static AssistantResultDto CreateUnknownResult(
         string language)
     {
@@ -315,8 +273,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 ? "محتاج توضيح"
                 : "Clarification Needed",
             Content: language == "ar"
-                ? "اختر: سؤال عام، حالة الطلب، حالة المستندات، أو ترشيح مسار."
-                : "Choose: general question, application status, document status, or track recommendation.",
+                ? "اختر: سؤال عام، حالة الطلب، أو ترشيح مسار."
+                : "Choose: general question, application status, or track recommendation.",
             Sources: [],
             Metadata: new Dictionary<string, object?>());
     }
