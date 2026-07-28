@@ -261,11 +261,6 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
 
 
 
-
-
-
-
-
     public async Task<Result<FileDownloadDto>> DownloadDocumentAsync(
     Guid documentId,
     CancellationToken cancellationToken = default)
@@ -310,5 +305,37 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
 
         var dto = new FileDownloadDto(stream, document.OriginalFileName);
         return Result<FileDownloadDto>.Success(dto);
+    }
+
+
+
+
+
+
+    public async Task<Result<IEnumerable<ApplicantDocumentDto>>> GetDocumentsForApplicantAsync(string userId, CancellationToken cancellationToken)
+    {
+        // 1. Ask Halim's module for this user's current ApplicationId
+        var applicationId = await _applicationAccessReader.GetApplicationIdForUserAsync(userId, cancellationToken);
+
+        // Khorshid explicitly requested: "returns their documents, or an empty list if they have none - please don't throw"
+        if (applicationId == Guid.Empty)
+        {
+            return Result<IEnumerable<ApplicantDocumentDto>>.Success(Enumerable.Empty<ApplicantDocumentDto>());
+        }
+
+        // 2. Fetch and project directly to the DTO in one highly optimized query
+        var documents = await _dbContext.ApplicantDocuments
+            .AsNoTracking()
+            .Where(d => d.ApplicationId == applicationId)
+            .Select(d => new ApplicantDocumentDto(
+                d.Id,
+                d.DocumentType,
+                d.OriginalFileName,
+                d.Status,
+                d.CreatedAt
+            ))
+            .ToListAsync(cancellationToken);
+
+        return Result<IEnumerable<ApplicantDocumentDto>>.Success(documents);
     }
 }

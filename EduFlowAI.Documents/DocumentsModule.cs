@@ -7,7 +7,6 @@ using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Application.Validators;
 using EduFlowAI.Documents.Infrastructure.Auth;
-using EduFlowAI.Documents.Infrastructure.Fakes;
 using EduFlowAI.Documents.Infrastructure.Storage;
 using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Application.Services;
