@@ -125,14 +125,11 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 language,
                 cancellationToken),
 
-            // Temporary backward compatibility until Khorshid
-            // replaces "status" with "application_status".
-            "status" or "application_status" =>
-                await HandleApplicationStatusAsync(
-                    userId,
-                    isAuthenticated,
-                    language,
-                    cancellationToken),
+            "status" => await HandleApplicationStatusAsync(
+                userId,
+                isAuthenticated,
+                language,
+                cancellationToken),
 
             _ => CreateUnknownResult(language)
         };
@@ -199,7 +196,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         if (!isAuthenticated)
         {
             return new AssistantResultDto(
-                Intent: "application_status",
+                Intent: "status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -222,7 +219,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         if (applicationStatus is null)
         {
             return new AssistantResultDto(
-                Intent: "application_status",
+                Intent: "status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -244,7 +241,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     : $"Your current application status is: {applicationStatus.CurrentStatus}.";
 
         return new AssistantResultDto(
-            Intent: "application_status",
+            Intent: "status",
             Title: language == "ar"
                 ? "حالة الطلب"
                 : "Application Status",
