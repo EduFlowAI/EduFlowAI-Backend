@@ -12,11 +12,7 @@ namespace EduFlowAI.Documents.Application.Interfaces
             UploadDocumentDto dto,
             CancellationToken cancellationToken);
 
-
         Task<Result<IEnumerable<ApplicantDocumentDto>>> GetDocumentsByApplicationIdAsync(Guid applicationId, CancellationToken cancellationToken = default);
-
-
-
 
         Task<Result<FileDownloadDto>> DownloadDocumentAsync(Guid documentId, CancellationToken cancellationToken = default);
     }
