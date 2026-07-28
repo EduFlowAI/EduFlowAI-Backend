@@ -65,6 +65,9 @@ namespace EduFlowAI.Admission
             services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
             services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
 
+            // Needed by AI's document verification handler to resolve the applicant for an application.
+            services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
+
             return services;
         }
 
