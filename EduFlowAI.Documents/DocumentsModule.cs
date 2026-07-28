@@ -26,8 +26,8 @@ namespace EduFlowAI.Documents
             // Application + Infrastructure services registrations go here later
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
+
             services.AddScoped<IDocumentHumanReviewService, DocumentHumanReviewService>();
-            services.AddScoped<IApplicantDocumentService, ApplicantDocumentService>();
             services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
             services.AddScoped<IApplicantDocumentService, ApplicantDocumentService>();
             services.AddScoped<IValidator<UploadDocumentDto>, UploadDocumentDtoValidator>();

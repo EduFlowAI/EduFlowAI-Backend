@@ -64,6 +64,55 @@ public sealed class GeminiRecommendationModelClient(
                    "Gemini returned an invalid recommendation response.");
     }
 
+    public async Task<RecommendationModelResponseDto> RankFromMessageAsync(
+    ChatRecommendationModelRequestDto request,
+    CancellationToken cancellationToken = default)
+    {
+        ValidateConfiguration();
+
+        var endpoint =
+            $"v1beta/models/{Uri.EscapeDataString(_options.Model)}:generateContent";
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+        message.Headers.Add("x-goog-api-key", _options.ApiKey);
+
+        message.Content = JsonContent.Create(
+            CreatePayload(request),
+            options: JsonOptions);
+
+        using var response = await httpClient.SendAsync(
+            message,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var envelope =
+            await response.Content.ReadFromJsonAsync<GeminiResponseEnvelope>(
+                JsonOptions,
+                cancellationToken);
+
+        var json = envelope?
+            .Candidates?
+            .FirstOrDefault()?
+            .Content?
+            .Parts?
+            .FirstOrDefault()?
+            .Text;
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException(
+                "Gemini returned an empty chat recommendation response.");
+        }
+
+        return JsonSerializer.Deserialize<RecommendationModelResponseDto>(
+                   json,
+                   JsonOptions)
+               ?? throw new JsonException(
+                   "Gemini returned an invalid chat recommendation response.");
+    }
     private static object CreatePayload(RecommendationModelRequestDto request)
     {
         return new
@@ -126,6 +175,74 @@ public sealed class GeminiRecommendationModelClient(
                     {
                         "recommendations"
                     }
+                }
+            }
+        };
+    }
+
+    private static object CreatePayload(
+    ChatRecommendationModelRequestDto request)
+    {
+        return new
+        {
+            contents = new[]
+            {
+            new
+            {
+                role = "user",
+                parts = new[]
+                {
+                    new
+                    {
+                        text = RecommendationPromptBuilder.Build(request)
+                    }
+                }
+            }
+        },
+            generationConfig = new
+            {
+                temperature = 0.2,
+                responseMimeType = "application/json",
+                responseSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        recommendations = new
+                        {
+                            type = "array",
+                            maxItems = 3,
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    trackId = new
+                                    {
+                                        type = "string"
+                                    },
+                                    rank = new
+                                    {
+                                        type = "integer"
+                                    },
+                                    reason = new
+                                    {
+                                        type = "string"
+                                    }
+                                },
+                                required = new[]
+                                {
+                                "trackId",
+                                "rank",
+                                "reason"
+                            }
+                            }
+                        }
+                    },
+                    required = new[]
+                    {
+                    "recommendations"
+                }
                 }
             }
         };

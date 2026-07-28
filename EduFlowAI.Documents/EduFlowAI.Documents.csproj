@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
-    <ProjectReference Include="..\EduFlowAI.AI\EduFlowAI.AI.csproj" />
     <ProjectReference Include="..\EduFlowAI.Communication\EduFlowAI.Communication.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Kernel\EduFlowAI.Shared.Kernel.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Messaging.Contracts\EduFlowAI.Shared.Messaging.Contracts.csproj" />

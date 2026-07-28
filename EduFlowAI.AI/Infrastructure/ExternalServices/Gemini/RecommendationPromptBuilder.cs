@@ -42,4 +42,40 @@ internal static class RecommendationPromptBuilder
             {{JsonSerializer.Serialize(input, JsonOptions)}}
             """;
     }
+
+    public static string Build(ChatRecommendationModelRequestDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var input = new
+        {
+            message = request.Message,
+            offeredTracks = request.OfferedTracks.Select(track => new
+            {
+                trackId = track.TrackId,
+                name = track.Name,
+                description = track.Description,
+                prerequisiteTopics = track.PrerequisiteTopics
+            })
+        };
+
+        return $$"""
+        You are an advisory track recommendation assistant for the ITI admission platform.
+
+        Use only the user's short chat message and the supplied offered track metadata.
+
+        Rules:
+        - Return at most three distinct recommendations.
+        - Use only the supplied trackId values.
+        - Rank results from 1 upward.
+        - Give one concise reason linked to the user's message.
+        - Do not invent tracks, IDs, prerequisites, scores, or percentages.
+        - If the message does not contain enough useful preference information, return an empty recommendations array.
+        - Recommendations are advisory and do not determine eligibility or admission.
+        - Return JSON matching the requested schema exactly.
+
+        Input:
+        {{JsonSerializer.Serialize(input, JsonOptions)}}
+        """;
+    }
 }

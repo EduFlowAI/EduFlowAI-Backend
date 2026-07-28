@@ -9,6 +9,8 @@ using EduFlowAI.AI.Infrastructure.Persistence;
 using EduFlowAI.AI.Infrastructure.Processing;
 using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
+using EduFlowAI.AI.Presentation.Interfaces;
+using EduFlowAI.AI.Presentation.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -101,6 +103,8 @@ public static class AIModule
             .ValidateOnStart();
 
         services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
+        services.AddScoped<IChatRecommendationService, ChatRecommendationService>();
+        services.AddScoped<IAssistantMessageService, AssistantMessageService>();
 
         services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()
             .ConfigureHttpClient((serviceProvider, client) =>

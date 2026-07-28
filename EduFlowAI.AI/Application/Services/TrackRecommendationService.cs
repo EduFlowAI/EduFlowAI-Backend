@@ -1,5 +1,7 @@
 ﻿namespace EduFlowAI.AI.Application.Services;
 
+using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Exceptions;
 using EduFlowAI.AI.Application.Interfaces;
