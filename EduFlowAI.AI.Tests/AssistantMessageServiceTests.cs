@@ -12,12 +12,10 @@ public class AssistantMessageServiceTests
     [Fact]
     public async Task KnowledgeIntent_ReturnsRagResult()
     {
-        var service = new AssistantMessageService(
-            new FakeIntentRouter(),
-            new FakeRagAnswerService(),
-            new FakeSessionManager(),
-            new FakeTrackRecommendationService(),
-            new FakeApplicationStatusQueryService());
+        var service = CreateService(
+            intent: "knowledge",
+            recommendationService:
+                new FakeTrackRecommendationService());
 
         var response = await service.HandleAsync(
             new AssistantMessageRequest(
@@ -36,7 +34,68 @@ public class AssistantMessageServiceTests
         Assert.False(response.RequiresClarification);
     }
 
-    private sealed class FakeIntentRouter : IIntentRouter
+    [Fact]
+    public async Task RecommendWithAvailableData_ReturnsCompletedWithoutAskingQuestions()
+    {
+        var recommendationService =
+            new FakeTrackRecommendationService();
+
+        var service = CreateService(
+            intent: "recommendation",
+            recommendationService);
+
+        var request = new AssistantMessageRequest(
+            Message: "Recommend based on what you know.",
+            SessionId: null,
+            Language: "en",
+            Recommendation:
+                new RecommendationQuestionnaireProgressDto
+                {
+                    Interests = ["Backend Development"]
+                },
+            RecommendWithAvailableData: true);
+
+        var response = await service.HandleAsync(
+            request,
+            Guid.Empty,
+            false);
+
+        var result = Assert.Single(response.Results);
+
+        Assert.Equal("recommendation", result.Intent);
+        Assert.Equal("Recommended Tracks", result.Title);
+        Assert.Equal("completed", result.Metadata["state"]);
+        Assert.Equal(true, result.Metadata["basedOnAvailableData"]);
+        Assert.Equal(true, result.Metadata["advisory"]);
+
+        Assert.NotNull(recommendationService.LastQuestionnaire);
+
+        Assert.Contains(
+            "Backend Development",
+            recommendationService.LastQuestionnaire.Interests);
+
+        Assert.Empty(
+            recommendationService.LastQuestionnaire.CareerGoals);
+
+        Assert.Empty(
+            recommendationService.LastQuestionnaire.Skills);
+    }
+
+    private static AssistantMessageService CreateService(
+        string intent,
+        FakeTrackRecommendationService recommendationService)
+    {
+        return new AssistantMessageService(
+            new FakeIntentRouter(intent),
+            new FakeRagAnswerService(),
+            new FakeSessionManager(),
+            recommendationService,
+            new FakeApplicationStatusQueryService());
+    }
+
+    private sealed class FakeIntentRouter(
+        string intent)
+        : IIntentRouter
     {
         public Task<IntentClassificationDto> ClassifyAsync(
             string userQuestion,
@@ -46,17 +105,17 @@ public class AssistantMessageServiceTests
             return Task.FromResult(
                 new IntentClassificationDto
                 {
-                    PrimaryIntent = "knowledge",
+                    PrimaryIntent = intent,
                     Confidence = 0.95m,
-                    RoutedTo = "knowledge_rag",
+                    RoutedTo = GetRoute(intent),
                     RequiresClarification = false,
                     Intents =
                     [
                         new DetectedIntentDto
                         {
-                            Intent = "knowledge",
+                            Intent = intent,
                             Confidence = 0.95m,
-                            RoutedTo = "knowledge_rag"
+                            RoutedTo = GetRoute(intent)
                         }
                     ]
                 });
@@ -65,6 +124,17 @@ public class AssistantMessageServiceTests
         public string GetClarificationMessage(string language)
         {
             return "Clarify";
+        }
+
+        private static string GetRoute(string intent)
+        {
+            return intent switch
+            {
+                "knowledge" => "knowledge_rag",
+                "recommendation" => "recommendations_agent",
+                "status" => "status_service",
+                _ => "unknown"
+            };
         }
     }
 
@@ -128,14 +198,32 @@ public class AssistantMessageServiceTests
     private sealed class FakeTrackRecommendationService
         : ITrackRecommendationService
     {
+        public RecommendationQuestionnaireDto? LastQuestionnaire
+        {
+            get;
+            private set;
+        }
+
         public Task<TrackRecommendationResultDto> RecommendAsync(
             RecommendationQuestionnaireDto questionnaire,
             CancellationToken cancellationToken = default)
         {
+            LastQuestionnaire = questionnaire;
+
             return Task.FromResult(
                 new TrackRecommendationResultDto
                 {
-                    Recommendations = [],
+                    Recommendations =
+                    [
+                        new RecommendedTrackResultDto
+                        {
+                            TrackId = Guid.NewGuid(),
+                            TrackName = ".NET Development",
+                            Rank = 1,
+                            Reason =
+                                "Matches the available backend-development interest."
+                        }
+                    ],
                     UsedFallback = false,
                     AdvisoryNotice =
                         "These recommendations are advisory only."

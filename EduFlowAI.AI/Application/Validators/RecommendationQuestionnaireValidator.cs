@@ -1,5 +1,4 @@
-﻿
-using EduFlowAI.AI.Application.DTOs;
+﻿using EduFlowAI.AI.Application.DTOs;
 
 namespace EduFlowAI.AI.Application.Validators;
 
@@ -15,54 +14,51 @@ public static class RecommendationQuestionnaireValidator
 
         var errors = new List<string>();
 
-        ValidateRequiredText(
+        ValidateOptionalText(
             questionnaire.Major,
             nameof(questionnaire.Major),
             errors);
 
-        ValidateCollection(
+        ValidateOptionalCollection(
             questionnaire.TechnicalCourses,
             nameof(questionnaire.TechnicalCourses),
             errors);
 
-        ValidateCollection(
+        ValidateOptionalCollection(
             questionnaire.Skills,
             nameof(questionnaire.Skills),
             errors);
 
-        ValidateCollection(
+        ValidateOptionalCollection(
             questionnaire.Interests,
             nameof(questionnaire.Interests),
             errors);
 
-        ValidateCollection(
+        ValidateOptionalCollection(
             questionnaire.PreferredActivities,
             nameof(questionnaire.PreferredActivities),
             errors);
 
-        ValidateCollection(
+        ValidateOptionalCollection(
             questionnaire.CareerGoals,
             nameof(questionnaire.CareerGoals),
             errors);
 
-        if (questionnaire.AdditionalContext?.Length > MaximumTextLength)
-        {
-            errors.Add(
-                $"{nameof(questionnaire.AdditionalContext)} must not exceed " +
-                $"{MaximumTextLength} characters.");
-        }
+        ValidateOptionalText(
+            questionnaire.AdditionalContext,
+            nameof(questionnaire.AdditionalContext),
+            errors);
 
         return errors;
     }
 
-    private static void ValidateRequiredText(
+    private static void ValidateOptionalText(
         string? value,
         string fieldName,
         ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            errors.Add($"{fieldName} is required.");
             return;
         }
 
@@ -73,14 +69,13 @@ public static class RecommendationQuestionnaireValidator
         }
     }
 
-    private static void ValidateCollection(
+    private static void ValidateOptionalCollection(
         IReadOnlyCollection<string>? values,
         string fieldName,
         ICollection<string> errors)
     {
-        if (values is null || values.Count == 0)
+        if (values is null)
         {
-            errors.Add($"{fieldName} must contain at least one value.");
             return;
         }
 
@@ -93,7 +88,8 @@ public static class RecommendationQuestionnaireValidator
 
         if (values.Any(string.IsNullOrWhiteSpace))
         {
-            errors.Add($"{fieldName} must not contain empty values.");
+            errors.Add(
+                $"{fieldName} must not contain empty values.");
         }
 
         if (values.Any(value => value.Length > MaximumTextLength))
