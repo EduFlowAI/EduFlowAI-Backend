@@ -16,7 +16,7 @@ public class AssistantMessageServiceTests
             new FakeIntentRouter(),
             new FakeRagAnswerService(),
             new FakeSessionManager(),
-            new FakeChatRecommendationService(),
+            new FakeTrackRecommendationService(),
             new FakeApplicationStatusQueryService());
 
         var response = await service.HandleAsync(
@@ -125,20 +125,20 @@ public class AssistantMessageServiceTests
         }
     }
 
-    private sealed class FakeChatRecommendationService
-        : IChatRecommendationService
+    private sealed class FakeTrackRecommendationService
+        : ITrackRecommendationService
     {
-        public Task<ChatRecommendationResultDto>
-            RecommendFromMessageAsync(
-                string message,
-                CancellationToken cancellationToken = default)
+        public Task<TrackRecommendationResultDto> RecommendAsync(
+            RecommendationQuestionnaireDto questionnaire,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(
-                new ChatRecommendationResultDto
+                new TrackRecommendationResultDto
                 {
-                    Message = "Test recommendation",
-                    ShouldUseQuestionnaire = true,
-                    Recommendations = []
+                    Recommendations = [],
+                    UsedFallback = false,
+                    AdvisoryNotice =
+                        "These recommendations are advisory only."
                 });
         }
     }
