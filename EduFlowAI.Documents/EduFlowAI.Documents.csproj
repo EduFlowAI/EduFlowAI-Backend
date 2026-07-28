@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Folder Include="Infrastructure\ExternalServices\" />
+    <Folder Include="Infrastructure\Fake\" />
     <Folder Include="Presentation\Responses\" />
   </ItemGroup>
 
