@@ -70,6 +70,9 @@ public static class AIModule
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
 
+        // Phrases the applicant's document statuses warmly, grounded in the facts (§ document_status).
+        services.AddScoped<IDocumentStatusNarrator, DocumentStatusNarrator>();
+
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
