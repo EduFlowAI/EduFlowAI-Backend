@@ -1,6 +1,9 @@
+using EduFlowAI.AI.Application.DocumentVerification;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
+using EduFlowAI.AI.Infrastructure.DocumentVerification;
+using EduFlowAI.AI.Infrastructure.DocumentVerification.Gemini;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
 using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 using EduFlowAI.AI.Infrastructure.Indexing;
@@ -134,7 +137,31 @@ public static class AIModule
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
+        services.AddDocumentVerificationServices();
 
         return services;
+    }
+
+    // Document verification (Seif). Only the Worker consumes VerifyApplicantDocumentV1, so this
+    // is wired into AddAIWorkerModule rather than the API-facing AddAIModule.
+    private static void AddDocumentVerificationServices(this IServiceCollection services)
+    {
+        services.AddOptions<GeminiOptions>()
+            .BindConfiguration(GeminiOptions.SectionName);
+
+        services.AddScoped<IDocumentVerificationFileReader, DocumentVerificationFileReader>();
+        services.AddScoped<IDocumentVerificationContextReader, DocumentVerificationContextReader>();
+        services.AddScoped<IDocumentVerificationService, DocumentVerificationService>();
+
+        services.AddHttpClient<IDocumentVerificationGeminiClient, DocumentVerificationGeminiClient>(
+            (serviceProvider, client) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<IOptions<GeminiOptions>>()
+                    .Value;
+
+                client.BaseAddress = new Uri(options.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
     }
 }

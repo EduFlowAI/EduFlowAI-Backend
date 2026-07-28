@@ -57,6 +57,14 @@ namespace EduFlowAI.Admission.Application.Services
             return application.Cycle.ProgramId;
         }
 
+        public async Task<string> GetApplicantUserIdAsync(Guid applicationId, CancellationToken cancellationToken)
+        {
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
+            if (application == null)
+            {
+                throw new Exception("This application is not found");
+            }
+            return application.ApplicantUserId;
         public async Task<Guid> GetApplicationIdForUserAsync(string applicantUserId, CancellationToken cancellationToken)
         {
             var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.ApplicantUserId == applicantUserId);

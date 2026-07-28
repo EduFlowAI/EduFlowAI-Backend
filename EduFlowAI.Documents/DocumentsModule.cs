@@ -38,6 +38,7 @@ namespace EduFlowAI.Documents
 
             services.AddScoped<IProfileService, ProfileService>();
 
+            services.AddScoped<IDocumentVerificationQueryService, DocumentVerificationQueryService>();
 
             return services;
         }
@@ -45,6 +46,10 @@ namespace EduFlowAI.Documents
         public static IServiceCollection AddDocumentsWorkerModule(this IServiceCollection services)
         {
             services.AddScoped<IEmailTemplate, DocumentReplacementRequestEmailTemplate>();
+
+            // Needed by AI's document verification handler (file reader + expected-field lookup).
+            services.AddScoped<IFileStorageService, FileStorageService>();
+            services.AddScoped<IProfileService, ProfileService>();
 
             return services;
         }
