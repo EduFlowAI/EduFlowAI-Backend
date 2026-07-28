@@ -1,5 +1,4 @@
-﻿namespace EduFlowAI.AI.Application.DTOs;
-
+﻿namespace EduFlowAI.Admission.Application.DTOs;
 public sealed record OfferedTrackForRecommendationDto
 {
     public required Guid TrackId { get; init; }

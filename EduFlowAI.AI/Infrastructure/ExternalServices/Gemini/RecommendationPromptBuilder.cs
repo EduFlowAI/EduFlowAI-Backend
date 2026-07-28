@@ -42,4 +42,6 @@ internal static class RecommendationPromptBuilder
             {{JsonSerializer.Serialize(input, JsonOptions)}}
             """;
     }
+
+    
 }

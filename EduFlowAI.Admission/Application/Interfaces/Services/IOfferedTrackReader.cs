@@ -1,7 +1,7 @@
-﻿using EduFlowAI.AI.Application.DTOs;
+﻿
+using EduFlowAI.Admission.Application.DTOs;
 
-namespace EduFlowAI.AI.Application.Interfaces;
-
+namespace EduFlowAI.Admission.Application.Interfaces.Services;
 public interface IOfferedTrackReader
 {
     Task<IReadOnlyList<OfferedTrackForRecommendationDto>>

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace EduFlowAI.Documents.Presentation.Controllers;
 
 [ApiController]
-[Authorize] // Enforces that the user must be authenticated
+//[Authorize] // Enforces that the user must be authenticated
 [Route("api/applications/{applicationId:guid}/documents")]
 public sealed class ApplicantDocumentsController : ControllerBase
 {

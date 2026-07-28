@@ -2,6 +2,7 @@ using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 
+
 namespace EduFlowAI.Admission.Application.Services;
 
 // Fills the AI module's status reader port from this module's status query service.
