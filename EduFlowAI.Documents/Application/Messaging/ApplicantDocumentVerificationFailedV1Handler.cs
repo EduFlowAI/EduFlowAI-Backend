@@ -71,4 +71,3 @@ public sealed class ApplicantDocumentVerificationFailedV1Handler
         await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
     }
 }
-}

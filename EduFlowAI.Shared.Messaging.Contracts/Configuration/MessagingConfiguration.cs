@@ -24,7 +24,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
 
                 builder.UseWolverine(options =>
                 {
-                    options.ServiceName = "EduFlowAI";
+                    options.ServiceName = hostName;
 
                     options.PersistMessagesWithPostgresql(databaseConnection!, schemaName: "messaging");
                     options.UseEntityFrameworkCoreTransactions();
@@ -93,8 +93,7 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentStatusNotifications);
             options.ListenToRabbitQueue(MessagingQueueNames.DocumentReplacementFulfilled);
             options.ListenToRabbitQueue(MessagingQueueNames.SendEmail);
-            options.ListenToRabbitQueue(MessagingQueueNames.RealtimeNotification);
-            options.ListenToRabbitQueue(MessagingQueueNames.CreateNotification);
+            //options.ListenToRabbitQueue(MessagingQueueNames.CreateNotification);
         }
 
         public static void ConfigureApiListeners(WolverineOptions options)

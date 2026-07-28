@@ -5,7 +5,7 @@ using EduFlowAI.Admission.Domain.Enums;
 
 namespace EduFlowAI.Documents.Infrastructure.Fakes;
 
-public sealed class FakeApplicantProfileReader : IApplicantProfileReader
+public sealed class FakeApplicantProfileReader
 {
     public Task<Gender> GetApplicantGenderAsync(string userId, CancellationToken cancellationToken)
     {
