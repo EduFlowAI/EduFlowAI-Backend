@@ -70,9 +70,6 @@ public static class AIModule
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
 
-        // IApplicationStatusReader is supplied by the Admission module.
-        services.AddScoped<IStatusAnswerService, StatusAnswerService>();
-
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
         services.AddSingleton<ISessionManager, InMemorySessionManager>();
