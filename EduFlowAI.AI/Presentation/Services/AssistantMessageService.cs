@@ -209,8 +209,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
             cancellationToken);
 
         var basedOnAvailableData =
-            recommendWithAvailableData &&
-            missingContext.Count > 0;
+            recommendWithAvailableData ||
+            HasSkippedImportantFields(progress);
 
         if (result.Recommendations.Count == 0)
         {
@@ -386,34 +386,37 @@ public sealed class AssistantMessageService : IAssistantMessageService
             RecommendationQuestionnaireProgressDto? progress,
             string language)
     {
-        if (IsMissing(progress?.CareerGoals))
+        if (IsMissing(progress?.CareerGoals) &&
+            !IsSkipped(progress, "careerGoals"))
         {
             return new RecommendationQuestion(
                 "careerGoals",
                 1,
                 language == "ar"
-                    ? "ما هي أهدافك المهنية؟ يمكنك تخطي السؤال وطلب الترشيح بالمعلومات المتاحة."
-                    : "What are your career goals? You can skip this and ask me to recommend using the available information.");
+                    ? "ما هي أهدافك المهنية؟"
+                    : "What are your career goals?");
         }
 
-        if (IsMissing(progress?.Interests))
+        if (IsMissing(progress?.Interests) &&
+            !IsSkipped(progress, "interests"))
         {
             return new RecommendationQuestion(
                 "interests",
                 2,
                 language == "ar"
-                    ? "ما هي المجالات التقنية التي تهتم بها أكثر؟ يمكنك طلب الترشيح الآن إذا أردت."
-                    : "Which technical areas interest you the most? You can ask me to recommend now if you prefer.");
+                    ? "ما هي المجالات التقنية التي تهتم بها أكثر؟"
+                    : "Which technical areas interest you the most?");
         }
 
-        if (IsMissing(progress?.Skills))
+        if (IsMissing(progress?.Skills) &&
+            !IsSkipped(progress, "skills"))
         {
             return new RecommendationQuestion(
                 "skills",
                 3,
                 language == "ar"
-                    ? "ما هي المهارات التقنية التي تمتلكها؟ ويمكنك المتابعة بدون إضافة مهارات."
-                    : "What technical skills do you currently have? You can also continue without adding any skills.");
+                    ? "ما هي المهارات التقنية التي تمتلكها؟"
+                    : "What technical skills do you currently have?");
         }
 
         return null;
@@ -427,23 +430,43 @@ public sealed class AssistantMessageService : IAssistantMessageService
                values.All(string.IsNullOrWhiteSpace);
     }
 
+    private static bool IsSkipped(
+        RecommendationQuestionnaireProgressDto? progress,
+        string fieldName)
+    {
+        return progress?.SkippedFields?.Contains(
+            fieldName,
+            StringComparer.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool HasSkippedImportantFields(
+        RecommendationQuestionnaireProgressDto? progress)
+    {
+        return IsSkipped(progress, "careerGoals") ||
+               IsSkipped(progress, "interests") ||
+               IsSkipped(progress, "skills");
+    }
+
     private static IReadOnlyList<string>
         GetMissingImportantContext(
             RecommendationQuestionnaireProgressDto? progress)
     {
         var missingContext = new List<string>();
 
-        if (IsMissing(progress?.CareerGoals))
+        if (IsMissing(progress?.CareerGoals) &&
+            !IsSkipped(progress, "careerGoals"))
         {
             missingContext.Add("careerGoals");
         }
 
-        if (IsMissing(progress?.Interests))
+        if (IsMissing(progress?.Interests) &&
+            !IsSkipped(progress, "interests"))
         {
             missingContext.Add("interests");
         }
 
-        if (IsMissing(progress?.Skills))
+        if (IsMissing(progress?.Skills) &&
+            !IsSkipped(progress, "skills"))
         {
             missingContext.Add("skills");
         }
