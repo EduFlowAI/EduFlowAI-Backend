@@ -1,4 +1,4 @@
-namespace EduFlowAI.Shared.Kernel.Contracts;
+namespace EduFlowAI.Identity.Application.Interfaces;
 
 public interface IApplicantProfileLocker
 {

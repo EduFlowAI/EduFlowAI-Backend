@@ -1,11 +1,17 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Communication.Application.Interfaces;
+using EduFlowAI.Communication.Application.Interfaces.Emails;
+using EduFlowAI.Communication.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
+using EduFlowAI.Documents.Application.Emails;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Domain.Enums;
+using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
+using EduFlowAI.Shared.Kernel.Messaging;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -14,9 +20,11 @@ using System.Text;
 
 namespace EduFlowAI.Documents.Application.Services
 {
-    public class ReplacementRequestService(IDocumentDbContext dbContext, UserManager<AppUser> userManager, IAdmissionDbContext admissionDbContext) : IReplacementRequestService
+    public class ReplacementRequestService(IDocumentDbContext dbContext, IUserContactInfoReader userContactInfoReader, 
+        IAdmissionDbContext admissionDbContext, INotificationService notificationService, IEmailDispatcher emailDispatcher, IOutboxPublisher outboxPublisher) 
+        : IReplacementRequestService
     {
-        public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById)
+        public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById, CancellationToken cancellationToken)
         {
             try
             {
@@ -24,12 +32,6 @@ namespace EduFlowAI.Documents.Application.Services
                 if (doc == null)
                 {
                     return Result<string>.Failure(404, "Document not found");
-                }
-
-                var isAuthorizedUser = await IsUserAuthorizedAsync(requestedById);
-                if (!isAuthorizedUser)
-                {
-                    return Result<string>.Failure(403, "User is not authorized to send replacement requests");
                 }
 
                 var replacementRequest = new Domain.Entities.DocumentReplacementRequest
@@ -43,9 +45,24 @@ namespace EduFlowAI.Documents.Application.Services
                 };
 
                 await dbContext.DocumentReplacementRequests.AddAsync(replacementRequest);
-                await dbContext.SaveChangesAsync();
 
-                // may send notification/email to applicant about replacement request here
+                var applicant = await GetApplicant(doc.ApplicationId);
+                // send notification
+                await notificationService.NotifyAsync(new CreateNotificationRequest(
+                    UserId: applicant.UserId,
+                    ApplicationId: doc.ApplicationId,
+                    Type: NotificationType.DocumentReplacementRequested,
+                    Message: $"Your {doc.DocumentType.ToString()} needs to be replaced!"),
+                    cancellationToken);
+                // send email
+                await emailDispatcher.RequestEmailAsync(
+                    EmailType.DocumentReplacementRequested,
+                    applicant.Email!,
+                    new DocumentReplacementRequestEmailData(doc.DocumentType.ToString(), request.Reason),
+                    cancellationToken);
+
+                // save transaction
+                await outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
 
                 return Result<string>.Success("Replacement request sent successfully");
             }
@@ -143,14 +160,16 @@ namespace EduFlowAI.Documents.Application.Services
         }
 
         // helpers
-        private async Task<bool> IsUserAuthorizedAsync(string userId)
+        private async Task<UserContactInfo> GetApplicant(Guid applicationId)
         {
-            var user = await userManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                return false;
-            }
-            return await userManager.IsInRoleAsync(user, "Admin") || await userManager.IsInRoleAsync(user, "Operation Manager");
+            var id = await admissionDbContext.Applications
+                .Where(a => a.Id == applicationId)
+                .Select(a => a.ApplicantUserId)
+                .FirstOrDefaultAsync();
+
+            var user = await userContactInfoReader.GetContactInfoAsync(id!, default);
+
+            return user;
         }
     }
 }

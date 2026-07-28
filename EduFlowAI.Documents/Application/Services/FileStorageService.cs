@@ -65,8 +65,33 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
             using var fileStream = new FileStream(fullFilePath, FileMode.CreateNew, FileAccess.Write);
             await stream.CopyToAsync(fileStream, cancellationToken);
 
-            // Return the secure path so the API can save it to the ApplicantDocument database row
-            return fullFilePath;
+            return secureFileName;
+        }
+
+        //public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default)
+        //{
+        //    cancellationToken.ThrowIfCancellationRequested();
+        //    var fullPath = ResolveStoragePath(storageKey);
+        //    Stream stream = new FileStream(
+        //        fullPath,
+        //        FileMode.Open,
+        //        FileAccess.Read,
+        //        FileShare.Read,
+        //        bufferSize: 64 * 1024,
+        //        options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+        //    return Task.FromResult(stream);
+        //}
+
+        public Task DeleteAsync(string storageKey, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var fullPath = ResolveStoragePath(storageKey);
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+            }
+
+            return Task.CompletedTask;
         }
 
         public Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken = default)
@@ -122,6 +147,23 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
 
             return allowedSignatures.Any(signature =>
                 headerBytes.Take(signature.Length).SequenceEqual(signature));
+        }
+
+        private string ResolveStoragePath(string storageKey)
+        {
+            if (string.IsNullOrWhiteSpace(storageKey))
+                throw new ArgumentException("Storage key cannot be empty.", nameof(storageKey));
+
+            // Older rows may contain the absolute path returned by the original implementation.
+            var candidate = Path.IsPathRooted(storageKey)
+                ? Path.GetFullPath(storageKey)
+                : Path.GetFullPath(Path.Combine(_storageDirectory, storageKey));
+            var root = Path.GetFullPath(_storageDirectory) + Path.DirectorySeparatorChar;
+
+            if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("The storage key is outside secure storage.");
+
+            return candidate;
         }
     }
 }

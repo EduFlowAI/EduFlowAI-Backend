@@ -16,6 +16,6 @@ namespace EduFlowAI.Admission.Application.DTOs
         public bool IsAgentUncertain { get; set; }
 
         // The ID of the employee who performed the review
-        public required string ReviewedByUserId { get; set; }
+        public string? ReviewedByUserId { get; set; }
     }
 }

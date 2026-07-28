@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Identity.Application.Services;
 
-internal sealed class ProfileService(
+public sealed class ProfileService(
     IIdentityDbContext dbContext) : IProfileService
 {
     public async Task<IdentityOperationResult<ProfileResponse>> GetAsync(
