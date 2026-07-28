@@ -3,7 +3,6 @@ using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
-using EduFlowAI.Documents.Application.Interfaces;
 
 namespace EduFlowAI.AI.Presentation.Services;
 
@@ -15,25 +14,19 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private readonly IChatRecommendationService _chatRecommendationService;
     private readonly IApplicationStatusQueryService
         _applicationStatusQueryService;
-    private readonly IApplicantDocumentStatusQueryService
-        _applicantDocumentStatusQueryService;
 
     public AssistantMessageService(
         IIntentRouter intentRouter,
         IRagAnswerService ragAnswerService,
         ISessionManager sessionManager,
         IChatRecommendationService chatRecommendationService,
-        IApplicationStatusQueryService applicationStatusQueryService,
-        IApplicantDocumentStatusQueryService
-            applicantDocumentStatusQueryService)
+        IApplicationStatusQueryService applicationStatusQueryService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
         _chatRecommendationService = chatRecommendationService;
         _applicationStatusQueryService = applicationStatusQueryService;
-        _applicantDocumentStatusQueryService =
-            applicantDocumentStatusQueryService;
     }
 
     public async Task<AssistantResponse> HandleAsync(
@@ -142,11 +135,9 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     cancellationToken),
 
             "document_status" =>
-                await HandleDocumentStatusAsync(
-                    userId,
+                CreateDocumentStatusPendingResult(
                     isAuthenticated,
-                    language,
-                    cancellationToken),
+                    language),
 
             _ => CreateUnknownResult(language)
         };
@@ -278,12 +269,10 @@ public sealed class AssistantMessageService : IAssistantMessageService
             });
     }
 
-    private async Task<AssistantResultDto>
-        HandleDocumentStatusAsync(
-            Guid userId,
+    private static AssistantResultDto
+        CreateDocumentStatusPendingResult(
             bool isAuthenticated,
-            string language,
-            CancellationToken cancellationToken)
+            string language)
     {
         if (!isAuthenticated)
         {
@@ -302,51 +291,18 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 });
         }
 
-        var documentStatus =
-            await _applicantDocumentStatusQueryService
-                .GetCurrentDocumentStatusForApplicantAsync(
-                    userId.ToString(),
-                    cancellationToken);
-
-        if (documentStatus is null)
-        {
-            return new AssistantResultDto(
-                Intent: "document_status",
-                Title: language == "ar"
-                    ? "حالة المستندات"
-                    : "Document Status",
-                Content: language == "ar"
-                    ? "لا يوجد طلب تقديم حالي أو مستندات مرتبطة بحسابك."
-                    : "No current application or document records were found for your account.",
-                Sources: [],
-                Metadata: new Dictionary<string, object?>
-                {
-                    ["documentStatusFound"] = false
-                });
-        }
-
-        var content = language == "ar"
-            ? $"الحالة العامة لمستنداتك هي: {documentStatus.OverallStatus}."
-            : $"Your overall document status is: {documentStatus.OverallStatus}.";
-
         return new AssistantResultDto(
             Intent: "document_status",
             Title: language == "ar"
                 ? "حالة المستندات"
                 : "Document Status",
-            Content: content,
+            Content: language == "ar"
+                ? "تكامل حالة المستندات قيد التحديث حالياً."
+                : "Document status integration is currently being updated.",
             Sources: [],
             Metadata: new Dictionary<string, object?>
             {
-                ["documentStatusFound"] = true,
-                ["applicationId"] =
-                    documentStatus.ApplicationId,
-                ["overallStatus"] =
-                    documentStatus.OverallStatus,
-                ["lastUpdatedAt"] =
-                    documentStatus.LastUpdatedAt,
-                ["documents"] =
-                    documentStatus.Documents
+                ["integrationPending"] = true
             });
     }
 

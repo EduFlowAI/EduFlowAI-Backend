@@ -4,8 +4,6 @@ using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Services;
-using EduFlowAI.Documents.Application.DTOs;
-using EduFlowAI.Documents.Application.Interfaces;
 
 namespace EduFlowAI.AI.Tests;
 
@@ -19,8 +17,7 @@ public class AssistantMessageServiceTests
             new FakeRagAnswerService(),
             new FakeSessionManager(),
             new FakeChatRecommendationService(),
-            new FakeApplicationStatusQueryService(),
-            new FakeApplicantDocumentStatusQueryService());
+            new FakeApplicationStatusQueryService());
 
         var response = await service.HandleAsync(
             new AssistantMessageRequest(
@@ -161,18 +158,6 @@ public class AssistantMessageServiceTests
                 CancellationToken cancellationToken = default)
         {
             return Task.FromResult<ApplicationStatusDto?>(null);
-        }
-    }
-
-    private sealed class FakeApplicantDocumentStatusQueryService
-        : IApplicantDocumentStatusQueryService
-    {
-        public Task<ApplicantDocumentStatusDto?>
-            GetCurrentDocumentStatusForApplicantAsync(
-                string applicantUserId,
-                CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<ApplicantDocumentStatusDto?>(null);
         }
     }
 }
