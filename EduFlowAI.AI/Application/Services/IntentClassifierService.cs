@@ -59,7 +59,9 @@ Decide by what the user WANTS, never by which keywords appear:
 knowledge - objective, public facts about ITI: programs, which tracks exist, what a track covers,
 admission requirements, eligibility, grades, fees, dates, locations, the selection process and how
 to apply. The answer is identical for every applicant and comes from official documents. Listing,
-describing or explaining things belongs here.
+describing or explaining things belongs here. Greetings, thanks and general small talk also belong
+here - the assistant replies conversationally - so classify a clear hello or thank-you as knowledge
+with HIGH confidence, not as something vague.
 
 application_status - the state or outcome of THIS user's own application: whether they were accepted,
 rejected or waitlisted, and how far their application has progressed.
@@ -76,8 +78,9 @@ recommendation. The word "track" never decides the intent by itself - the user's
 Disambiguation: the overall application outcome is application_status; the state of the uploaded
 files is document_status.
 
-Set each confidence honestly. Use a low value when the message is vague, very short, or when you
-cannot tell which intent it belongs to. A message that is ambiguous between two intents is NOT a
+Set each confidence honestly. Use a low value when the message is vague or you cannot tell which
+intent it belongs to - but a clear greeting, thanks or bit of small talk is confidently knowledge,
+not low confidence. A message that is ambiguous between two intents is NOT a
 multi-intent message - it is one intent with low confidence. Only list several intents when the user
 clearly asks for several things.
 
@@ -88,6 +91,10 @@ Examples:
 "Tell me about the .NET track" -> knowledge
 "What is the minimum graduation grade?" -> knowledge
 "How do I apply?" -> knowledge
+"Hi" -> knowledge
+"مرحبا" -> knowledge
+"Thank you!" -> knowledge
+"How are you?" -> knowledge
 "Which track should I choose?" -> recommendation
 "Which track fits someone with a design background?" -> recommendation
 "ما هو المسار المناسب لي؟" -> recommendation
