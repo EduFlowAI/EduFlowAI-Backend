@@ -15,4 +15,7 @@ public sealed record RecommendationQuestionnaireProgressDto
     public IReadOnlyCollection<string>? CareerGoals { get; init; }
 
     public string? AdditionalContext { get; init; }
+
+    public IReadOnlyCollection<string> SkippedFields { get; init; }
+        = [];
 }

@@ -2,17 +2,22 @@
 
 public sealed record RecommendationQuestionnaireDto
 {
-    public required string Major { get; init; }
+    public string? Major { get; init; }
 
-    public required IReadOnlyCollection<string> TechnicalCourses { get; init; }
+    public IReadOnlyCollection<string> TechnicalCourses { get; init; }
+        = [];
 
-    public required IReadOnlyCollection<string> Skills { get; init; }
+    public IReadOnlyCollection<string> Skills { get; init; }
+        = [];
 
-    public required IReadOnlyCollection<string> Interests { get; init; }
+    public IReadOnlyCollection<string> Interests { get; init; }
+        = [];
 
-    public required IReadOnlyCollection<string> PreferredActivities { get; init; }
+    public IReadOnlyCollection<string> PreferredActivities { get; init; }
+        = [];
 
-    public required IReadOnlyCollection<string> CareerGoals { get; init; }
+    public IReadOnlyCollection<string> CareerGoals { get; init; }
+        = [];
 
     public string? AdditionalContext { get; init; }
 }
