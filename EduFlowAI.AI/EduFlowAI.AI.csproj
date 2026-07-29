@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
     <ProjectReference Include="..\EduFlowAI.Documents\EduFlowAI.Documents.csproj" />
+    <ProjectReference Include="..\EduFlowAI.Identity\EduFlowAI.Identity.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Kernel\EduFlowAI.Shared.Kernel.csproj" />
   </ItemGroup>
 
