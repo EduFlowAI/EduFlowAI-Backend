@@ -63,16 +63,15 @@ public static class AIModule
         services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
 
-        // Registered concrete as well: the background worker needs IngestDocumentAsync, which is
-        // not part of the caller-facing interface.
+        // Concrete too: the background worker needs IngestDocumentAsync, not on the caller-facing interface.
         services.AddScoped<KnowledgeBaseService>();
         services.AddScoped<IKnowledgeIndexingService>(sp => sp.GetRequiredService<KnowledgeBaseService>());
         services.AddScoped<IKnowledgeRetrievalService, KnowledgeBaseRetrievalService>();
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
 
-        // IApplicationStatusReader is supplied by the Admission module.
-        services.AddScoped<IStatusAnswerService, StatusAnswerService>();
+        // Phrases the applicant's document statuses warmly, grounded in the facts (§ document_status).
+        services.AddScoped<IDocumentStatusNarrator, DocumentStatusNarrator>();
 
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 

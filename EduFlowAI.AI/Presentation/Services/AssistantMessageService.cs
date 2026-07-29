@@ -3,6 +3,7 @@ using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
+using EduFlowAI.Documents.Application.Interfaces;
 
 namespace EduFlowAI.AI.Presentation.Services;
 
@@ -15,6 +16,10 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _trackRecommendationService;
     private readonly IApplicationStatusQueryService
         _applicationStatusQueryService;
+    private readonly IApplicantDocumentService
+        _applicantDocumentService;
+    private readonly IDocumentStatusNarrator
+        _documentStatusNarrator;
     private readonly IRecommendationUserContextService
         _recommendationUserContextService;
 
@@ -24,6 +29,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         ISessionManager sessionManager,
         ITrackRecommendationService trackRecommendationService,
         IApplicationStatusQueryService applicationStatusQueryService,
+        IApplicantDocumentService applicantDocumentService,
+        IDocumentStatusNarrator documentStatusNarrator)
         IRecommendationUserContextService recommendationUserContextService)
     {
         _intentRouter = intentRouter;
@@ -31,6 +38,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _sessionManager = sessionManager;
         _trackRecommendationService = trackRecommendationService;
         _applicationStatusQueryService = applicationStatusQueryService;
+        _applicantDocumentService = applicantDocumentService;
+        _documentStatusNarrator = documentStatusNarrator;
         _recommendationUserContextService =
             recommendationUserContextService;
     }
@@ -139,7 +148,14 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 language,
                 cancellationToken),
 
-            "status" => await HandleApplicationStatusAsync(
+            // "status" kept as a transitional alias while clients migrate to "application_status".
+            "status" or "application_status" => await HandleApplicationStatusAsync(
+                userId,
+                isAuthenticated,
+                language,
+                cancellationToken),
+
+            "document_status" => await HandleDocumentStatusAsync(
                 userId,
                 isAuthenticated,
                 language,
@@ -357,6 +373,68 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 ["statusMessage"] =
                     applicationStatus.StatusMessage
             });
+    }
+
+    private async Task<AssistantResultDto> HandleDocumentStatusAsync(
+        Guid userId,
+        bool isAuthenticated,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        if (!isAuthenticated)
+        {
+            return DocumentStatusResult(
+                language,
+                language == "ar"
+                    ? "من فضلك سجل الدخول لعرض حالة مستنداتك."
+                    : "Please log in to view your document status.",
+                new Dictionary<string, object?> { ["requiresLogin"] = true });
+        }
+
+        var documents =
+            await _applicantDocumentService.GetDocumentsForApplicantAsync(
+                userId.ToString(),
+                cancellationToken);
+
+        if (!documents.IsSuccess)
+        {
+            return DocumentStatusResult(
+                language,
+                language == "ar"
+                    ? "تعذّر تحميل حالة مستنداتك حالياً. برجاء المحاولة مرة أخرى."
+                    : "I couldn't load your document status right now. Please try again.",
+                new Dictionary<string, object?> { ["documentsFound"] = false });
+        }
+
+        // The narrator handles the empty list, warm phrasing, and the model-down fallback internally.
+        var content = await _documentStatusNarrator.NarrateAsync(
+            documents.Data,
+            language,
+            cancellationToken);
+
+        return DocumentStatusResult(
+            language,
+            content,
+            new Dictionary<string, object?>
+            {
+                ["documentsFound"] = true,
+                ["documents"] = documents.Data
+            });
+    }
+
+    private static AssistantResultDto DocumentStatusResult(
+        string language,
+        string content,
+        Dictionary<string, object?> metadata)
+    {
+        return new AssistantResultDto(
+            Intent: "document_status",
+            Title: language == "ar"
+                ? "حالة المستندات"
+                : "Document Status",
+            Content: content,
+            Sources: [],
+            Metadata: metadata);
     }
 
     private static RecommendationQuestionnaireDto
@@ -605,8 +683,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 ? "محتاج توضيح"
                 : "Clarification Needed",
             Content: language == "ar"
-                ? "اختر: سؤال عام، حالة الطلب، أو ترشيح مسار."
-                : "Choose: general question, application status, or track recommendation.",
+                ? "اختر: سؤال عام، حالة الطلب، حالة المستندات، أو ترشيح مسار."
+                : "Choose: general question, application status, document status, or track recommendation.",
             Sources: [],
             Metadata: new Dictionary<string, object?>());
     }
