@@ -11,8 +11,9 @@ using EduFlowAI.Documents.Domain.Enums;
 namespace EduFlowAI.AI.Application.Services;
 
 // Hybrid document-status answer: the statuses are deterministic facts (never decided by the model);
-// the model only phrases them warmly in the applicant's language. Falls back to the plain facts if
-// the model returns nothing or is unavailable, so a status question always gets a truthful answer.
+// the model phrases them warmly, in ITI's voice, for both the "has documents" and "no documents yet"
+// cases - so the reply is never a canned template. Falls back to the plain facts only if the model
+// returns nothing or is unavailable, so a status question always gets a truthful answer.
 public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
 {
     private readonly IGeminiChatClient _chatClient;
@@ -29,29 +30,33 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
     {
         var docs = documents?.ToList() ?? new List<ApplicantDocumentDto>();
 
-        // No documents needs no model call - a warm, fixed line is enough.
-        if (docs.Count == 0)
-            return language == "ar"
-                ? "لا توجد مستندات مرفوعة على حسابك حتى الآن. يمكنك رفعها من حسابك في أي وقت."
-                : "You haven't uploaded any documents yet. You can upload them from your account whenever you're ready.";
+        // Deterministic, authoritative facts. English is canonical; the model phrases and translates,
+        // it never re-decides. The empty case is a fact too, so it is phrased naturally as well.
+        var facts = docs.Count == 0
+            ? "The applicant has not uploaded any documents yet."
+            : string.Join("\n", docs
+                .OrderBy(d => d.DocumentType)
+                .Select(d => $"- {TypeLabel(d.DocumentType)}: {StatusLabel(d.Status)}"));
 
-        var facts = BuildFacts(docs);
         var languageLine = language == "ar" ? "Respond in Arabic only." : "Respond in English only.";
 
-        // English is the canonical fact language; the model translates and phrases, never re-decides.
         var systemPrompt = $"""
 # ROLE
-You are ITI's admission assistant, replying warmly and briefly to an applicant who asked about their
-uploaded documents.
+You are the official virtual assistant of the Information Technology Institute (ITI), replying to an
+applicant who asked about their uploaded documents.
 
 # THE FACTS (authoritative - this is the applicant's real record)
 {facts}
 
 # RULES
-- Report exactly these statuses. Never add, change, soften, upgrade or downgrade a status.
-- Never invent documents, dates, timelines or next steps that are not stated above.
-- If something is rejected or still needs review, say so plainly but kindly.
-- Keep it to one short, natural paragraph or a short list. No filler, no emoji.
+- Speak as the institute, first person plural ("we"), in a warm, human, professional tone. Never sound
+  like a template or a form; vary your wording naturally.
+- Report exactly these facts. Never add, change, soften, upgrade or downgrade a status, and never
+  invent documents, dates, timelines or next steps.
+- If nothing has been uploaded yet, say so kindly and mention they can upload from their account.
+- If something is rejected or still under review, say so plainly but reassuringly.
+- Keep it to one short, natural paragraph (a short list only if it genuinely reads better). No filler,
+  no emoji.
 - {languageLine}
 """;
 
@@ -66,17 +71,17 @@ uploaded documents.
             answer = null; // model unavailable (e.g. quota) - fall back to the plain facts below
         }
 
-        return string.IsNullOrWhiteSpace(answer) ? PlainSummary(docs, language) : answer;
+        return string.IsNullOrWhiteSpace(answer) ? Fallback(docs, language) : answer;
     }
 
-    // The deterministic source of truth, handed to the model and used verbatim if the model can't reply.
-    private static string BuildFacts(IEnumerable<ApplicantDocumentDto> docs) =>
-        string.Join("\n", docs
-            .OrderBy(d => d.DocumentType)
-            .Select(d => $"- {TypeLabel(d.DocumentType)}: {StatusLabel(d.Status)}"));
-
-    private static string PlainSummary(IReadOnlyList<ApplicantDocumentDto> docs, string language)
+    // Used only when the model is unavailable, so the applicant still gets a truthful answer.
+    private static string Fallback(IReadOnlyList<ApplicantDocumentDto> docs, string language)
     {
+        if (docs.Count == 0)
+            return language == "ar"
+                ? "لا توجد مستندات مرفوعة على حسابك حتى الآن. يمكنك رفعها من حسابك في أي وقت."
+                : "You haven't uploaded any documents yet. You can upload them from your account whenever you're ready.";
+
         var intro = language == "ar" ? "حالة مستنداتك:" : "Your document status:";
         var lines = docs
             .OrderBy(d => d.DocumentType)

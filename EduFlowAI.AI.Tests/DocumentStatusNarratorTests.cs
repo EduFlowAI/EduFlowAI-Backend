@@ -13,17 +13,28 @@ namespace EduFlowAI.AI.Tests;
 public class DocumentStatusNarratorTests
 {
     [Fact]
-    public async Task No_documents_returns_a_warm_line_without_calling_the_model()
+    public async Task No_documents_is_narrated_by_the_model_with_the_empty_state_as_a_grounded_fact()
     {
-        var chat = new StubChat();
+        var chat = new StubChat { Response = "You haven't uploaded any documents yet." };
         var narrator = new DocumentStatusNarrator(chat);
+
+        var result = await narrator.NarrateAsync(new List<ApplicantDocumentDto>(), "en");
+
+        Assert.Equal("You haven't uploaded any documents yet.", result);  // the model phrased it - not canned
+        Assert.NotNull(chat.LastSystemPrompt);
+        Assert.Contains("not uploaded any documents", chat.LastSystemPrompt);  // the empty state is a grounded fact
+    }
+
+    [Fact]
+    public async Task Empty_state_falls_back_to_a_plain_line_when_the_model_is_unavailable()
+    {
+        var narrator = new DocumentStatusNarrator(new StubChat { Throw = true });
 
         var en = await narrator.NarrateAsync(new List<ApplicantDocumentDto>(), "en");
         var ar = await narrator.NarrateAsync(new List<ApplicantDocumentDto>(), "ar");
 
         Assert.Contains("haven't uploaded", en);
         Assert.Contains("لا توجد مستندات", ar);
-        Assert.Null(chat.LastSystemPrompt);   // the empty case never needs the model
     }
 
     [Fact]
