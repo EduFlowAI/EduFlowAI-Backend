@@ -23,19 +23,22 @@ public sealed class DocumentSubmissionService : IDocumentSubmissionService
     private readonly IApplicationAcessReader _applicationAccessReader;
     private readonly IProgramRequirementReader _programRequirementReader;
     private readonly IProfileService _profileService;
+    private readonly IStatusTransitionCoordinator _statusTransitionCoordinator;
 
     public DocumentSubmissionService(
         IDocumentVerificationOutbox outbox,
         ICurrentUserService currentUserService,
         IApplicationAcessReader applicationAccessReader,
         IProgramRequirementReader programRequirementReader,
-        IProfileService profileService)
+        IProfileService profileService,
+        IStatusTransitionCoordinator statusTransitionCoordinator)
     {
         _outbox = outbox;
         _currentUserService = currentUserService;
         _applicationAccessReader = applicationAccessReader;
         _programRequirementReader = programRequirementReader;
         _profileService = profileService;
+        _statusTransitionCoordinator = statusTransitionCoordinator;
     }
 
     public async Task<Result<int>> SubmitPackageAsync(
@@ -113,6 +116,12 @@ public sealed class DocumentSubmissionService : IDocumentSubmissionService
 
         // Capture a single timestamp for the entire logical transaction
         var now = DateTimeOffset.UtcNow;
+
+        var transition = await _statusTransitionCoordinator.MarkDocumentVerificationStartedAsync(applicationId);
+        if (!transition.IsSuccess)
+        {
+            return Result<int>.Failure(409, transition.ErrorMessage);
+        }
 
         // 7. In-Memory Orchestration
         foreach (var document in documentsToSubmit)

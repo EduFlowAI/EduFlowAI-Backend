@@ -16,6 +16,11 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
         Task<T?> GetFirstOrDefaultAsync(Expression<Func<T, bool>> predicate,
             Func<IQueryable<T>, IQueryable<T>>? include = null);
 
+        Task<T?> GetFirstOrDefaultWithIncludeAsync(Expression<Func<T, bool>> predicate, 
+            bool asNoTracking = false,
+            CancellationToken cancellationToken = default,
+            params Expression<Func<T, object>>[] includes);
+
         /// <summary>
         /// Get all entities meet the condition.
         /// </summary>

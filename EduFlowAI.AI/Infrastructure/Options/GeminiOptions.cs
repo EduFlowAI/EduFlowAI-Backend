@@ -11,6 +11,7 @@ public class GeminiOptions
     public string ApiKey { get; set; } = string.Empty;
 
     // Extra keys (separate projects) tried in order on quota/auth failures. Empty falls back to ApiKey.
+    //public List<string> ApiKeys { get; set; } = new();
     public List<string> ApiKeys { get; set; } = new();
 
     public string EmbeddingModel { get; set; } = "models/gemini-embedding-001";
