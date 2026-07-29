@@ -30,14 +30,15 @@ public sealed class AssistantMessageService : IAssistantMessageService
         ITrackRecommendationService trackRecommendationService,
         IApplicationStatusQueryService applicationStatusQueryService,
         IApplicantDocumentService applicantDocumentService,
-        IDocumentStatusNarrator documentStatusNarrator)
+        IDocumentStatusNarrator documentStatusNarrator,
         IRecommendationUserContextService recommendationUserContextService)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
         _sessionManager = sessionManager;
         _trackRecommendationService = trackRecommendationService;
-        _applicationStatusQueryService = applicationStatusQueryService;
+        _applicationStatusQueryService =
+            applicationStatusQueryService;
         _applicantDocumentService = applicantDocumentService;
         _documentStatusNarrator = documentStatusNarrator;
         _recommendationUserContextService =
@@ -309,7 +310,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         if (!isAuthenticated)
         {
             return new AssistantResultDto(
-                Intent: "status",
+                Intent: "application_status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -332,7 +333,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         if (applicationStatus is null)
         {
             return new AssistantResultDto(
-                Intent: "status",
+                Intent: "application_status",
                 Title: language == "ar"
                     ? "حالة الطلب"
                     : "Application Status",
@@ -355,7 +356,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     : $"Your current application status is: {applicationStatus.CurrentStatus}.";
 
         return new AssistantResultDto(
-            Intent: "status",
+            Intent: "application_status",
             Title: language == "ar"
                 ? "حالة الطلب"
                 : "Application Status",

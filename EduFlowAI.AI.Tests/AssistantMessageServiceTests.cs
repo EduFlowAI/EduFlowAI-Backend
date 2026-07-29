@@ -15,14 +15,6 @@ public class AssistantMessageServiceTests
     [Fact]
     public async Task KnowledgeIntent_ReturnsRagResult()
     {
-        var service = new AssistantMessageService(
-            new FakeIntentRouter(),
-            new FakeRagAnswerService(),
-            new FakeSessionManager(),
-            new FakeTrackRecommendationService(),
-            new FakeApplicationStatusQueryService(),
-            new FakeApplicantDocumentService(),
-            new FakeDocumentStatusNarrator());
         var service = CreateService(
             intent: "knowledge",
             recommendationService:
@@ -48,17 +40,16 @@ public class AssistantMessageServiceTests
     [Fact]
     public async Task DocumentStatusIntent_AuthenticatedUser_ReturnsNarratedDocumentStatus()
     {
-        var service = new AssistantMessageService(
-            new FakeIntentRouter("document_status"),
-            new FakeRagAnswerService(),
-            new FakeSessionManager(),
-            new FakeTrackRecommendationService(),
-            new FakeApplicationStatusQueryService(),
-            new FakeApplicantDocumentService(),
-            new FakeDocumentStatusNarrator());
+        var service = CreateService(
+            intent: "document_status",
+            recommendationService:
+                new FakeTrackRecommendationService());
 
         var response = await service.HandleAsync(
-            new AssistantMessageRequest("did you receive my documents?", null, "en"),
+            new AssistantMessageRequest(
+                "Did you receive my documents?",
+                null,
+                "en"),
             Guid.NewGuid(),
             isAuthenticated: true);
 
@@ -66,10 +57,10 @@ public class AssistantMessageServiceTests
 
         Assert.Equal("document_status", result.Intent);
         Assert.Equal("Document Status", result.Title);
-        Assert.Equal("Test document status", result.Content); // produced by the narrator
+        Assert.Equal("Test document status", result.Content);
     }
 
-    private sealed class FakeIntentRouter : IIntentRouter
+    [Fact]
     public async Task RecommendWithAvailableData_ReturnsCompletedWithoutAskingQuestions()
     {
         var recommendationService =
@@ -280,19 +271,17 @@ public class AssistantMessageServiceTests
             new FakeSessionManager(),
             recommendationService,
             new FakeApplicationStatusQueryService(),
+            new FakeApplicantDocumentService(),
+            new FakeDocumentStatusNarrator(),
             new FakeRecommendationUserContextService(
                 userContext ??
                 new RecommendationUserContextDto()));
     }
 
     private sealed class FakeIntentRouter(
-        string intent)
+        string intent = "knowledge")
         : IIntentRouter
     {
-        private readonly string _intent;
-
-        public FakeIntentRouter(string intent = "knowledge") => _intent = intent;
-
         public Task<IntentClassificationDto> ClassifyAsync(
             string userQuestion,
             List<ConversationTurnDto> context,
@@ -301,9 +290,6 @@ public class AssistantMessageServiceTests
             return Task.FromResult(
                 new IntentClassificationDto
                 {
-                    PrimaryIntent = _intent,
-                    Confidence = 0.95m,
-                    RoutedTo = _intent,
                     PrimaryIntent = intent,
                     Confidence = 0.95m,
                     RoutedTo = GetRoute(intent),
@@ -312,9 +298,6 @@ public class AssistantMessageServiceTests
                     [
                         new DetectedIntentDto
                         {
-                            Intent = _intent,
-                            Confidence = 0.95m,
-                            RoutedTo = _intent
                             Intent = intent,
                             Confidence = 0.95m,
                             RoutedTo = GetRoute(intent)
@@ -334,7 +317,8 @@ public class AssistantMessageServiceTests
             {
                 "knowledge" => "knowledge_rag",
                 "recommendation" => "recommendations_agent",
-                "status" => "status_service",
+                "status" or "application_status" => "status_service",
+                "document_status" => "document_status_service",
                 _ => "unknown"
             };
         }
@@ -451,34 +435,54 @@ public class AssistantMessageServiceTests
         }
     }
 
-    private sealed class FakeApplicantDocumentService : IApplicantDocumentService
+    private sealed class FakeApplicantDocumentService
+        : IApplicantDocumentService
     {
         public Task<Result<Guid>> UploadDocumentAsync(
-            UploadDocumentDto dto, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            UploadDocumentDto dto,
+            CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
 
-        public Task<Result<IEnumerable<ApplicantDocumentDto>>> GetDocumentsByApplicationIdAsync(
-            Guid applicationId, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
+        public Task<Result<IEnumerable<ApplicantDocumentDto>>>
+            GetDocumentsByApplicationIdAsync(
+                Guid applicationId,
+                CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
 
         public Task<Result<FileDownloadDto>> DownloadDocumentAsync(
-            Guid documentId, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
 
-        public Task<Result<IEnumerable<ApplicantDocumentDto>>> GetDocumentsForApplicantAsync(
-            string userId, CancellationToken cancellationToken)
-            => Task.FromResult(
+        public Task<Result<IEnumerable<ApplicantDocumentDto>>>
+            GetDocumentsForApplicantAsync(
+                string userId,
+                CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
                 Result<IEnumerable<ApplicantDocumentDto>>.Success(
-                    Enumerable.Empty<ApplicantDocumentDto>()));
+                    []));
+        }
     }
 
-    private sealed class FakeDocumentStatusNarrator : IDocumentStatusNarrator
+    private sealed class FakeDocumentStatusNarrator
+        : IDocumentStatusNarrator
     {
         public Task<string> NarrateAsync(
             IEnumerable<ApplicantDocumentDto> documents,
             string language,
             CancellationToken cancellationToken = default)
-            => Task.FromResult("Test document status");
+        {
+            return Task.FromResult("Test document status");
+        }
+    }
+
     private sealed class FakeRecommendationUserContextService(
         RecommendationUserContextDto context)
         : IRecommendationUserContextService
