@@ -28,6 +28,8 @@ public sealed class VerifyApplicantDocumentV1Handler
     // AI and file I/O are long external operations - never hold an EF transaction open around
     // this handler. It performs no business-table writes; it only publishes the outcome.
     [NonTransactional]
+    [RetryNow(typeof(HttpRequestException), 1000, 3000, 10000, 12000)]
+    [MaximumAttempts(5)]
     public async Task Handle(
         VerifyApplicantDocumentV1 message,
         IMessageContext messages,

@@ -2,6 +2,7 @@
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
+using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Domain.Enums;
 using EduFlowAI.Shared.Messaging.Contracts.Documents.V1;
 using Microsoft.EntityFrameworkCore;
@@ -60,14 +61,20 @@ public sealed class ApplicantDocumentVerificationFailedV1Handler
             message.FailedAtUtc
         });
 
-        // Notify Halim's Application State Machine about the technical failure
-        var reviewResult = new DocumentReviewResultDto
-        {
-            ReviewerType = ReviewerType.AI,
-            IsAccepted = false,
-            IsAgentUncertain = true
-        };
+        // Notify Halim's Application State Machine about the technical failure after resolve all docs status
+        var reviewResult = await DocumentPackageReviewResolver.ResolveAsync(
+            dbContext, document.ApplicationId,
+            document.Id,
+            DocumentStatus.NeedsHumanReview,
+            cancellationToken);
 
-        await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
+        if (reviewResult is not null)
+        {
+            var transition = await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
+            if (!transition.IsSuccess)
+            {
+                throw new InvalidOperationException(transition.ErrorMessage);
+            }
+        }
     }
 }

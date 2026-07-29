@@ -10,6 +10,7 @@ using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
 using EduFlowAI.Shared.Messaging.Contracts.Configuration;
 using iText.StyledXmlParser.Jsoup.Nodes;
+using JasperFx.CodeGeneration.Model;
 using JasperFx.Resources;
 using Microsoft.EntityFrameworkCore;
 using Wolverine;
@@ -29,15 +30,16 @@ namespace EduFlowAI.Worker
             builder.Services.AddAIWorkerModule();
             builder.Services.AddCommunicationModule(builder.Configuration);
 
-            builder.Services
-                .AddIdentityCore<AppUser>()
-                .AddEntityFrameworkStores<EduFlowAIDbContext>();
+            //builder.Services
+            //    .AddIdentityCore<AppUser>()
+            //    .AddEntityFrameworkStores<EduFlowAIDbContext>();
 
             builder.Services.AddScoped<IUserContactInfoReader, UserContactInfoReader>();
 
             builder.ConfigureCommonMessaging("EduFlowAI.Worker");
             builder.Services.ConfigureWolverine(options =>
             {
+                options.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
                 MessagingConfiguration.ConfigureWorkerListeners(options);
             });
 
