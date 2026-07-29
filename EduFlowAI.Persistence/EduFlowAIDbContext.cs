@@ -51,6 +51,8 @@ namespace EduFlowAI.Persistence
         // Documents
         public DbSet<ApplicantDocument> ApplicantDocuments => Set<ApplicantDocument>();
         public DbSet<DocumentReplacementRequest> DocumentReplacementRequests => Set<DocumentReplacementRequest>();
+        public DbSet<ApplicantDocumentVersion> ApplicantDocumentVersions => Set<ApplicantDocumentVersion>();
+
         // AI and Knowledge Base
         public DbSet<KnowledgeBaseDocument> KnowledgeBaseDocuments => Set<KnowledgeBaseDocument>();
         public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks => Set<KnowledgeBaseChunk>();

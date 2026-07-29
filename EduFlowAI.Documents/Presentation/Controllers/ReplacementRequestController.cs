@@ -2,6 +2,7 @@
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -58,6 +59,33 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
 
             return StatusCode(result.StatusCode, result.Data);
+        }
+
+        [HttpPost("/api/replacement-requests/{requestId:guid}/upload")]
+        [Consumes("multipart/form-data")]
+        [Authorize]
+        public async Task<IActionResult> UploadReplacement(Guid requestId, IFormFile file, CancellationToken cancellationToken)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized();
+            }
+
+            var result = await _replacementRequestService.UploadReplacementAsync(requestId, file, userId, cancellationToken);
+
+            if (!result.IsSuccess)
+            {
+                return StatusCode(result.StatusCode, result.Message);
+            }
+
+            return Ok(new
+            {
+                documentId = result.Data,
+                message = result.Message,
+                replacementStatus = "Fulfilled",
+                documentStatus = "Verifying"
+            });
         }
     }
 }

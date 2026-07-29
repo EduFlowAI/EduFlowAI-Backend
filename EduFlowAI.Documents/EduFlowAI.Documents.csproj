@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Infrastructure\Fake\**" />
+    <EmbeddedResource Remove="Infrastructure\Fake\**" />
+    <None Remove="Infrastructure\Fake\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
     <ProjectReference Include="..\EduFlowAI.Communication\EduFlowAI.Communication.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Kernel\EduFlowAI.Shared.Kernel.csproj" />
@@ -23,7 +29,6 @@
 
   <ItemGroup>
     <Folder Include="Infrastructure\ExternalServices\" />
-    <Folder Include="Infrastructure\Fake\" />
     <Folder Include="Presentation\Responses\" />
   </ItemGroup>
 
