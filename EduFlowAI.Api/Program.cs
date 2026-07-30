@@ -13,6 +13,7 @@ using JasperFx.Resources;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
+using Serilog;
 using Wolverine;
 
 namespace EduFlowAI.Api;
@@ -22,6 +23,15 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        builder.Services.AddSerilog((services, loggerConfiguration) =>
+        {
+            loggerConfiguration
+                .ReadFrom.Configuration(builder.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("Application", "EduFlowAI.Api");
+        });
 
         builder.Services.AddControllers()
             .AddApplicationPart(typeof(IdentityModule).Assembly)
@@ -127,6 +137,11 @@ public class Program
 
         app.UseExceptionHandler();
 
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+        });
+
         if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi();
@@ -139,6 +154,7 @@ public class Program
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
+
 
         app.MapHub<NotificationHub>("/hubs/notifications");
 

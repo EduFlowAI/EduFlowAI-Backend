@@ -13,6 +13,7 @@ using iText.StyledXmlParser.Jsoup.Nodes;
 using JasperFx.CodeGeneration.Model;
 using JasperFx.Resources;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using Wolverine;
 
 namespace EduFlowAI.Worker
@@ -22,6 +23,15 @@ namespace EduFlowAI.Worker
         public static void Main(string[] args)
         {
             var builder = Host.CreateApplicationBuilder(args);
+
+            builder.Services.AddSerilog((services, loggerConfiguration) =>
+            {
+                loggerConfiguration
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .ReadFrom.Services(services)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithProperty("Application", "EduFlowAI.Worker");
+            });
 
             builder.Services.AddPersistence(builder.Configuration);
 
