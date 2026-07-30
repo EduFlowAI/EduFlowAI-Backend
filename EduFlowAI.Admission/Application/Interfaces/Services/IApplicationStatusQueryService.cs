@@ -16,5 +16,7 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
 
 
         Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default);
+
+        Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId);
     }
 }

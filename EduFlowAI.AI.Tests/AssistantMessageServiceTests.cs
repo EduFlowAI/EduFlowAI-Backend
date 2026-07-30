@@ -159,5 +159,10 @@ public class AssistantMessageServiceTests
         {
             return Task.FromResult<ApplicationStatusDto?>(null);
         }
+
+        public Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId)
+        {
+            return Task.FromResult<ApplicationDashboardSummaryDto?>(null);
+        }
     }
 }
