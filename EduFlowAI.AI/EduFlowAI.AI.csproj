@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EduFlowAI.Admission\EduFlowAI.Admission.csproj" />
     <ProjectReference Include="..\EduFlowAI.Documents\EduFlowAI.Documents.csproj" />
+    <ProjectReference Include="..\EduFlowAI.Identity\EduFlowAI.Identity.csproj" />
     <ProjectReference Include="..\EduFlowAI.Shared.Kernel\EduFlowAI.Shared.Kernel.csproj" />
   </ItemGroup>
 
@@ -24,7 +25,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Pgvector" Version="0.3.2" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />

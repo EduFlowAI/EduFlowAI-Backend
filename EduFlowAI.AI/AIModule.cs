@@ -1,6 +1,9 @@
+using EduFlowAI.AI.Application.DocumentVerification;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Infrastructure.Caching;
+using EduFlowAI.AI.Infrastructure.DocumentVerification;
+using EduFlowAI.AI.Infrastructure.DocumentVerification.Gemini;
 using EduFlowAI.AI.Infrastructure.ExternalServices;
 using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini;
 using EduFlowAI.AI.Infrastructure.Indexing;
@@ -60,16 +63,15 @@ public static class AIModule
         services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
 
-        // Registered concrete as well: the background worker needs IngestDocumentAsync, which is
-        // not part of the caller-facing interface.
+        // Concrete too: the background worker needs IngestDocumentAsync, not on the caller-facing interface.
         services.AddScoped<KnowledgeBaseService>();
         services.AddScoped<IKnowledgeIndexingService>(sp => sp.GetRequiredService<KnowledgeBaseService>());
         services.AddScoped<IKnowledgeRetrievalService, KnowledgeBaseRetrievalService>();
         services.AddScoped<IRagAnswerService, AiChatService>();
         services.AddScoped<IIntentRouter, IntentClassifierService>();
 
-        // IApplicationStatusReader is supplied by the Admission module.
-        services.AddScoped<IStatusAnswerService, StatusAnswerService>();
+        // Phrases the applicant's document statuses warmly, grounded in the facts (§ document_status).
+        services.AddScoped<IDocumentStatusNarrator, DocumentStatusNarrator>();
 
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 
@@ -103,7 +105,7 @@ public static class AIModule
             .ValidateOnStart();
 
         services.AddScoped<ITrackRecommendationService, TrackRecommendationService>();
-        services.AddScoped<IChatRecommendationService, ChatRecommendationService>();
+        services.AddScoped<IRecommendationUserContextService,RecommendationUserContextService>();
         services.AddScoped<IAssistantMessageService, AssistantMessageService>();
 
         services.AddHttpClient<IRecommendationModelClient, GeminiRecommendationModelClient>()
@@ -135,7 +137,31 @@ public static class AIModule
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
             });
 
+        services.AddDocumentVerificationServices();
 
         return services;
+    }
+
+    // Document verification (Seif). Only the Worker consumes VerifyApplicantDocumentV1, so this
+    // is wired into AddAIWorkerModule rather than the API-facing AddAIModule.
+    private static void AddDocumentVerificationServices(this IServiceCollection services)
+    {
+        services.AddOptions<GeminiOptions>()
+            .BindConfiguration(GeminiOptions.SectionName);
+
+        services.AddScoped<IDocumentVerificationFileReader, DocumentVerificationFileReader>();
+        services.AddScoped<IDocumentVerificationContextReader, DocumentVerificationContextReader>();
+        services.AddScoped<IDocumentVerificationService, DocumentVerificationService>();
+
+        services.AddHttpClient<IDocumentVerificationGeminiClient, DocumentVerificationGeminiClient>(
+            (serviceProvider, client) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<IOptions<GeminiOptions>>()
+                    .Value;
+
+                client.BaseAddress = new Uri(options.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
     }
 }

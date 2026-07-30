@@ -41,6 +41,28 @@ public static class IdentityModule
                 "Jwt:AccessTokenMinutes must be positive.")
             .ValidateOnStart();
 
+        services.AddOptions<BootstrapSuperAdminOptions>()
+            .Bind(configuration.GetSection(
+                BootstrapSuperAdminOptions.SectionName))
+            .Validate(
+                options => !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.Email),
+                "BootstrapSuperAdmin:Email is required when " +
+                "bootstrapping is enabled.")
+            .Validate(
+                options => !options.Enabled ||
+                    (
+                        !string.IsNullOrWhiteSpace(options.Password) &&
+                        options.Password.Length >= 8 &&
+                        options.Password.Any(char.IsUpper) &&
+                        options.Password.Any(char.IsLower) &&
+                        options.Password.Any(char.IsDigit)
+                    ),
+                "BootstrapSuperAdmin:Password must contain at least " +
+                "eight characters, an uppercase letter, a lowercase " +
+                "letter and a digit.")
+            .ValidateOnStart();
+
         services
             .AddAuthentication(options =>
             {
@@ -111,6 +133,7 @@ public static class IdentityModule
         services.AddScoped<IApplicantProfileLocker,
             ApplicantProfileLocker>();
         services.AddHostedService<IdentityRoleSeeder>();
+        services.AddHostedService<IdentitySuperAdminSeeder>();
         services.AddScoped<IUserContactInfoReader, UserContactInfoReader>();
 
         return services.AddIdentityCore<AppUser>(options =>

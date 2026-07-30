@@ -13,6 +13,7 @@ PLAN.md
 tools/
 
 Migrations/
+logs/
 
 # User-specific files
 *.rsuser

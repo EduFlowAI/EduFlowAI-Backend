@@ -2,9 +2,9 @@
 
 namespace EduFlowAI.AI.Application.Interfaces;
 
-public interface IChatRecommendationService
+public interface IRecommendationUserContextService
 {
-    Task<ChatRecommendationResultDto> RecommendFromMessageAsync(
-        string message,
+    Task<RecommendationUserContextDto> GetAsync(
+        Guid userId,
         CancellationToken cancellationToken = default);
 }

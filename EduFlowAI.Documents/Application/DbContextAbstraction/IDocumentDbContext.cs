@@ -10,6 +10,7 @@ namespace EduFlowAI.Documents.Application.DbContextAbstraction
     {
         DbSet<ApplicantDocument> ApplicantDocuments { get; }
         DbSet<DocumentReplacementRequest> DocumentReplacementRequests { get; }
+        DbSet<ApplicantDocumentVersion> ApplicantDocumentVersions { get; }
 
         Task<int> SaveChangesAsync(
             CancellationToken cancellationToken = default);

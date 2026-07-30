@@ -25,5 +25,6 @@ namespace EduFlowAI.Documents.Domain.Entities
 
         // Navigation Properties
         public ICollection<DocumentReplacementRequest> ReplacementRequests { get; set; } = new List<DocumentReplacementRequest>();
+        public ICollection<ApplicantDocumentVersion> Versions { get; set; } = new List<ApplicantDocumentVersion>();
     }
 }
