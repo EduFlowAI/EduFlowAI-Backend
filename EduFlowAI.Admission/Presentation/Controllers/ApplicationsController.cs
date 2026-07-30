@@ -159,5 +159,23 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var res = Result<IEnumerable<SimulatedStageDto>>.Success(stagesResultDto, message: "Applicant stages results are retreived successfully");
             return StatusCode(res.StatusCode, res);
         }
+
+        [HttpGet("{applicationId}/dashboard-summary")]
+        public async Task<ActionResult<Result<ApplicationDashboardSummaryDto>>> GetDashboardSummary(Guid applicationId)
+        {
+            var summaryDto = await _statusQueryService.GetDashboardSummaryAsync(applicationId);
+            if (summaryDto == null)
+            {
+                var error = Result<ApplicationDashboardSummaryDto>.Failure(404, "Application not found!");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            var successResult = Result<ApplicationDashboardSummaryDto>.Success(
+                summaryDto,
+                message: "Dashboard summary retrieved successfully"
+            );
+
+            return StatusCode(successResult.StatusCode, successResult);
+        }
     }
 }
