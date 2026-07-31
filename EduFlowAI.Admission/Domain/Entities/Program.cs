@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace EduFlowAI.Admission.Domain.Entities
+﻿namespace EduFlowAI.Admission.Domain.Entities
 {
     // Represents a major scholarship or training program (e.g., 9-Month Professional Training)
     public sealed class Program
@@ -14,6 +10,8 @@ namespace EduFlowAI.Admission.Domain.Entities
         public string Name { get; set; } = null!;
 
         public string Code { get; set; } = null!;
+
+        public string Description { get; set; } = null!;
 
         public int DurationMonths { get; set; }
 
