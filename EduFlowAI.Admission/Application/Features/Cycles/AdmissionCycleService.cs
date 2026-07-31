@@ -121,7 +121,7 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
             .ToListAsync(cancellationToken);
 
         return cycles
-            .Select(AdmissionCycleMapper.Map)
+            .Select(cycle => AdmissionCycleMapper.Map(cycle))
             .ToList();
     }
 
