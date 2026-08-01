@@ -62,6 +62,7 @@ public sealed class UpdateTrackRequest
 public interface ITrackService
 {
     Task<IReadOnlyList<TrackDto>> GetPublicTracksAsync(
+        Guid? cycleId = null,   // optional cycleId parameter
         CancellationToken cancellationToken = default);
 
     Task<TrackDto?> GetPublicTrackAsync(
@@ -106,6 +107,7 @@ internal sealed class TrackService : ITrackService
     }
 
     public async Task<IReadOnlyList<TrackDto>> GetPublicTracksAsync(
+        Guid? cycleId = null,       // Accept the optional cycleId parameter
         CancellationToken cancellationToken = default)
     {
         var offerings = await _dbContext.TrackBranchOfferings
@@ -113,6 +115,8 @@ internal sealed class TrackService : ITrackService
             .Include(x => x.Track)
             .Include(x => x.Branch)
             .Where(x =>
+                // Filter by cycleId if provided, otherwise ignore this condition
+                (cycleId == null || x.CycleId == cycleId) &&
                 x.Cycle.Status == CycleStatus.Active &&
                 x.Track.IsActive &&
                 x.Branch.IsActive)
