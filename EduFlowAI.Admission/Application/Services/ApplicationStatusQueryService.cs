@@ -103,5 +103,39 @@ namespace EduFlowAI.Admission.Application.Services
                 FinalResultPhaseStatus = timeline.FinalStatus
             };
         }
+
+        public async Task<ApplicationDetailsDto?> GetApplicationDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            // Fetch application with its related preferences, ensuring the user owns it
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
+                include: query => query.Include(a => a.Cycle)   // Required to fetch Cycle Label and Deadline
+                                       .Include(a => a.Preferences)
+                                       .ThenInclude(p => p.TrackBranchOffering)     // Required to extract TrackId and BranchId
+            );
+
+            if (application == null)
+                return null;
+
+            // Map preferences entity to DTO
+            var preferencesDto = application.Preferences?
+                .OrderBy(p => p.Rank)
+                .Select(p => new PreferenceDto(p.TrackBranchOffering.TrackId,
+                p.TrackBranchOffering.BranchId,
+                p.Rank))
+                .ToList() ?? new List<PreferenceDto>();
+
+            return new ApplicationDetailsDto(
+                application.Id,
+                application.ApplicantUserId,
+                application.CycleId,
+                application.Cycle?.Label ?? string.Empty, // Map Label to CycleName
+                application.Cycle?.DeadlineUtc ?? DateTimeOffset.MinValue, // Map DeadlineUtc safely
+                application.Status.ToString(),
+                application.CreatedAt,
+                application.UpdatedAt,
+                preferencesDto
+            );
+        }
     }
 }

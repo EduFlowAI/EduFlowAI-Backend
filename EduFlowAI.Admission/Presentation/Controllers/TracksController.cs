@@ -20,9 +20,10 @@ public sealed class TracksController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<Result<IReadOnlyList<TrackDto>>>> GetTracks(
+        [FromQuery] Guid? cycleId,      // Optional parameter to filter tracks by admission cycle
         CancellationToken cancellationToken)
     {
-        var tracks = await _trackService.GetPublicTracksAsync(cancellationToken);
+        var tracks = await _trackService.GetPublicTracksAsync(cycleId, cancellationToken);
         return Ok(Result<IReadOnlyList<TrackDto>>.Success(tracks));
     }
 

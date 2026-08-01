@@ -420,6 +420,11 @@ public class AssistantMessageServiceTests
     private sealed class FakeApplicationStatusQueryService
         : IApplicationStatusQueryService
     {
+        public Task<ApplicationDetailsDto?> GetApplicationDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ApplicationDetailsDto?>(null);
+        }
+
         public Task<ApplicationStatusDto?> GetApplicationStatusAsync(
             Guid applicationId)
         {

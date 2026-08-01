@@ -72,6 +72,7 @@ namespace EduFlowAI.Admission
             services.AddScoped<IAssessmentSimulationService, AssessmentSimulationService>();
             services.AddScoped<IFinalRankingService, FinalRankingService>();
             services.AddScoped<ITimelineCalculator, TimelineCalculator>();
+            services.AddScoped<ICycleQueryService, CycleQueryService>();
 
             return services;
         }
