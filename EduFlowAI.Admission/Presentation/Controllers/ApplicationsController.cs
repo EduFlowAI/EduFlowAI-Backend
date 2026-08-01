@@ -177,5 +177,36 @@ namespace EduFlowAI.Admission.Presentation.Controllers
 
             return StatusCode(successResult.StatusCode, successResult);
         }
+
+        [HttpGet("{applicationId}")]
+        public async Task<ActionResult<Result<ApplicationDetailsDto>>> GetApplicationDetails(Guid applicationId, CancellationToken cancellationToken)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+
+            var detailsDto = await _statusQueryService.GetApplicationDetailsAsync(applicationId, userId, cancellationToken);
+            if(detailsDto == null)
+            {
+                var error = Result<ApplicationDetailsDto>.Failure(404, "Application not found or unauthorized access!");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            var successResult = Result<ApplicationDetailsDto>.Success(detailsDto, message: "Application details retrieved successfully");
+            return StatusCode(successResult.StatusCode, successResult);
+        }
+
+        [HttpPut("{applicationId}/preferences")]
+        public async Task<ActionResult<Result<ApplicationDetailsDto>>> UpdatePreferences(
+            Guid applicationId,
+            [FromBody] UpdateApplicationPreferencesDto request,
+            CancellationToken cancellationToken)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+
+            var result = await _applicationService.UpdateApplicationPreferencesAsync(applicationId, userId, request, cancellationToken);
+
+            return StatusCode(result.StatusCode, result);
+        }
     }
 }
