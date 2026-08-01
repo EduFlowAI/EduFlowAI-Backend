@@ -12,6 +12,8 @@ namespace EduFlowAI.Communication.Application.Interfaces
     {
         Task NotifyAsync(CreateNotificationRequest request, CancellationToken cancellationToken);
         Task<Result<PaginatedResult<NotificationResponse>>> GetAllNotificationsByUserIdAsync(string userId, QueryParameters queryParameters, CancellationToken cancellationToken);
+        Task<Result<bool>> MarkAsReadAsync(string userId, Guid notificationId, CancellationToken cancellationToken);
+        Task<Result<int>> MarkAllAsReadAsync(string userId, CancellationToken cancellationToken);
     }
 
     public sealed record CreateNotificationRequest(
