@@ -45,6 +45,13 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
         void Update(T entity);
 
         /// <summary>
+        /// Remove an existing entity.
+        /// </summary>
+        /// <param name="entity"></param>
+        void Delete(T entity);
+
+
+        /// <summary>
         /// Saves changes to the database.
         /// </summary>
         /// <returns></returns>
