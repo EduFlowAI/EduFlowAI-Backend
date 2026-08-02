@@ -76,6 +76,11 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
             _dbSet.Update(entity);
         }
 
+        public void Delete(T entity)
+        {
+            _dbSet.Remove(entity);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();
