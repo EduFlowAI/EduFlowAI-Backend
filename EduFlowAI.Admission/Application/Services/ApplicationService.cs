@@ -1,11 +1,14 @@
 ﻿using AutoMapper;
 using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
+using Wolverine.Persistence;
 
 namespace EduFlowAI.Admission.Application.Services
 {
@@ -14,16 +17,22 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IApplicationRepository _applicationRepository;
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<ApplicationPreference> _preferenceRepository;
+        private readonly IGenericRepository<ApplicantProfile> _profileRepository;
+        private readonly IAdmissionEligibilityService _eligibilityService;
         private readonly IMapper _mapper;
 
         public ApplicationService(IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
             IGenericRepository<ApplicationPreference> preferenceRepository,
+            IGenericRepository<ApplicantProfile> profileRepository,
+            IAdmissionEligibilityService eligibilityService,
             IMapper mapper)
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _preferenceRepository = preferenceRepository;
+            _profileRepository = profileRepository;
+            _eligibilityService = eligibilityService;
             _mapper = mapper;
         }
 
@@ -35,11 +44,15 @@ namespace EduFlowAI.Admission.Application.Services
             if(string.IsNullOrWhiteSpace(applicantUserId))
                 return Result<ApplicationDto>.Failure(400, "Applicant user ID cannot be null or empty");
 
-            // 1. Business Rule Validation: One application per applicant and cycle
-            bool hasExistingApp = await _applicationRepository.HasExistingApplicationAsync(applicantUserId, request.CycleId);
-
-            if (hasExistingApp)
-                return Result<ApplicationDto>.Failure(400, "You have already created application for this admission cycle.");
+            // 1. Business Rule Validation: One active application per applicant and cycle
+            // Check if there is any application for this cycle that is NOT Withdrawn.
+            var activeApplication = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: a => a.ApplicantUserId == applicantUserId
+                             && a.CycleId == request.CycleId
+                             && a.Status != ApplicationStatus.Withdrawn
+            );
+            if (activeApplication != null)
+                return Result<ApplicationDto>.Failure(400, "You already have an active application for this admission cycle.");
 
             // 2. Map and set Business Rules/Domain logic
             var application = _mapper.Map<Domain.Entities.Application>(request);
@@ -205,6 +218,129 @@ namespace EduFlowAI.Admission.Application.Services
             );
 
             return Result<ApplicationDetailsDto>.Success(resultDto, 200, "Preferences updated successfully.");
+        }
+
+        public async Task<Result<ApplicationDetailsDto>> SubmitApplicationAsync(Guid applicationId,
+            string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            // STEP 1: Validation
+            // 1. Fetch the application along with required related data (Cycle and Preferences)
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
+                include: query => query.Include(a => a.Cycle)
+                                       .Include(a => a.Preferences)
+                                            .ThenInclude(p => p.TrackBranchOffering)
+            );
+            if(application == null)
+            {
+                return Result<ApplicationDetailsDto>.Failure(404, "Application not found or you are not authorized to submit it.");
+            }
+
+            // 2. Perform business rule validations
+            var validationError = ValidateApplicationForSubmission(application);
+            if (!string.IsNullOrEmpty(validationError))
+            {
+                return Result<ApplicationDetailsDto>.Failure(400, validationError);
+            }
+
+            // STEP 2: Eligibility Evaluation
+            // 2.1 Fetch the ApplicantProfile using the string userId to get the applicantProfile Guid Id
+            var applicantProfile = await _profileRepository.GetFirstOrDefaultAsync(
+                predicate: p => p.UserId == applicantUserId
+            );
+            if(applicantProfile == null)
+            {
+                return Result<ApplicationDetailsDto>.Failure(400, "Applicant profile is incomplete or missing. Cannot evaluate eligibility.");
+            }
+            // 2.2 Evaluate eligibility
+            var eligibilityResult = await _eligibilityService.EvaluateApplicantAsync(
+                applicantProfile.Id,
+                application.CycleId,
+                application.Id
+            );
+
+            // STEP 3: Atomic State Mutation
+            // 3.1 Attach the evaluation result to the application
+            application.EligibilityResult = eligibilityResult;
+
+            // 3.2 Update the status based on the evaluation result
+            if (eligibilityResult.Passed)
+            {
+                application.Status = ApplicationStatus.DocumentsRequired;
+            }
+            else
+            {
+                application.Status = ApplicationStatus.EligibilityFailed;
+            }
+
+            // 3.3 Set submission and update timestamps
+            application.SubmittedAt = DateTimeOffset.UtcNow;
+            application.UpdatedAt = DateTimeOffset.UtcNow;
+
+            _applicationRepository.Update(application);
+            await _applicationRepository.SaveChangesAsync();
+
+            var applicationDetailsDto = new ApplicationDetailsDto(
+                application.Id,
+                application.ApplicantUserId,
+                application.CycleId,
+                application.Cycle?.Label ?? string.Empty,
+                application.Cycle?.DeadlineUtc ?? DateTimeOffset.MinValue,
+                application.Status.ToString(),
+                application.CreatedAt,
+                application.UpdatedAt,
+                application.Preferences?.Select(p => new PreferenceDto
+                (
+                    p.TrackBranchOffering?.TrackId ?? Guid.Empty,
+                    p.TrackBranchOffering?.BranchId ?? Guid.Empty,
+                    p.Rank
+                )).OrderBy(p => p.Rank).ToList() ?? new List<PreferenceDto>()
+            );
+
+            return Result<ApplicationDetailsDto>.Success(applicationDetailsDto, message: "Application submitted and evaluated successfully.");
+        }
+
+
+        // ============================ Helper Methods ============================
+        /// <summary>
+        /// Private helper method to handle all submission business rules.
+        /// </summary>
+        /// <param name="application"></param>
+        /// <returns></returns>
+        private string? ValidateApplicationForSubmission(Domain.Entities.Application application)
+        {
+            // Rule A: Application must be in Draft status
+            if(application.Status != ApplicationStatus.Draft)
+            {
+                return "Application cannot be submitted because it is no longer in Draft status.";
+            }
+
+            // Rule B: Application must have at least one selected preference
+            if (application.Preferences == null || !application.Preferences.Any())
+            {
+                return "Cannot submit an application without selecting any preferences.";
+            }
+
+            // Rule C: Ensure Cycle is loaded properly
+            if (application.Cycle == null)
+            {
+                return "System error: The admission cycle associated with this application could not be loaded.";
+            }
+
+            // Rule D: The cycle must be active
+            if (application.Cycle.Status != CycleStatus.Active) // Assuming CycleStatus has an 'Active' enum
+            {
+                return $"The admission cycle '{application.Cycle.Label}' is not currently active.";
+            }
+
+            // Rule E: Deadline enforcement (Strict check against UTC time)
+            if (DateTimeOffset.UtcNow > application.Cycle.DeadlineUtc)
+            {
+                return $"The deadline for '{application.Cycle.Label}' has passed. Submissions are no longer accepted.";
+            }
+
+            // Return null if all validations pass successfully
+            return null;
         }
     }
 }
