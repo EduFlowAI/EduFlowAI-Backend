@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using EduFlowAI.Admission.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EduFlowAI.Admission.Infrastructure.Configurations
@@ -25,7 +26,11 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(a => a.CreatedAt).HasDefaultValueSql("now()");
             builder.Property(a => a.UpdatedAt).HasDefaultValueSql("now()");
 
-            builder.HasIndex(a => new { a.ApplicantUserId, a.CycleId }).IsUnique();
+            // Cast the enum to integer to get the exact database value
+            string withdrawnStatusValue = ApplicationStatus.Withdrawn.ToString();
+            builder.HasIndex(a => new { a.ApplicantUserId, a.CycleId })
+                .IsUnique()
+                .HasFilter($"\"Status\" != '{withdrawnStatusValue}'");
 
             builder.HasIndex(a => new { a.CycleId, a.Status });
 
