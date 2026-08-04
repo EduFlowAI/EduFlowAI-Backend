@@ -6,6 +6,7 @@ using EduFlowAI.Shared.Kernel.Common;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
 using EduFlowAI.Shared.Kernel.Messaging;
 using EduFlowAI.Shared.Messaging.Contracts.Communication.V1;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -94,6 +95,71 @@ namespace EduFlowAI.Communication.Application.Services
                 OccurredAtUtc: DateTimeOffset.UtcNow));
 
             //await _outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
+        }
+
+        public async Task<Result<bool>> MarkAsReadAsync(string userId, Guid notificationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var updatedCount = await _dbContext.Notifications
+                    .Where(notification =>
+                        notification.Id == notificationId &&
+                        notification.UserId == userId &&
+                        !notification.IsRead)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(
+                            notification => notification.IsRead,
+                            true),
+                        cancellationToken);
+
+                if (updatedCount > 0)
+                {
+                    return Result<bool>.Success(true);
+                }
+
+                var exists = await _dbContext.Notifications
+                    .AnyAsync(
+                        notification =>
+                            notification.Id == notificationId &&
+                            notification.UserId == userId,
+                        cancellationToken);
+
+                return exists
+                    ? Result<bool>.Success(true)
+                    : Result<bool>.Failure(
+                        StatusCodes.Status404NotFound,
+                        "Notification was not found.");
+            }
+            catch (Exception ex)
+            {
+                return Result<bool>.Failure(
+                    StatusCodes.Status500InternalServerError,
+                    $"An error occurred while updating the notification: {ex.Message}");
+            }
+        }
+
+        public async Task<Result<int>> MarkAllAsReadAsync(string userId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var updatedCount = await _dbContext.Notifications
+                    .Where(notification =>
+                        notification.UserId == userId &&
+                        !notification.IsRead)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(
+                            notification => notification.IsRead,
+                            true),
+                        cancellationToken);
+
+                return Result<int>.Success(updatedCount);
+            }
+            catch (Exception ex)
+            {
+                return Result<int>.Failure(
+                    StatusCodes.Status500InternalServerError,
+                    $"An error occurred while updating notifications: {ex.Message}");
+            }
         }
     }
 }

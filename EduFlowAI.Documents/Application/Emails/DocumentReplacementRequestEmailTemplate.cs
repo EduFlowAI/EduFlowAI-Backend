@@ -25,7 +25,7 @@ namespace EduFlowAI.Documents.Application.Emails
                           <table role='presentation' cellspacing='0' cellpadding='0' border='0' width='600' style='background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
                             <tr>
                               <td style='background-color: #1E3A8A; padding: 30px; text-align: center; color: white;'>
-                                <img src='cid:vgo_logo' alt='EduFlowAI Logo' style='width: 85px; height: auto; margin-bottom: 10px;' />
+                                <img src='../../../EduFlowAI.Api/wwwroot/Logo/edu-logo-light.png' alt='EduFlowAI Logo' style='width: 85px; height: auto; margin-bottom: 10px;' />
                               </td>
                             </tr>
                             <tr>

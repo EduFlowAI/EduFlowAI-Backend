@@ -118,6 +118,19 @@ public static class IdentityModule
                                 Detail = "The account does not have permission " +
                                     "to perform this action."
                             });
+                    },
+                    OnMessageReceived = context =>
+                    {
+                        var token = context.Request.Query["access_token"].FirstOrDefault();
+
+                        if (!string.IsNullOrWhiteSpace(token) &&
+                            context.HttpContext.Request.Path
+                                .StartsWithSegments("/hubs/notifications"))
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
                     }
                 };
             });

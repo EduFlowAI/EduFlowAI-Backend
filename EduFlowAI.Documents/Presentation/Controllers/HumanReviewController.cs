@@ -19,7 +19,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         }
 
         [HttpGet("document-reviews")]
-        //[Authorize]
+        [Authorize(Roles = "SuperAdmin, OperationsManager")]
         public async Task<IActionResult> GetAllDocumentsReviews([FromQuery] QueryParameters queryParameters)
         {
             var result = await _documentHumanReviewService.GetAllDocumentsReviewsAsync(queryParameters);
@@ -32,7 +32,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         }
 
         [HttpGet("document-review/{documentId}")]
-        //[Authorize]
+        [Authorize(Roles = "SuperAdmin, OperationsManager")]
         public async Task<IActionResult> GetDocumentReview(Guid documentId)
         {
             var result = await _documentHumanReviewService.GetDocumentReviewAsync(documentId);
@@ -44,7 +44,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         }
 
         [HttpGet("document-file/{documentId}")]
-        //[Authorize]
+        [Authorize]
         public async Task<IActionResult> GetDocumentFile(Guid documentId)
         {
             var result = await _documentHumanReviewService.GetDocumentFileAsync(documentId);
@@ -56,11 +56,12 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         }
 
         [HttpPost("approve-review/{documentId}")]
-        //[Authorize]
+        [Authorize(Roles ="SuperAdmin, OperationsManager")]
         public async Task<IActionResult> ApproveReview(Guid documentId)
         {
-            //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userId = "1"; // for test
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
             var result = await _documentHumanReviewService.ApproveReviewAsync(documentId, userId, default);
             if (!result.IsSuccess)
             {
@@ -70,12 +71,13 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         }
 
         [HttpPost("reject-review/{documentId}")]
-        //[Authorize]
-        public async Task<IActionResult> RejectReview(Guid documentId)
+        [Authorize(Roles = "SuperAdmin, OperationsManager")]
+        public async Task<IActionResult> RejectReview(Guid documentId, string reason)
         {
-            //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userId = "1"; // for test
-            var result = await _documentHumanReviewService.RejectReviewAsync(documentId, userId, default);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var result = await _documentHumanReviewService.RejectReviewAsync(documentId, reason, default);
             if (!result.IsSuccess)
             {
                 return StatusCode(result.StatusCode, result.Message);

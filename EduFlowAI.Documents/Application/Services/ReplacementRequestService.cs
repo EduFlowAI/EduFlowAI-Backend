@@ -53,6 +53,7 @@ namespace EduFlowAI.Documents.Application.Services
                 };
 
                 await dbContext.DocumentReplacementRequests.AddAsync(replacementRequest);
+                doc.Status = DocumentStatus.ReplacementRequested;
 
                 var applicant = await GetApplicant(doc.ApplicationId);
                 // send notification
@@ -85,17 +86,26 @@ namespace EduFlowAI.Documents.Application.Services
             try
             {
                 var apps = await admissionDbContext.Applications.AsNoTracking()
-                    .Where(a => a.ApplicantUserId == ApplicantId).ToListAsync();
+                    .Where(a => a.ApplicantUserId == ApplicantId)
+                    .Select(a => a.Id).ToListAsync();
 
-                if (!apps.Any() || apps is null)
+                if (apps.Count == 0)
                 {
-                    Result<PaginatedResult<ReplacementDto>>.Failure(400, "User does not have any applications");
+                    return Result<PaginatedResult<ReplacementDto>>.Failure(404, "User does not have any applications");
                 }
 
                 var query = dbContext.DocumentReplacementRequests.AsNoTracking()
-                    .Where(r=>r.Status == ReplacementRequestStatus.Open)
                     .Include(r => r.Document)
-                    .Where(r => apps.Any(a => a.Id == r.Document.ApplicationId));
+                    .Where(r=>apps.Contains(r.Document.ApplicationId))
+                    .Select(r => new
+                    {
+                        r.Id,
+                        r.DocumentId,
+                        r.Reason,
+                        r.Status,
+                        r.RequestedAt,
+                        DocumentType = r.Document.DocumentType.ToString()
+                    });
 
                 if(!string.IsNullOrEmpty(queryParameters.Search))
                 {
@@ -116,6 +126,7 @@ namespace EduFlowAI.Documents.Application.Services
                     .Select(r => new ReplacementDto(
                         r.Id,
                         r.DocumentId,
+                        r.DocumentType,
                         r.Reason,
                         r.Status,
                         r.RequestedAt
@@ -143,23 +154,23 @@ namespace EduFlowAI.Documents.Application.Services
             try
             {
                 var req = await dbContext.DocumentReplacementRequests.AsNoTracking()
-                    .FirstOrDefaultAsync(r => r.Id == requestId);
+                    .Include(r => r.Document)
+                    .Where(r => r.Id == requestId)
+                    .Select(r => new ReplacementDto(
+                        r.Id,
+                        r.DocumentId,
+                        r.Document.DocumentType.ToString(),
+                        r.Reason,
+                        r.Status,
+                        r.RequestedAt
+                    )).FirstOrDefaultAsync();
 
-                if(req is null)
+                if (req is null)
                 {
                     return Result<ReplacementDto>.Failure(404, "Request not found");
                 }
 
-                var dto = new ReplacementDto
-                    (
-                        requestId,
-                        req.DocumentId,
-                        req.Reason,
-                        req.Status,
-                        req.RequestedAt
-                    );
-
-                return Result<ReplacementDto>.Success(dto);
+                return Result<ReplacementDto>.Success(req);
             }
             catch (Exception ex)
             {
