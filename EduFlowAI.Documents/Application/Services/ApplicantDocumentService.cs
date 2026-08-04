@@ -338,4 +338,52 @@ public sealed class ApplicantDocumentService : IApplicantDocumentService
 
         return Result<IEnumerable<ApplicantDocumentDto>>.Success(documents);
     }
+
+
+    public async Task<Result<RequiredDocumentsDto>> GetRequiredDocumentTypesAsync(Guid applicationId, CancellationToken cancellationToken = default)
+    {
+        // 1. Authenticate
+        var userId = _currentUserService.UserId;
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Result<RequiredDocumentsDto>.Failure(401, "User is not authenticated.");
+        }
+
+        // 2. Authorize
+        var hasAccess = await _applicationAccessReader.CanAccessDocumentsAsync(
+            applicationId,
+            userId,
+            cancellationToken);
+
+        if (!hasAccess)
+        {
+            _logger.LogWarning(
+                "Security: User {UserId} attempted to view required documents for application {ApplicationId} without authorization.",
+                userId,
+                applicationId);
+
+            return Result<RequiredDocumentsDto>.Failure(403, "You do not have permission to view requirements for this application.");
+        }
+
+        // 3. Resolve program context (same lookup UploadDocumentAsync already does)
+        var programId = await _applicationAccessReader.GetProgramIdAsync(applicationId, cancellationToken);
+        if (programId == Guid.Empty)
+        {
+            return Result<RequiredDocumentsDto>.Failure(404, "Application program context could not be found.");
+        }
+
+        // 4. Resolve applicant gender
+        var applicant = await _profileService.GetAsync(userId, cancellationToken);
+        var applicantGender = GenderMapper.ToGender(applicant?.Value?.Gender) ?? Gender.None;
+
+        // 5. Resolve the effective requirement set for this program + gender
+        var requirementSet = await _programRequirementReader.ResolveAsync(programId, applicantGender, cancellationToken);
+        if (requirementSet is null)
+        {
+            return Result<RequiredDocumentsDto>.Failure(400, "Could not determine document requirements for this program. Please contact support.");
+        }
+
+        return Result<RequiredDocumentsDto>.Success(new RequiredDocumentsDto(requirementSet.DocumentTypes));
+    }
+
 }
