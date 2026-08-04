@@ -21,6 +21,8 @@ namespace EduFlowAI.Documents.Domain.Entities
 
         public string? VerificationDetailsJson { get; set; }
 
+        public string? RejectionReason { get; set; }
+
         public DateTimeOffset? VerifiedAt { get; set; }
 
         public DateTimeOffset CreatedAt { get; set; }

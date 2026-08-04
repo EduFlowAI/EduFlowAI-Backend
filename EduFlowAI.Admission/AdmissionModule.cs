@@ -83,7 +83,6 @@ namespace EduFlowAI.Admission
         {
             services.AddScoped<IApplicationRepository, ApplicationRepository>();
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
-            services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
             services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
 
             return services;
