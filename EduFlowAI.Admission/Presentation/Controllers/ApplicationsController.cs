@@ -3,6 +3,8 @@ using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
+using EduFlowAI.Shared.Kernel.Common.Pagination;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -10,6 +12,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
 {
     [ApiController]
     [Route("api/modules/admission/[controller]")]
+    [Authorize]
     public class ApplicationsController : ControllerBase
     {
         private readonly IApplicationService _applicationService;
@@ -41,6 +44,24 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _applicationService.CreateDraftApplicationAsync(userId, request);
             // Use the built-in StatusCode method to return both the HTTP code and the Result object
             return StatusCode(result.StatusCode, result);
+        }
+
+        // POST api/modules/admission/applications/{applicationId}/submit
+        [HttpPost("{applicationId:guid}/submit")]
+        public async Task<ActionResult<Result<ApplicationDetailsDto>>> SubmitApplication(Guid applicationId, CancellationToken cancellationToken)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(Result<ApplicationDetailsDto>.Failure(401, "User is not authenticated."));
+            }
+
+            var result = await _applicationService.SubmitApplicationAsync(applicationId, userId, cancellationToken);
+            if (!result.IsSuccess)
+            {
+                return StatusCode(result.StatusCode, result);
+            }
+            return Ok(result);
         }
 
         // POST: api/modules/admission/applications/evaluate
@@ -207,6 +228,44 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var result = await _applicationService.UpdateApplicationPreferencesAsync(applicationId, userId, request, cancellationToken);
 
             return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("my-applications")]
+        public async Task<ActionResult<Result<PaginatedResult<ApplicationListDto>>>> GetMyApplications(
+            [FromQuery] QueryParameters queryParameters,
+            CancellationToken cancellationToken = default)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+
+            var paginatedResult = await _statusQueryService.GetMyApplicationsAsync(userId, queryParameters, cancellationToken);
+
+            var successResult = Result<PaginatedResult<ApplicationListDto>>.Success(
+                paginatedResult, message: "Applications retrieved successfully."
+            );
+
+            return Ok(successResult);
+        }
+
+        [HttpGet("{applicationId}/eligibility")]
+        public async Task<ActionResult<Result<EligibilityDetailsDto>>> GetEligibilityDetails(Guid applicationId,
+            CancellationToken cancellationToken = default)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+            
+            var detailsDto = await _statusQueryService.GetEligibilityDetailsAsync(applicationId, userId, cancellationToken);
+            if(detailsDto == null)
+            {
+                var error = Result<EligibilityDetailsDto>.Failure(404, "Application not found, unauthorized, or eligibility results not available yet.");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            var successResult = Result<EligibilityDetailsDto>.Success(
+                detailsDto,
+                message: "Eligibility details retrieved successfully."
+            );
+
+            return Ok(successResult);
         }
     }
 }

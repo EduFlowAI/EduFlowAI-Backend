@@ -7,6 +7,7 @@ using EduFlowAI.AI.Presentation.Services;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Shared.Kernel.Common;
+using EduFlowAI.Shared.Kernel.Common.Pagination;
 
 namespace EduFlowAI.AI.Tests;
 
@@ -442,6 +443,16 @@ public class AssistantMessageServiceTests
         public Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId)
         {
             return Task.FromResult<ApplicationDashboardSummaryDto?>(null);
+        }
+
+        public Task<EligibilityDetailsDto?> GetEligibilityDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<EligibilityDetailsDto?>(null);
+        }
+
+        public Task<PaginatedResult<ApplicationListDto>> GetMyApplicationsAsync(string applicantUserId, QueryParameters queryParams, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<PaginatedResult<ApplicationListDto>>(new PaginatedResult<ApplicationListDto>());
         }
     }
 

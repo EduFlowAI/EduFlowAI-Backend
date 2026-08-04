@@ -3,7 +3,7 @@ using EduFlowAI.Admission.Application.Extensions;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
-using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Shared.Kernel.Common.Pagination;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Admission.Application.Services
@@ -136,6 +136,89 @@ namespace EduFlowAI.Admission.Application.Services
                 application.UpdatedAt,
                 preferencesDto
             );
+        }
+
+        public async Task<PaginatedResult<ApplicationListDto>> GetMyApplicationsAsync(string applicantUserId,
+            QueryParameters queryParams, CancellationToken cancellationToken = default)
+        {
+            // 1. Fetch all applications for the specific user and include the Cycle to retrieve the IntakeName
+            var applications = await _applicationRepository.GetAllAsync(
+                predicate: a => a.ApplicantUserId == applicantUserId,
+                include: query => query.Include(a => a.Cycle)
+                                       .ThenInclude(c => c.Program)
+            );
+
+            applications ??= new List<Domain.Entities.Application>();
+
+            // 2. Calculate pagination metrics
+            var totalCount = applications.Count;
+            var totalPages = (int)Math.Ceiling(totalCount / (double)queryParams.PageSize);
+
+            // 3. Apply sorting and pagination in-memory
+            var paginatedApps = applications
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((queryParams.Page - 1) * queryParams.PageSize)
+                .Take(queryParams.PageSize)
+                .ToList();
+
+            // 4. Map the paginated entities to the lightweight DTO
+            var data = paginatedApps.Select(a => new ApplicationListDto
+            {
+                Id = a.Id,
+                ProgramName = a.Cycle?.Program?.Name ?? string.Empty,
+                IntakeName = a.Cycle?.Label ?? string.Empty,
+                Status = a.Status.ToString(),
+                SubmittedAt = a.SubmittedAt
+            }).ToList();
+
+            // 5. Construct and return the unified paginated result
+            return new PaginatedResult<ApplicationListDto>
+            {
+                Data = data,
+                CurrentPage = queryParams.Page,
+                PageSize = queryParams.PageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Filters = queryParams
+            };
+        }
+
+        public async Task<EligibilityDetailsDto?> GetEligibilityDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            // 1. Fetch the application to verify ownership and include the eligibility result
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: a => a.Id == applicationId && a.ApplicantUserId == applicantUserId,
+                include: q => q.Include(a => a.EligibilityResult)
+            );
+            // 2. Return null if application is not found, unauthorized, or has no eligibility result
+            if (application == null || application.EligibilityResult == null)
+            {
+                return null;
+            }
+
+            var eligibility = application.EligibilityResult;
+            var failureReasons = new List<string>();
+
+            // 3. Safely deserialize the JSON string into a List of strings
+            if (!string.IsNullOrWhiteSpace(eligibility.FailureReasonsJson))
+            {
+                try
+                {
+                    failureReasons = System.Text.Json.JsonSerializer.Deserialize<List<string>>(eligibility.FailureReasonsJson) ?? new List<string>();
+                }
+                catch
+                {       // Fallback to an empty list in case of JSON parsing errors
+                    failureReasons = new List<string>();
+                }
+            }
+
+            // 4. Map to DTO and return
+            return new EligibilityDetailsDto
+            {
+                Passed = eligibility.Passed,
+                EvaluatedAt = eligibility.EvaluatedAt,
+                FailureReasons = failureReasons
+            };
         }
     }
 }
