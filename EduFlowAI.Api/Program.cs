@@ -148,6 +148,12 @@ public class Program
             app.UseSwagger();
             app.UseSwaggerUI();
         }
+        else if (app.Environment.IsProduction())
+        {
+            app.MapOpenApi();
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
 
         app.UseHttpsRedirection();
         app.UseCors("Frontend");
