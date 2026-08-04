@@ -11,7 +11,7 @@
 
         public string Code { get; set; } = null!;
 
-        public string Description { get; set; } = null!;
+        public string Description { get; set; } = string.Empty;
 
         public int DurationMonths { get; set; }
 
