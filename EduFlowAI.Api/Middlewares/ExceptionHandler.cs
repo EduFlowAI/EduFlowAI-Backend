@@ -40,7 +40,7 @@ public sealed class ExceptionHandler(
                 StatusCodes.Status500InternalServerError,
                 "Unexpected server error",
                 environment.IsDevelopment()
-                    ? exception.Message
+                    ? GetDevelopmentDetail(exception)
                     : "An unexpected error occurred.")
         };
 
@@ -75,5 +75,14 @@ public sealed class ExceptionHandler(
             problem,
             cancellationToken: cancellationToken);
         return true;
+    }
+
+    private static string GetDevelopmentDetail(Exception exception)
+    {
+        var rootCause = exception.GetBaseException();
+
+        return ReferenceEquals(rootCause, exception)
+            ? exception.Message
+            : $"{rootCause.GetType().Name}: {rootCause.Message}";
     }
 }
