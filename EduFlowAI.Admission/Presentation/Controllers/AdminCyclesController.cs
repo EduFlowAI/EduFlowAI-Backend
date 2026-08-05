@@ -60,14 +60,44 @@ public sealed class AdminCyclesController : ControllerBase
     }
 
     [HttpPost("{cycleId:guid}/offerings")]
-    public async Task<ActionResult<Result<IReadOnlyList<OfferingDto>>>> ConfigureOfferings(
+    public async Task<ActionResult<Result<OfferingDto>>> CreateOffering(
         Guid cycleId,
-        [FromBody] ConfigureOfferingsRequest request,
+        [FromBody] CreateOfferingRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _offeringService.ConfigureOfferingsAsync(
+        var result = await _offeringService.CreateOfferingAsync(
             cycleId,
             request,
+            cancellationToken);
+
+        return this.ToActionResult(result);
+    }
+
+    [HttpPut("{cycleId:guid}/offerings/{offeringId:guid}")]
+    public async Task<ActionResult<Result<OfferingDto>>> UpdateOffering(
+        Guid cycleId,
+        Guid offeringId,
+        [FromBody] UpdateOfferingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _offeringService.UpdateOfferingAsync(
+            cycleId,
+            offeringId,
+            request,
+            cancellationToken);
+
+        return this.ToActionResult(result);
+    }
+
+    [HttpDelete("{cycleId:guid}/offerings/{offeringId:guid}")]
+    public async Task<ActionResult<Result<bool>>> DeleteOffering(
+        Guid cycleId,
+        Guid offeringId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _offeringService.DeleteOfferingAsync(
+            cycleId,
+            offeringId,
             cancellationToken);
 
         return this.ToActionResult(result);

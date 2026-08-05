@@ -19,7 +19,7 @@ public sealed class OfferingDto
     public int Capacity { get; init; }
 }
 
-public sealed class OfferingInput
+public sealed class CreateOfferingRequest
 {
     public Guid TrackId { get; init; }
     public Guid BranchId { get; init; }
@@ -28,22 +28,35 @@ public sealed class OfferingInput
     public int Capacity { get; init; }
 }
 
-public sealed class ConfigureOfferingsRequest
+public sealed class UpdateOfferingRequest
 {
-    [Required, MaxLength(500)]
-    public OfferingInput[] Offerings { get; init; } = [];
+    [Range(1, int.MaxValue)]
+    public int Capacity { get; init; }
 }
 
 public interface IOfferingService
 {
-    Task<Result<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(
+    Task<Result<OfferingDto>> CreateOfferingAsync(
         Guid cycleId,
-        ConfigureOfferingsRequest request,
+        CreateOfferingRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<OfferingDto>> UpdateOfferingAsync(
+        Guid cycleId,
+        Guid offeringId,
+        UpdateOfferingRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<bool>> DeleteOfferingAsync(
+        Guid cycleId,
+        Guid offeringId,
         CancellationToken cancellationToken = default);
 }
 
 internal sealed class OfferingService : IOfferingService
 {
+    private const int MaximumOfferingsPerCycle = 500;
+
     private readonly IAdmissionDbContext _dbContext;
     private readonly IAdmissionApplicationReader _applicationReader;
     private readonly TimeProvider _timeProvider;
@@ -70,70 +83,44 @@ internal sealed class OfferingService : IOfferingService
         _cycleGuard = cycleGuard;
     }
 
-    public async Task<Result<IReadOnlyList<OfferingDto>>> ConfigureOfferingsAsync(
+    public async Task<Result<OfferingDto>> CreateOfferingAsync(
         Guid cycleId,
-        ConfigureOfferingsRequest request,
+        CreateOfferingRequest request,
         CancellationToken cancellationToken = default)
     {
         if (cycleId == Guid.Empty)
         {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
+            return Result<OfferingDto>.Failure(
                 400,
                 "A valid cycle ID is required.");
         }
 
-        if (request?.Offerings is null)
+        if (request is null)
         {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
+            return Result<OfferingDto>.Failure(
                 400,
-                "An offerings list is required.");
+                "Request body is required.");
         }
 
-        if (request.Offerings.Length == 0)
+        if (request.TrackId == Guid.Empty ||
+            request.BranchId == Guid.Empty ||
+            request.Capacity <= 0)
         {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
+            return Result<OfferingDto>.Failure(
                 400,
-                "At least one track/branch offering is required.");
-        }
-
-        if (request.Offerings.Length > 500)
-        {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
-                400,
-                "A cycle can contain at most 500 track/branch offerings.");
-        }
-
-        if (request.Offerings.Any(x =>
-                x is null ||
-                x.TrackId == Guid.Empty ||
-                x.BranchId == Guid.Empty ||
-                x.Capacity <= 0))
-        {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
-                400,
-                "Every offering requires a valid track, branch, and positive capacity.");
-        }
-
-        if (request.Offerings
-            .GroupBy(x => new { x.TrackId, x.BranchId })
-            .Any(group => group.Count() > 1))
-        {
-            return Result<IReadOnlyList<OfferingDto>>.Failure(
-                400,
-                "Duplicate track/branch combinations are not allowed.");
+                "A valid track, branch, and positive capacity are required.");
         }
 
         return await _writeExecutor.ExecuteSerializableAsync(
             cancellationToken,
             async ct =>
             {
-                var cycle = await _dbContext.AdmissionCycles.SingleOrDefaultAsync(
-                    x => x.Id == cycleId,
-                    ct);
+                var cycle = await _dbContext.AdmissionCycles
+                    .SingleOrDefaultAsync(x => x.Id == cycleId, ct);
 
                 if (cycle is null)
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(
                         404,
                         "Admission cycle was not found.");
                 }
@@ -141,158 +128,212 @@ internal sealed class OfferingService : IOfferingService
                 var configurationError = await _cycleGuard.ValidateAsync(cycle, ct);
                 if (configurationError is not null)
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(409, configurationError);
+                }
+
+                int offeringCount = await _dbContext.TrackBranchOfferings.CountAsync(
+                    x => x.CycleId == cycleId,
+                    ct);
+                if (offeringCount >= MaximumOfferingsPerCycle)
+                {
+                    return Result<OfferingDto>.Failure(
                         409,
-                        configurationError);
+                        $"A cycle can contain at most {MaximumOfferingsPerCycle} track/branch offerings.");
                 }
 
-                var trackIds = request.Offerings
-                    .Select(x => x.TrackId)
-                    .Distinct()
-                    .ToList();
+                var track = await _dbContext.Tracks
+                    .SingleOrDefaultAsync(x => x.Id == request.TrackId, ct);
 
-                var branchIds = request.Offerings
-                    .Select(x => x.BranchId)
-                    .Distinct()
-                    .ToList();
+                var branch = await _dbContext.Branches
+                    .SingleOrDefaultAsync(x => x.Id == request.BranchId, ct);
 
-                var tracks = await _dbContext.Tracks
-                    .Where(x => trackIds.Contains(x.Id))
-                    .ToDictionaryAsync(x => x.Id, ct);
-
-                var branches = await _dbContext.Branches
-                    .Where(x => branchIds.Contains(x.Id))
-                    .ToDictionaryAsync(x => x.Id, ct);
-
-                if (tracks.Count != trackIds.Count ||
-                    branches.Count != branchIds.Count)
+                if (track is null || branch is null)
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(
                         400,
-                        "One or more tracks or branches do not exist.");
+                        "The selected track or branch does not exist.");
                 }
 
-                if (tracks.Values.Any(x => x.ProgramId != cycle.ProgramId))
+                if (track.ProgramId != cycle.ProgramId)
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(
                         400,
-                        "Every offered track must belong to the cycle's program.");
+                        "The offered track must belong to the cycle's program.");
                 }
 
-                if (tracks.Values.Any(x => !x.IsActive) ||
-                    branches.Values.Any(x => !x.IsActive))
+                if (!track.IsActive || !branch.IsActive)
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(
                         400,
                         "Inactive tracks or branches cannot be offered.");
                 }
 
-                var existing = await _dbContext.TrackBranchOfferings
-                    .Where(x => x.CycleId == cycleId)
-                    .ToListAsync(ct);
-
-                if (existing
-                    .GroupBy(offering => new OfferingKey(
-                        offering.TrackId,
-                        offering.BranchId))
-                    .Any(group => group.Count() > 1))
-                {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
-                        409,
-                        "Existing offerings contain duplicate track/branch keys. Resolve the database duplicates before updating this cycle.");
-                }
-
-                var existingByKey = existing.ToDictionary(
-                    offering => new OfferingKey(
-                        offering.TrackId,
-                        offering.BranchId));
-
-                var requestedKeys = request.Offerings
-                    .Select(input => new OfferingKey(
-                        input.TrackId,
-                        input.BranchId))
-                    .ToHashSet();
-
-                var removed = existing
-                    .Where(offering =>
-                        !requestedKeys.Contains(new OfferingKey(
-                            offering.TrackId,
-                            offering.BranchId)))
-                    .ToList();
-
-                if (await _applicationReader.HasPreferencesForOfferingsAsync(
-                        removed.Select(x => x.Id).ToList(),
+                if (await _dbContext.TrackBranchOfferings.AnyAsync(
+                        x => x.CycleId == cycleId &&
+                             x.TrackId == request.TrackId &&
+                             x.BranchId == request.BranchId,
                         ct))
                 {
-                    return Result<IReadOnlyList<OfferingDto>>.Failure(
+                    return Result<OfferingDto>.Failure(
                         409,
-                        "One or more removed offerings are referenced by application preferences and cannot be deleted.");
+                        "That track and branch offering already exists for this cycle.");
                 }
-
-                _dbContext.TrackBranchOfferings.RemoveRange(removed);
-
-                var effectiveOfferings = new List<TrackBranchOffering>(
-                    request.Offerings.Length);
 
                 var now = UtcNow;
-
-                foreach (var input in request.Offerings)
+                var offering = new TrackBranchOffering
                 {
-                    var key = new OfferingKey(input.TrackId, input.BranchId);
+                    Id = Guid.NewGuid(),
+                    CycleId = cycleId,
+                    TrackId = request.TrackId,
+                    BranchId = request.BranchId,
+                    Capacity = request.Capacity,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
 
-                    if (existingByKey.TryGetValue(key, out var retained))
-                    {
-                        if (retained.Capacity != input.Capacity)
-                        {
-                            retained.Capacity = input.Capacity;
-                            retained.UpdatedAt = now;
-                        }
-
-                        effectiveOfferings.Add(retained);
-                        continue;
-                    }
-
-                    var added = new TrackBranchOffering
-                    {
-                        Id = Guid.NewGuid(),
-                        CycleId = cycleId,
-                        TrackId = input.TrackId,
-                        BranchId = input.BranchId,
-                        Capacity = input.Capacity,
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    };
-
-                    _dbContext.TrackBranchOfferings.Add(added);
-                    effectiveOfferings.Add(added);
-                }
-
+                _dbContext.TrackBranchOfferings.Add(offering);
                 cycle.UpdatedAt = now;
                 await _dbContext.SaveChangesAsync(ct);
 
-                IReadOnlyList<OfferingDto> data = effectiveOfferings
-                    .Select(x => OfferingMapper.Map(
-                        x,
-                        tracks[x.TrackId].Name,
-                        branches[x.BranchId].Name))
-                    .OrderBy(x => x.TrackName)
-                    .ThenBy(x => x.BranchName)
-                    .ToList();
-
-                return Result<IReadOnlyList<OfferingDto>>.Success(
-                    data,
-                    message: "Cycle offerings configured successfully.");
+                return Result<OfferingDto>.Success(
+                    OfferingMapper.Map(offering, track.Name, branch.Name),
+                    201,
+                    "Cycle offering created successfully.");
             },
             (
                 "UX_TrackBranchOfferings_Cycle_Track_Branch",
-                "A duplicate track/branch offering already exists for this cycle."));
+                "That track and branch offering already exists for this cycle."));
+    }
+
+    public async Task<Result<OfferingDto>> UpdateOfferingAsync(
+        Guid cycleId,
+        Guid offeringId,
+        UpdateOfferingRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (cycleId == Guid.Empty || offeringId == Guid.Empty)
+        {
+            return Result<OfferingDto>.Failure(
+                400,
+                "Valid cycle and offering IDs are required.");
+        }
+
+        if (request is null)
+        {
+            return Result<OfferingDto>.Failure(
+                400,
+                "Request body is required.");
+        }
+
+        if (request.Capacity <= 0)
+        {
+            return Result<OfferingDto>.Failure(
+                400,
+                "Capacity must be greater than zero.");
+        }
+
+        return await _writeExecutor.ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var offering = await _dbContext.TrackBranchOfferings
+                    .Include(x => x.Cycle)
+                    .Include(x => x.Track)
+                    .Include(x => x.Branch)
+                    .SingleOrDefaultAsync(
+                        x => x.Id == offeringId && x.CycleId == cycleId,
+                        ct);
+
+                if (offering is null)
+                {
+                    return Result<OfferingDto>.Failure(
+                        404,
+                        "Cycle offering was not found.");
+                }
+
+                var configurationError = await _cycleGuard.ValidateAsync(
+                    offering.Cycle,
+                    ct);
+                if (configurationError is not null)
+                {
+                    return Result<OfferingDto>.Failure(409, configurationError);
+                }
+
+                if (offering.Capacity != request.Capacity)
+                {
+                    var now = UtcNow;
+                    offering.Capacity = request.Capacity;
+                    offering.UpdatedAt = now;
+                    offering.Cycle.UpdatedAt = now;
+                    await _dbContext.SaveChangesAsync(ct);
+                }
+
+                return Result<OfferingDto>.Success(
+                    OfferingMapper.Map(
+                        offering,
+                        offering.Track.Name,
+                        offering.Branch.Name),
+                    message: "Cycle offering updated successfully.");
+            });
+    }
+
+    public async Task<Result<bool>> DeleteOfferingAsync(
+        Guid cycleId,
+        Guid offeringId,
+        CancellationToken cancellationToken = default)
+    {
+        if (cycleId == Guid.Empty || offeringId == Guid.Empty)
+        {
+            return Result<bool>.Failure(
+                400,
+                "Valid cycle and offering IDs are required.");
+        }
+
+        return await _writeExecutor.ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var offering = await _dbContext.TrackBranchOfferings
+                    .Include(x => x.Cycle)
+                    .SingleOrDefaultAsync(
+                        x => x.Id == offeringId && x.CycleId == cycleId,
+                        ct);
+
+                if (offering is null)
+                {
+                    return Result<bool>.Failure(
+                        404,
+                        "Cycle offering was not found.");
+                }
+
+                var configurationError = await _cycleGuard.ValidateAsync(
+                    offering.Cycle,
+                    ct);
+                if (configurationError is not null)
+                {
+                    return Result<bool>.Failure(409, configurationError);
+                }
+
+                if (await _applicationReader.HasPreferencesForOfferingsAsync(
+                        [offering.Id],
+                        ct))
+                {
+                    return Result<bool>.Failure(
+                        409,
+                        "This offering is referenced by an application preference and cannot be deleted.");
+                }
+
+                _dbContext.TrackBranchOfferings.Remove(offering);
+                offering.Cycle.UpdatedAt = UtcNow;
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<bool>.Success(
+                    true,
+                    message: "Cycle offering deleted successfully.");
+            });
     }
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
-
-    private readonly record struct OfferingKey(
-        Guid TrackId,
-        Guid BranchId);
 }
 
 internal static class OfferingMapper
