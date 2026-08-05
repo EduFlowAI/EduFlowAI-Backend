@@ -55,6 +55,8 @@ public interface IOfferingService
 
 internal sealed class OfferingService : IOfferingService
 {
+    private const int MaximumOfferingsPerCycle = 500;
+
     private readonly IAdmissionDbContext _dbContext;
     private readonly IAdmissionApplicationReader _applicationReader;
     private readonly TimeProvider _timeProvider;
@@ -127,6 +129,16 @@ internal sealed class OfferingService : IOfferingService
                 if (configurationError is not null)
                 {
                     return Result<OfferingDto>.Failure(409, configurationError);
+                }
+
+                int offeringCount = await _dbContext.TrackBranchOfferings.CountAsync(
+                    x => x.CycleId == cycleId,
+                    ct);
+                if (offeringCount >= MaximumOfferingsPerCycle)
+                {
+                    return Result<OfferingDto>.Failure(
+                        409,
+                        $"A cycle can contain at most {MaximumOfferingsPerCycle} track/branch offerings.");
                 }
 
                 var track = await _dbContext.Tracks
