@@ -490,6 +490,11 @@ public class AssistantMessageServiceTests
                 Result<IEnumerable<ApplicantDocumentDto>>.Success(
                     []));
         }
+
+        public Task<Result<RequiredDocumentsDto>> GetRequiredDocumentTypesAsync(Guid applicationId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     private sealed class FakeDocumentStatusNarrator
