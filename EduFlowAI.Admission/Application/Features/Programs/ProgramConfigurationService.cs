@@ -59,6 +59,8 @@ public sealed class CreateProgramRequest
 
     [Range(1, 60)]
     public int DurationMonths { get; init; }
+
+    public string Description { get; set; }
 }
 
 public sealed class UpdateProgramRequest
@@ -339,7 +341,8 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                     Name = name,
                     Code = code,
                     DurationMonths = request.DurationMonths,
-                    CreatedAt = UtcNow
+                    CreatedAt = UtcNow,
+                    Description = request.Description
                 };
 
                 _dbContext.Programs.Add(program);
