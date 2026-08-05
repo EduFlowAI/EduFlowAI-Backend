@@ -68,32 +68,35 @@ public sealed class AdmissionConfigurationValidationTests
     }
 
     [Fact]
-    public async Task Offerings_reject_duplicate_track_branch_pairs()
+    public async Task Creating_an_offering_rejects_invalid_input_before_database_access()
     {
-        var trackId = Guid.NewGuid();
-        var branchId = Guid.NewGuid();
-
-        var request = new ConfigureOfferingsRequest
+        var request = new CreateOfferingRequest
         {
-            Offerings =
-            [
-                new OfferingInput
-                {
-                    TrackId = trackId,
-                    BranchId = branchId,
-                    Capacity = 10
-                },
-                new OfferingInput
-                {
-                    TrackId = trackId,
-                    BranchId = branchId,
-                    Capacity = 20
-                }
-            ]
+            TrackId = Guid.NewGuid(),
+            BranchId = Guid.NewGuid(),
+            Capacity = 0
         };
 
         var result = await CreateOfferingService()
-            .ConfigureOfferingsAsync(
+            .CreateOfferingAsync(
+                Guid.NewGuid(),
+                request);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(400, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Updating_an_offering_rejects_invalid_capacity_before_database_access()
+    {
+        var request = new UpdateOfferingRequest
+        {
+            Capacity = 0
+        };
+
+        var result = await CreateOfferingService()
+            .UpdateOfferingAsync(
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 request);
 
