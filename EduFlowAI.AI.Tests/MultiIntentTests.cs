@@ -17,14 +17,14 @@ public class MultiIntentTests
     public void IntentArray_IsParsedAndRanked()
     {
         var raw = """
-        {"intents":[{"intent":"recommendation","confidence":0.7},{"intent":"status","confidence":0.9}]}
+        {"intents":[{"intent":"recommendation","confidence":0.7},{"intent":"application_status","confidence":0.9}]}
         """;
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
         Assert.Equal(2, dto.Intents.Count);
-        Assert.Equal("status", dto.Intents[0].Intent);
+        Assert.Equal("application_status", dto.Intents[0].Intent);
         Assert.Equal("recommendation", dto.Intents[1].Intent);
     }
 
@@ -32,28 +32,43 @@ public class MultiIntentTests
     public void PrimaryIntent_MirrorsTheTopRankedEntry()
     {
         var raw = """
-        {"intents":[{"intent":"knowledge","confidence":0.6},{"intent":"status","confidence":0.95}]}
+        {"intents":[{"intent":"knowledge","confidence":0.6},{"intent":"application_status","confidence":0.95}]}
         """;
 
         IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
-        Assert.Equal("status", dto.PrimaryIntent);
+        Assert.Equal("application_status", dto.PrimaryIntent);
         Assert.Equal(0.95m, dto.Confidence);
-        Assert.Equal("status_service", dto.RoutedTo);
+        Assert.Equal("application_status_service", dto.RoutedTo);
     }
 
     [Fact]
     public void EveryIntent_CarriesItsOwnRoute()
     {
         var raw = """
-        {"intents":[{"intent":"status","confidence":0.9},{"intent":"recommendation","confidence":0.8},{"intent":"knowledge","confidence":0.7}]}
+        {"intents":[{"intent":"application_status","confidence":0.9},{"intent":"recommendation","confidence":0.8},{"intent":"knowledge","confidence":0.7}]}
         """;
 
         IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.Equal(
-            new[] { "status_service", "recommendations_agent", "knowledge_rag" },
+            new[] { "application_status_service", "recommendations_agent", "knowledge_rag" },
             dto.Intents.Select(i => i.RoutedTo));
+    }
+
+    [Fact]
+    public void DocumentStatus_IsDistinctFromApplicationStatus_AndRoutesToItsOwnService()
+    {
+        var raw = """
+        {"intents":[{"intent":"knowledge","confidence":0.6},{"intent":"document_status","confidence":0.9}]}
+        """;
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("document_status", dto.PrimaryIntent);
+        Assert.Equal("document_status_service", dto.RoutedTo);
+        Assert.Equal("document_status_service", dto.Intents[0].RoutedTo);
     }
 
     [Fact]
@@ -71,15 +86,15 @@ public class MultiIntentTests
     [Fact]
     public void OldSingleIntentShape_StillParsesAndFillsTheList()
     {
-        var raw = """{"primaryIntent":"status","confidence":0.9}""";
+        var raw = """{"primaryIntent":"application_status","confidence":0.9}""";
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
-        Assert.Equal("status", dto.PrimaryIntent);
+        Assert.Equal("application_status", dto.PrimaryIntent);
         Assert.Single(dto.Intents);
-        Assert.Equal("status", dto.Intents[0].Intent);
-        Assert.Equal("status_service", dto.Intents[0].RoutedTo);
+        Assert.Equal("application_status", dto.Intents[0].Intent);
+        Assert.Equal("application_status_service", dto.Intents[0].RoutedTo);
     }
 
     [Fact]
@@ -99,14 +114,14 @@ public class MultiIntentTests
     public void UnknownIntents_AreDroppedButValidOnesSurvive()
     {
         var raw = """
-        {"intents":[{"intent":"billing","confidence":0.9},{"intent":"status","confidence":0.8}]}
+        {"intents":[{"intent":"billing","confidence":0.9},{"intent":"application_status","confidence":0.8}]}
         """;
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
         Assert.Single(dto.Intents);
-        Assert.Equal("status", dto.Intents[0].Intent);
+        Assert.Equal("application_status", dto.Intents[0].Intent);
     }
 
     [Fact]
@@ -135,7 +150,7 @@ public class MultiIntentTests
     public void OutOfRangeConfidence_IsClamped()
     {
         var raw = """
-        {"intents":[{"intent":"status","confidence":4.2},{"intent":"knowledge","confidence":-1}]}
+        {"intents":[{"intent":"application_status","confidence":4.2},{"intent":"knowledge","confidence":-1}]}
         """;
 
         IntentClassifierService.TryParseIntentResponse(raw, out var dto);
@@ -148,7 +163,7 @@ public class MultiIntentTests
     public async Task WeakSecondaryIntent_IsNotDispatched()
     {
         var raw = """
-        {"intents":[{"intent":"knowledge","confidence":0.9},{"intent":"status","confidence":0.2}]}
+        {"intents":[{"intent":"knowledge","confidence":0.9},{"intent":"application_status","confidence":0.2}]}
         """;
 
         var dto = await Classify(Build(raw, minConfidence: 0.6m));
@@ -161,7 +176,7 @@ public class MultiIntentTests
     public async Task StrongSecondaryIntent_IsKept()
     {
         var raw = """
-        {"intents":[{"intent":"status","confidence":0.9},{"intent":"recommendation","confidence":0.8}]}
+        {"intents":[{"intent":"application_status","confidence":0.9},{"intent":"recommendation","confidence":0.8}]}
         """;
 
         var dto = await Classify(Build(raw, minConfidence: 0.6m));
@@ -173,20 +188,20 @@ public class MultiIntentTests
     [Fact]
     public async Task WeakPrimaryIntent_IsKeptAndFlaggedForClarification()
     {
-        var raw = """{"intents":[{"intent":"status","confidence":0.3}]}""";
+        var raw = """{"intents":[{"intent":"application_status","confidence":0.3}]}""";
 
         var dto = await Classify(Build(raw, minConfidence: 0.6m));
 
         Assert.True(dto.RequiresClarification);
         Assert.Single(dto.Intents);
-        Assert.Equal("status", dto.Intents[0].Intent);
+        Assert.Equal("application_status", dto.Intents[0].Intent);
     }
 
     // A national ID typed into chat must be masked before the text is sent to the model.
     [Fact]
     public async Task LongDigitRuns_AreMaskedBeforeReachingTheModel()
     {
-        var client = new FakeChatClient { JsonResponse = """{"intents":[{"intent":"status","confidence":0.9}]}""" };
+        var client = new FakeChatClient { JsonResponse = """{"intents":[{"intent":"application_status","confidence":0.9}]}""" };
         var svc = new IntentClassifierService(
             client,
             Options.Create(new IntentClassificationOptions()),

@@ -23,5 +23,8 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <returns></returns>
         Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult);
         // Note: We will add more methods here later for document verification transitions, etc.
+
+        // transform the application to UnderDocumentVerification
+        Task<(bool IsSuccess, string ErrorMessage)> MarkDocumentVerificationStartedAsync(Guid applicationId);
     }
 }

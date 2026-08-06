@@ -1,6 +1,10 @@
 using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.Features.Configuration.Common;
+using EduFlowAI.Admission.Application.Features.Cycles;
+using EduFlowAI.Admission.Application.Features.Offerings;
+using EduFlowAI.Admission.Application.Features.Requirements;
+using EduFlowAI.Admission.Application.Features.Tracks;
 using EduFlowAI.Admission.Application.Interfaces.Services;
-using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +14,8 @@ namespace EduFlowAI.Admission.Tests;
 
 public sealed class AdmissionConfigurationValidationTests
 {
-    private readonly AdmissionConfigurationService _service = new(
-        new UnusedAdmissionDbContext(),
-        new UnusedApplicationReader(),
-        TimeProvider.System);
+    private readonly UnusedAdmissionDbContext _dbContext = new();
+    private readonly UnusedApplicationReader _applicationReader = new();
 
     [Fact]
     public async Task Requirements_reject_undefined_enum_values_before_database_access()
@@ -29,9 +31,10 @@ public sealed class AdmissionConfigurationValidationTests
             ]
         };
 
-        var result = await _service.ReplaceProgramRequirementsAsync(
-            Guid.NewGuid(),
-            request);
+        var result = await CreateRequirementService()
+            .ReplaceProgramRequirementsAsync(
+                Guid.NewGuid(),
+                request);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(400, result.StatusCode);
@@ -55,41 +58,47 @@ public sealed class AdmissionConfigurationValidationTests
             ]
         };
 
-        var result = await _service.ReplaceProgramRequirementsAsync(
-            Guid.NewGuid(),
-            request);
+        var result = await CreateRequirementService()
+            .ReplaceProgramRequirementsAsync(
+                Guid.NewGuid(),
+                request);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(400, result.StatusCode);
     }
 
     [Fact]
-    public async Task Offerings_reject_duplicate_track_branch_pairs()
+    public async Task Creating_an_offering_rejects_invalid_input_before_database_access()
     {
-        var trackId = Guid.NewGuid();
-        var branchId = Guid.NewGuid();
-        var request = new ConfigureOfferingsRequest
+        var request = new CreateOfferingRequest
         {
-            Offerings =
-            [
-                new OfferingInput
-                {
-                    TrackId = trackId,
-                    BranchId = branchId,
-                    Capacity = 10
-                },
-                new OfferingInput
-                {
-                    TrackId = trackId,
-                    BranchId = branchId,
-                    Capacity = 20
-                }
-            ]
+            TrackId = Guid.NewGuid(),
+            BranchId = Guid.NewGuid(),
+            Capacity = 0
         };
 
-        var result = await _service.ConfigureOfferingsAsync(
-            Guid.NewGuid(),
-            request);
+        var result = await CreateOfferingService()
+            .CreateOfferingAsync(
+                Guid.NewGuid(),
+                request);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(400, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Updating_an_offering_rejects_invalid_capacity_before_database_access()
+    {
+        var request = new UpdateOfferingRequest
+        {
+            Capacity = 0
+        };
+
+        var result = await CreateOfferingService()
+            .UpdateOfferingAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                request);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(400, result.StatusCode);
@@ -105,7 +114,7 @@ public sealed class AdmissionConfigurationValidationTests
             PrerequisiteTopics = [new string('x', 101)]
         };
 
-        var result = await _service.CreateTrackAsync(request);
+        var result = await CreateTrackService().CreateTrackAsync(request);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(400, result.StatusCode);
@@ -114,7 +123,7 @@ public sealed class AdmissionConfigurationValidationTests
     [Fact]
     public void Prerequisite_topics_are_trimmed_and_deduplicated_case_insensitively()
     {
-        var result = AdmissionConfigurationService.ValidateAndNormalizeTopics(
+        var result = TrackTopicValidator.Validate(
             ["  C#  ", "c#", "Databases", " "]);
 
         Assert.True(result.IsValid);
@@ -129,12 +138,50 @@ public sealed class AdmissionConfigurationValidationTests
             MinGrade = (CumulativeGrade)999
         };
 
-        var result = await _service.UpsertEligibilityRuleAsync(
-            Guid.NewGuid(),
-            request);
+        var result = await CreateCycleService()
+            .UpsertEligibilityRuleAsync(
+                Guid.NewGuid(),
+                request);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(400, result.StatusCode);
+    }
+
+    private ProgramRequirementService CreateRequirementService()
+    {
+        return new ProgramRequirementService(
+            _dbContext,
+            _applicationReader,
+            TimeProvider.System,
+            new AdmissionWriteExecutor(_dbContext));
+    }
+
+    private OfferingService CreateOfferingService()
+    {
+        return new OfferingService(
+            _dbContext,
+            _applicationReader,
+            TimeProvider.System,
+            new AdmissionWriteExecutor(_dbContext),
+            new CycleConfigurationGuard(_applicationReader));
+    }
+
+    private TrackService CreateTrackService()
+    {
+        return new TrackService(
+            _dbContext,
+            _applicationReader,
+            TimeProvider.System,
+            new AdmissionWriteExecutor(_dbContext));
+    }
+
+    private AdmissionCycleService CreateCycleService()
+    {
+        return new AdmissionCycleService(
+            _dbContext,
+            TimeProvider.System,
+            new AdmissionWriteExecutor(_dbContext),
+            new CycleConfigurationGuard(_applicationReader));
     }
 
     private sealed class UnusedApplicationReader : IAdmissionApplicationReader
@@ -177,19 +224,38 @@ public sealed class AdmissionConfigurationValidationTests
     private sealed class UnusedAdmissionDbContext : IAdmissionDbContext
     {
         public DbSet<Institution> Institutions => throw UnexpectedDatabaseAccess();
+
         public DbSet<EduFlowAI.Admission.Domain.Entities.Program> Programs =>
             throw UnexpectedDatabaseAccess();
-        public DbSet<AdmissionCycle> AdmissionCycles => throw UnexpectedDatabaseAccess();
-        public DbSet<CycleEligibilityRule> CycleEligibilityRules => throw UnexpectedDatabaseAccess();
+
+        public DbSet<AdmissionCycle> AdmissionCycles =>
+            throw UnexpectedDatabaseAccess();
+
+        public DbSet<CycleEligibilityRule> CycleEligibilityRules =>
+            throw UnexpectedDatabaseAccess();
+
         public DbSet<Track> Tracks => throw UnexpectedDatabaseAccess();
+
         public DbSet<Branch> Branches => throw UnexpectedDatabaseAccess();
-        public DbSet<TrackBranchOffering> TrackBranchOfferings => throw UnexpectedDatabaseAccess();
+
+        public DbSet<TrackBranchOffering> TrackBranchOfferings =>
+            throw UnexpectedDatabaseAccess();
+
         public DbSet<EduFlowAI.Admission.Domain.Entities.Application> Applications =>
             throw UnexpectedDatabaseAccess();
-        public DbSet<ApplicationPreference> ApplicationPreferences => throw UnexpectedDatabaseAccess();
-        public DbSet<EligibilityResult> EligibilityResults => throw UnexpectedDatabaseAccess();
-        public DbSet<SimulatedStageResult> SimulatedStageResults => throw UnexpectedDatabaseAccess();
-        public DbSet<ProgramDocumentRequirement> ProgramDocumentRequirements => throw UnexpectedDatabaseAccess();
+
+        public DbSet<ApplicationPreference> ApplicationPreferences =>
+            throw UnexpectedDatabaseAccess();
+
+        public DbSet<EligibilityResult> EligibilityResults =>
+            throw UnexpectedDatabaseAccess();
+
+        public DbSet<SimulatedStageResult> SimulatedStageResults =>
+            throw UnexpectedDatabaseAccess();
+
+        public DbSet<ProgramDocumentRequirement> ProgramDocumentRequirements =>
+            throw UnexpectedDatabaseAccess();
+
         public DatabaseFacade Database => throw UnexpectedDatabaseAccess();
 
         public Task<int> SaveChangesAsync(

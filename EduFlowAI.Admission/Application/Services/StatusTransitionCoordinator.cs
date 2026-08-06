@@ -119,7 +119,38 @@ namespace EduFlowAI.Admission.Application.Services
 
             return (true, string.Empty, statusDto);
         }
-    
+
+        public async Task<(bool IsSuccess, string ErrorMessage)> MarkDocumentVerificationStartedAsync(Guid applicationId)
+        {
+            var application = await _applicationRepository
+                .GetFirstOrDefaultAsync(item => item.Id == applicationId);
+
+            if (application is null)
+            {
+                return (false, "Application not found.");
+            }
+
+            if (application.Status is not (
+                ApplicationStatus.DocumentsRequired or
+                ApplicationStatus.NeedsHumanReview or
+                ApplicationStatus.Draft))
+            {
+                return (
+                    false,
+                    $"Cannot start document verification while application status is {application.Status}."
+                );
+            }
+
+            application.Status =
+                ApplicationStatus.UnderDocumentVerification;
+
+            application.UpdatedAt = DateTimeOffset.UtcNow;
+
+            _applicationRepository.Update(application);
+
+            return (true, string.Empty);
+        }
+
     }
 }
 

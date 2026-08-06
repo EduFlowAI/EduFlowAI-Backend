@@ -1,12 +1,18 @@
 using EduFlowAI.Admission.Application.EligibilityRuleStrategy;
+using EduFlowAI.Admission.Application.Features.Branches;
+using EduFlowAI.Admission.Application.Features.Configuration.Common;
+using EduFlowAI.Admission.Application.Features.Cycles;
+using EduFlowAI.Admission.Application.Features.Dashboard;
+using EduFlowAI.Admission.Application.Features.Offerings;
+using EduFlowAI.Admission.Application.Features.Programs;
+using EduFlowAI.Admission.Application.Features.Requirements;
+using EduFlowAI.Admission.Application.Features.Tracks;
 using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.EligibilityRuleStrategy;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
-using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.Admission.Infrastructure.Repositories;
-using EduFlowAI.AI.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -14,14 +20,28 @@ namespace EduFlowAI.Admission
 {
     public static class AdmissionModule
     {
-        public static IServiceCollection AddAdmissionModule(this IServiceCollection services)
+        public static IServiceCollection AddAdmissionModule(
+            this IServiceCollection services)
         {
-            // Register AutoMapper profiles from the Application project.
             services.AddAutoMapper(cfg =>
-                cfg.AddMaps(typeof(Application.MappingProfiles.ApplicationProfile).Assembly));
+                cfg.AddMaps(
+                    typeof(Application.MappingProfiles.ApplicationProfile)
+                        .Assembly));
 
-            // Admission catalog, configuration, cycles and Super Admin operations.
-            services.AddScoped<IAdmissionConfigurationService, AdmissionConfigurationService>();
+            // Shared mechanics for Admission configuration writes.
+            services.AddScoped<AdmissionWriteExecutor>();
+            services.AddScoped<CycleConfigurationGuard>();
+
+            // Abdallah-owned Admission feature boundaries.
+            services.AddScoped<IProgramConfigurationService, ProgramConfigurationService>();
+            services.AddScoped<IProgramRequirementService, ProgramRequirementService>();
+            services.AddScoped<ITrackService, TrackService>();
+            services.AddScoped<IBranchService, BranchService>();
+            services.AddScoped<IAdmissionCycleService, AdmissionCycleService>();
+            services.AddScoped<IOfferingService, OfferingService>();
+            services.AddScoped<IAdmissionDashboardService, AdmissionDashboardService>();
+
+            // Public contracts consumed by other modules.
             services.AddScoped<IProgramRequirementReader, ProgramRequirementReader>();
             services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
             services.AddScoped<IAdmissionApplicationReader, AdmissionApplicationReader>();
@@ -32,9 +52,9 @@ namespace EduFlowAI.Admission
 
             // Infrastructure Layer repositories.
             services.AddScoped<IApplicationRepository, ApplicationRepository>();
-
-            // Register the Generic Repository as Open Generic.
-            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddScoped(
+                typeof(IGenericRepository<>),
+                typeof(GenericRepository<>));
 
             #region Register Eligibility rules and services
             services.AddScoped<IEligibilityRuleStrategy, GraduationRecencyRule>();
@@ -47,31 +67,25 @@ namespace EduFlowAI.Admission
 
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
             services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
-            services.AddScoped<IApplicationStatusReader, ApplicationStatusReader>();
             services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
             services.AddScoped<IAdminOperationsService, AdminOperationsService>();
             services.AddScoped<IAssessmentSimulationService, AssessmentSimulationService>();
             services.AddScoped<IFinalRankingService, FinalRankingService>();
+            services.AddScoped<ITimelineCalculator, TimelineCalculator>();
+            services.AddScoped<ICycleQueryService, CycleQueryService>();
 
             return services;
         }
 
         // for worker
-        public static IServiceCollection AddAdmissionWorkerModule(this IServiceCollection services)
+        public static IServiceCollection AddAdmissionWorkerModule(
+            this IServiceCollection services)
         {
             services.AddScoped<IApplicationRepository, ApplicationRepository>();
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
-            services.AddScoped<IApplicationStatusReader, ApplicationStatusReader>();
-            services.AddScoped<IApplicationStatusQueryService, ApplicationStatusQueryService>();
             services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
-
-            // Needed by AI's document verification handler to resolve the applicant for an application.
-            services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
 
             return services;
         }
-
-        // Called only by Api — Worker never calls this.
-        // public static IEndpointRouteBuilder MapAdmissionPresentation(this IEndpointRouteBuilder app) { ... }
     }
 }

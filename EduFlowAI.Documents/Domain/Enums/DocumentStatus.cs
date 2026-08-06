@@ -11,6 +11,7 @@ namespace EduFlowAI.Documents.Domain.Enums
         Verifying = 2,
         Approved = 3,
         NeedsHumanReview = 4,
-        Rejected = 5
+        ReplacementRequested = 5,
+        Rejected = 6
     }
 }

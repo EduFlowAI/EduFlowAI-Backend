@@ -1,10 +1,12 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Communication.Application.Interfaces;
 using EduFlowAI.Communication.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Domain.Enums;
+using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
@@ -12,11 +14,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace EduFlowAI.Documents.Application.Services
 {
-    public class DocumentHumanReviewService(IDocumentDbContext dbContext, 
+    public class DocumentHumanReviewService(IDocumentDbContext dbContext, IIdentityDbContext identityDbContext,
         IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService, INotificationService notificationService)
         : IDocumentHumanReviewService
     {
@@ -25,7 +28,7 @@ namespace EduFlowAI.Documents.Application.Services
             try
             {
                 var query = dbContext.ApplicantDocuments.AsNoTracking()
-                    .Where(d => d.Status == DocumentStatus.NeedsHumanReview)
+                    .Where(d => d.Status == DocumentStatus.NeedsHumanReview || d.Status == DocumentStatus.ReplacementRequested)
                     .AsQueryable();
 
                 if (!string.IsNullOrEmpty(queryParameters.Search)) {
@@ -35,7 +38,7 @@ namespace EduFlowAI.Documents.Application.Services
                 {
                     query = query.Where(d => d.Status.ToString().Contains(queryParameters.Status));
                 }
-                if (!string.IsNullOrEmpty(queryParameters.Search))
+                if (!string.IsNullOrEmpty(queryParameters.Type))
                 {
                     query = query.Where(d => d.DocumentType.ToString().Contains(queryParameters.Type!));
                 }
@@ -45,17 +48,52 @@ namespace EduFlowAI.Documents.Application.Services
                 }
 
                 var totalCount = await query.CountAsync();
-                var docReviews = await query.Skip((queryParameters.Page - 1) * queryParameters.PageSize)
+
+                var projectedDocs = await query.Skip((queryParameters.Page - 1) * queryParameters.PageSize)
                     .Take(queryParameters.PageSize)
-                    .Select(d => new HumanReviewDto(
+                    .Select(d => new {
+                        d.Id,
+                        d.DocumentType,
+                        d.StorageKey,
+                        d.OriginalFileName,
+                        d.Status,
+                        d.VerificationDetailsJson,
+                        d.ApplicationId
+                    })
+                    .ToListAsync();
+
+                var applicationIds = projectedDocs.Select(d => d.ApplicationId).Distinct().ToList();
+                var appUserMap = await admissionDbContext.Applications
+                    .Where(a => applicationIds.Contains(a.Id))
+                    .Select(a => new { a.Id, a.ApplicantUserId })
+                    .ToListAsync();
+
+                var userIds = appUserMap.Select(a => a.ApplicantUserId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                var profileMap = await identityDbContext.ApplicantProfiles
+                    .Where(p => userIds.Contains(p.UserId))
+                    .Select(p => new { p.UserId, p.FullNameEn })
+                    .ToListAsync();
+
+                var appIdToUserId = appUserMap.ToDictionary(x => x.Id, x => x.ApplicantUserId);
+                var userIdToName = profileMap.ToDictionary(x => x.UserId, x => x.FullNameEn);
+
+                var docReviews = projectedDocs.Select(d => {
+                    var applicantName = string.Empty;
+                    if (appIdToUserId.TryGetValue(d.ApplicationId, out var userId) && !string.IsNullOrEmpty(userId))
+                    {
+                        userIdToName.TryGetValue(userId, out applicantName);
+                    }
+
+                    return new HumanReviewDto(
                         DocumentId: d.Id,
                         DocumentType: d.DocumentType,
+                        ApplicantName: applicantName ?? string.Empty,
                         StorageKey: d.StorageKey,
                         OriginalFileName: d.OriginalFileName,
                         Status: d.Status,
                         VerificationDetailsJson: d.VerificationDetailsJson
-                    ))
-                    .ToListAsync();
+                    );
+                }).ToList();
 
                 var data = new PaginatedResult<HumanReviewDto>
                 {
@@ -134,7 +172,7 @@ namespace EduFlowAI.Documents.Application.Services
             }
         }
 
-        public async Task<Result<string>> RejectReviewAsync(Guid documentId, string rejectedById, CancellationToken cancellationToken)
+        public async Task<Result<string>> RejectReviewAsync(Guid documentId, string reason, CancellationToken cancellationToken)
         {
             try
             {
@@ -144,7 +182,11 @@ namespace EduFlowAI.Documents.Application.Services
                     return Result<string>.Failure(404, "Document not found");
                 }
 
+                var app = await admissionDbContext.Applications.FirstOrDefaultAsync(a => a.Id == doc.ApplicationId);
+
                 doc.Status = DocumentStatus.Rejected;
+                doc.RejectionReason = reason;
+                app!.Status = ApplicationStatus.DocumentRejected;
                 await dbContext.SaveChangesAsync();
 
                 var applicantId = await GetApplicantId(doc.ApplicationId);

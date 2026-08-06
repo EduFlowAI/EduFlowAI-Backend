@@ -1,7 +1,4 @@
 ﻿using EduFlowAI.Admission.Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace EduFlowAI.Admission.Domain.Entities
 {
@@ -18,7 +15,7 @@ namespace EduFlowAI.Admission.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; }
         public string? AdminNotes { get; set; }
 
-        public uint RowVersion { get; set; }
+        //public uint RowVersion { get; set; }
 
         // Navigation properties
         public AdmissionCycle Cycle { get; set; } = null!;

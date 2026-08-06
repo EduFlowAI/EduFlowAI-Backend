@@ -17,7 +17,7 @@ namespace EduFlowAI.Documents.Infrastructure.Configurations
                 t.HasCheckConstraint("CK_ApplicantDocument_DocumentType",
                     "\"DocumentType\" IN ('NationalId','BirthCertificate','GraduationCertificate','MilitaryCertificate')");
                 t.HasCheckConstraint("CK_ApplicantDocument_Status",
-                    "\"Status\" IN ('Uploaded','Verifying','Approved','NeedsHumanReview','Rejected')");
+                    "\"Status\" IN ('Uploaded','Verifying','Approved','NeedsHumanReview','ReplacementRequested','Rejected')");
             });
 
             builder.HasKey(d => d.Id);

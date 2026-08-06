@@ -5,7 +5,7 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services;
 public sealed record ProgramRequirementSet(
     Guid ProgramId,
     Gender ApplicantGender,
-    IReadOnlyList<EduFlowAI.Admission.Domain.Enums.DocumentType> DocumentTypes);
+    IReadOnlyList<DocumentType> DocumentTypes);
 
 /// <summary>
 /// Resolves the effective document set for one program and applicant gender.

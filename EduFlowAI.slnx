@@ -20,5 +20,4 @@
     <Project Path="EduFlowAI.AI.Tests/EduFlowAI.AI.Tests.csproj" />
     <Project Path="EduFlowAI.Identity.Tests/EduFlowAI.Identity.Tests.csproj" />
   </Folder>
-  <Project Path="DocVerifySmokeTest/DocVerifySmokeTest.csproj" Id="4a35df42-1272-4704-b2cb-7dc1dff7f31e" />
 </Solution>

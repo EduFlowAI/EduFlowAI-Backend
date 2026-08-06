@@ -6,7 +6,7 @@ using System.Text;
 
 namespace EduFlowAI.Communication.Infrastructure.Hubs
 {
-    //[Authorize]
+    [Authorize]
     public class NotificationHub : Hub
     {
     }

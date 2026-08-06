@@ -1,4 +1,5 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Communication.Application.Interfaces;
 using EduFlowAI.Communication.Application.Interfaces.Emails;
 using EduFlowAI.Communication.Domain.Enums;
@@ -6,12 +7,17 @@ using EduFlowAI.Documents.Application.DbContextAbstraction;
 using EduFlowAI.Documents.Application.DTOs;
 using EduFlowAI.Documents.Application.Emails;
 using EduFlowAI.Documents.Application.Interfaces;
+using EduFlowAI.Documents.Application.Validators;
+using EduFlowAI.Documents.Domain.Entities;
 using EduFlowAI.Documents.Domain.Enums;
 using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
 using EduFlowAI.Shared.Kernel.Messaging;
+using EduFlowAI.Shared.Messaging.Contracts.Documents.V1;
+using FluentValidation;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -21,7 +27,9 @@ using System.Text;
 namespace EduFlowAI.Documents.Application.Services
 {
     public class ReplacementRequestService(IDocumentDbContext dbContext, IUserContactInfoReader userContactInfoReader, 
-        IAdmissionDbContext admissionDbContext, INotificationService notificationService, IEmailDispatcher emailDispatcher, IOutboxPublisher outboxPublisher) 
+        IAdmissionDbContext admissionDbContext, INotificationService notificationService, IEmailDispatcher emailDispatcher,
+        IOutboxPublisher outboxPublisher, IFileStorageService fileStorageService, IValidator<UploadDocumentDto> uploadValidator,
+        IApplicationAcessReader applicationAccessReader, IStatusTransitionCoordinator statusTransitionCoordinator) 
         : IReplacementRequestService
     {
         public async Task<Result<string>> SendReplacementRequest(ReplacementRequestDto request, string requestedById, CancellationToken cancellationToken)
@@ -45,6 +53,7 @@ namespace EduFlowAI.Documents.Application.Services
                 };
 
                 await dbContext.DocumentReplacementRequests.AddAsync(replacementRequest);
+                doc.Status = DocumentStatus.ReplacementRequested;
 
                 var applicant = await GetApplicant(doc.ApplicationId);
                 // send notification
@@ -77,17 +86,26 @@ namespace EduFlowAI.Documents.Application.Services
             try
             {
                 var apps = await admissionDbContext.Applications.AsNoTracking()
-                    .Where(a => a.ApplicantUserId == ApplicantId).ToListAsync();
+                    .Where(a => a.ApplicantUserId == ApplicantId)
+                    .Select(a => a.Id).ToListAsync();
 
-                if (!apps.Any() || apps is null)
+                if (apps.Count == 0)
                 {
-                    Result<PaginatedResult<ReplacementDto>>.Failure(400, "User does not have any applications");
+                    return Result<PaginatedResult<ReplacementDto>>.Failure(404, "User does not have any applications");
                 }
 
                 var query = dbContext.DocumentReplacementRequests.AsNoTracking()
-                    .Where(r=>r.Status == ReplacementRequestStatus.Open)
                     .Include(r => r.Document)
-                    .Where(r => apps.Any(a => a.Id == r.Document.ApplicationId));
+                    .Where(r=>apps.Contains(r.Document.ApplicationId))
+                    .Select(r => new
+                    {
+                        r.Id,
+                        r.DocumentId,
+                        r.Reason,
+                        r.Status,
+                        r.RequestedAt,
+                        DocumentType = r.Document.DocumentType.ToString()
+                    });
 
                 if(!string.IsNullOrEmpty(queryParameters.Search))
                 {
@@ -108,6 +126,7 @@ namespace EduFlowAI.Documents.Application.Services
                     .Select(r => new ReplacementDto(
                         r.Id,
                         r.DocumentId,
+                        r.DocumentType,
                         r.Reason,
                         r.Status,
                         r.RequestedAt
@@ -135,28 +154,137 @@ namespace EduFlowAI.Documents.Application.Services
             try
             {
                 var req = await dbContext.DocumentReplacementRequests.AsNoTracking()
-                    .FirstOrDefaultAsync(r => r.Id == requestId);
+                    .Include(r => r.Document)
+                    .Where(r => r.Id == requestId)
+                    .Select(r => new ReplacementDto(
+                        r.Id,
+                        r.DocumentId,
+                        r.Document.DocumentType.ToString(),
+                        r.Reason,
+                        r.Status,
+                        r.RequestedAt
+                    )).FirstOrDefaultAsync();
 
-                if(req is null)
+                if (req is null)
                 {
                     return Result<ReplacementDto>.Failure(404, "Request not found");
                 }
 
-                var dto = new ReplacementDto
-                    (
-                        requestId,
-                        req.DocumentId,
-                        req.Reason,
-                        req.Status,
-                        req.RequestedAt
-                    );
-
-                return Result<ReplacementDto>.Success(dto);
+                return Result<ReplacementDto>.Success(req);
             }
             catch (Exception ex)
             {
                 return Result<ReplacementDto>.Failure(500, $"An error occurred while retrieving the replacement request: {ex.Message}");
             }
+        }
+
+        public async Task<Result<Guid>> UploadReplacementAsync(Guid requestId, IFormFile file,
+            string applicantUserId, CancellationToken cancellationToken)
+        {
+            var replacementRequest = await dbContext.DocumentReplacementRequests
+                .Include(request => request.Document)
+                .SingleOrDefaultAsync(request => request.Id == requestId, cancellationToken);
+
+            if (replacementRequest is null)
+            {
+                return Result<Guid>.Failure(404, "Replacement request not found.");
+            }
+
+            if (replacementRequest.Status != ReplacementRequestStatus.Open)
+            {
+                return Result<Guid>.Failure(409, "This replacement request has already been fulfilled.");
+            }
+
+            var document = replacementRequest.Document;
+
+            var hasAccess = await applicationAccessReader.CanAccessDocumentsAsync(document.ApplicationId,
+                    applicantUserId, cancellationToken);
+
+            if (!hasAccess)
+            {
+                return Result<Guid>.Failure(403, "You do not have permission to replace this document.");
+            }
+
+            var uploadDto = new UploadDocumentDto(document.ApplicationId, document.DocumentType, file);
+
+            var validationResult =
+                await uploadValidator.ValidateAsync(uploadDto, cancellationToken);
+
+            if (!validationResult.IsValid)
+            {
+                var errors = string.Join("; ", validationResult.Errors.Select(error => error.ErrorMessage));
+                return Result<Guid>.Failure(400, errors);
+            }
+
+            string newStorageKey;
+
+            try
+            {
+                newStorageKey = await fileStorageService.SaveFileAsync(file, cancellationToken);
+            }
+            catch (ArgumentException exception)
+            {
+                return Result<Guid>.Failure(400, exception.Message);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Result<Guid>.Failure(400, exception.Message);
+            }
+
+            var now = DateTimeOffset.UtcNow;
+
+            var previousVersionCount = await dbContext.ApplicantDocumentVersions
+                    .CountAsync(version => version.DocumentId == document.Id, cancellationToken);
+
+            var previousVersion = new ApplicantDocumentVersion
+            {
+                Id = Guid.NewGuid(),
+                DocumentId = document.Id,
+                VersionNumber = previousVersionCount + 1,
+                StorageKey = document.StorageKey,
+                OriginalFileName = document.OriginalFileName,
+                Status = document.Status,
+                VerificationDetailsJson = document.VerificationDetailsJson,
+                VerifiedAt = document.VerifiedAt,
+                CreatedAt = now
+            };
+
+            dbContext.ApplicantDocumentVersions.Add(previousVersion);
+
+            document.StorageKey = newStorageKey;
+            document.OriginalFileName = file.FileName;
+            document.Status = DocumentStatus.Verifying;
+            document.VerificationDetailsJson = null;
+            document.VerifiedAt = null;
+            document.UpdatedAt = now;
+
+            replacementRequest.Status = ReplacementRequestStatus.Fulfilled;
+
+            replacementRequest.FulfilledAt = now;
+
+            var transition = await statusTransitionCoordinator.MarkDocumentVerificationStartedAsync(document.ApplicationId);
+
+            if (!transition.IsSuccess)
+            {
+                return Result<Guid>.Failure(409, transition.ErrorMessage);
+            }
+
+            var verificationMessage = new VerifyApplicantDocumentV1(
+                    MessageId: Guid.NewGuid(),
+                    CorrelationId: document.ApplicationId,
+                    CausationId: null,
+                    DocumentId: document.Id,
+                    ApplicationId: document.ApplicationId,
+                    DocumentType: document.DocumentType.ToString(),
+                    SourceStorageKey: newStorageKey,
+                    OriginalFileName: file.FileName,
+                    OccurredAtUtc: now);
+
+            await outboxPublisher.PublishAsync(verificationMessage);
+
+            await outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
+
+            return Result<Guid>.Success(document.Id, 200, "Replacement uploaded successfully and verification has started.");
         }
 
         // helpers

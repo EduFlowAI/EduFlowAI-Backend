@@ -2,6 +2,7 @@
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Shared.Kernel.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Security.Claims;
@@ -10,7 +11,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
 {
     [ApiController]
     [Route("api/modules/admission/admin/applications")]
-    // [Authorize(Roles = "Admin")] // Uncomment this later when Identity is implemented
+    [Authorize(Roles = "Admin")] // Uncomment this later when Identity is implemented
     public class AdminApplicationsController : ControllerBase
     {
         private readonly IAdminOperationsService _adminOperationsService;

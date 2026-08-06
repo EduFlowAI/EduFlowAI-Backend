@@ -8,6 +8,7 @@ namespace EduFlowAI.Documents.Application.DTOs
     public sealed record ReplacementDto(
         Guid Id,
         Guid DocumentId,
+        string DocumentType,
         string Reason,
         ReplacementRequestStatus Status,
         DateTimeOffset RequestedAt

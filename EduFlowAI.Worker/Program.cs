@@ -10,8 +10,10 @@ using EduFlowAI.Persistence;
 using EduFlowAI.Persistence.Extensions;
 using EduFlowAI.Shared.Messaging.Contracts.Configuration;
 using iText.StyledXmlParser.Jsoup.Nodes;
+using JasperFx.CodeGeneration.Model;
 using JasperFx.Resources;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using Wolverine;
 
 namespace EduFlowAI.Worker
@@ -22,6 +24,15 @@ namespace EduFlowAI.Worker
         {
             var builder = Host.CreateApplicationBuilder(args);
 
+            builder.Services.AddSerilog((services, loggerConfiguration) =>
+            {
+                loggerConfiguration
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .ReadFrom.Services(services)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithProperty("Application", "EduFlowAI.Worker");
+            });
+
             builder.Services.AddPersistence(builder.Configuration);
 
             builder.Services.AddAdmissionWorkerModule();
@@ -29,15 +40,16 @@ namespace EduFlowAI.Worker
             builder.Services.AddAIWorkerModule();
             builder.Services.AddCommunicationModule(builder.Configuration);
 
-            builder.Services
-                .AddIdentityCore<AppUser>()
-                .AddEntityFrameworkStores<EduFlowAIDbContext>();
+            //builder.Services
+            //    .AddIdentityCore<AppUser>()
+            //    .AddEntityFrameworkStores<EduFlowAIDbContext>();
 
             builder.Services.AddScoped<IUserContactInfoReader, UserContactInfoReader>();
 
             builder.ConfigureCommonMessaging("EduFlowAI.Worker");
             builder.Services.ConfigureWolverine(options =>
             {
+                options.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
                 MessagingConfiguration.ConfigureWorkerListeners(options);
             });
 

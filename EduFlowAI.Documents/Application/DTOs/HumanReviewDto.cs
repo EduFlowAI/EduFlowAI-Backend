@@ -10,6 +10,7 @@ namespace EduFlowAI.Documents.Application.DTOs
     public sealed record HumanReviewDto(
         Guid DocumentId,
         DocumentType DocumentType,
+        string ApplicantName,
         string StorageKey,
         string OriginalFileName,
         DocumentStatus Status,
