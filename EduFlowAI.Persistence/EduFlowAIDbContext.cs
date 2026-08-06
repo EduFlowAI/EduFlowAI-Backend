@@ -58,7 +58,11 @@ namespace EduFlowAI.Persistence
         public DbSet<KnowledgeBaseChunk> KnowledgeBaseChunks => Set<KnowledgeBaseChunk>();
 
         // Communication
-        public DbSet<Notification> Notifications => Set<Notification>(); 
+        public DbSet<Notification> Notifications => Set<Notification>();
+
+        public DbSet<EnrollmentTaskLookup> EnrollmentTaskLookups => Set<EnrollmentTaskLookup>();
+
+        public DbSet<ApplicationEnrollmentTask> ApplicationEnrollmentTasks => Set<ApplicationEnrollmentTask>();
         #endregion
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

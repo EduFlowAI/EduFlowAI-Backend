@@ -57,9 +57,9 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .HasDatabaseName("UX_AdmissionCycles_Program_Label")
                 .IsUnique();
 
-            // PostgreSQL partial unique index: at most one Active cycle globally.
-            builder.HasIndex(x => x.Status)
-                .HasDatabaseName("uq_cycle_active")
+            // PostgreSQL partial unique index: at most one Active cycle per Program.
+            builder.HasIndex(x => x.ProgramId)
+                .HasDatabaseName("uq_cycle_active_per_program")
                 .HasFilter("\"Status\" = 'Active'")
                 .IsUnique();
 

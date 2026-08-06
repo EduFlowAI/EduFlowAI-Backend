@@ -38,6 +38,12 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
                 .WithMany()
                 .HasForeignKey(x => x.CycleId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Configure the relationship for the final accepted track
+            builder.HasOne(a => a.AcceptedTrackBranchOffering)
+                .WithMany()
+                .HasForeignKey(a => a.AcceptedTrackBranchOfferingId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 
