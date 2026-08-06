@@ -219,6 +219,10 @@ public sealed class ProgramDeletionTests
         public DbSet<SimulatedStageResult> SimulatedStageResults => Set<SimulatedStageResult>();
         public DbSet<ProgramDocumentRequirement> ProgramDocumentRequirements =>
             Set<ProgramDocumentRequirement>();
+        public DbSet<EnrollmentTaskLookup> EnrollmentTaskLookups =>
+            Set<EnrollmentTaskLookup>();
+        public DbSet<ApplicationEnrollmentTask> ApplicationEnrollmentTasks =>
+            Set<ApplicationEnrollmentTask>();
 
         DatabaseFacade IAdmissionDbContext.Database => Database;
 
