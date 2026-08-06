@@ -18,6 +18,7 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<ApplicationPreference> _preferenceRepository;
         private readonly IGenericRepository<ApplicantProfile> _profileRepository;
+        private readonly IGenericRepository<EligibilityResult> _eligibilityResultRepository;
         private readonly IAdmissionEligibilityService _eligibilityService;
         private readonly IMapper _mapper;
 
@@ -25,6 +26,7 @@ namespace EduFlowAI.Admission.Application.Services
             IGenericRepository<TrackBranchOffering> offeringRepository,
             IGenericRepository<ApplicationPreference> preferenceRepository,
             IGenericRepository<ApplicantProfile> profileRepository,
+            IGenericRepository<EligibilityResult> eligibilityResultRepository,
             IAdmissionEligibilityService eligibilityService,
             IMapper mapper)
         {
@@ -32,6 +34,7 @@ namespace EduFlowAI.Admission.Application.Services
             _offeringRepository = offeringRepository;
             _preferenceRepository = preferenceRepository;
             _profileRepository = profileRepository;
+            _eligibilityResultRepository = eligibilityResultRepository;
             _eligibilityService = eligibilityService;
             _mapper = mapper;
         }
@@ -260,10 +263,16 @@ namespace EduFlowAI.Admission.Application.Services
             );
 
             // STEP 3: Atomic State Mutation
-            // 3.1 Attach the evaluation result to the application
+            // CRITICAL FIX: The eligibility service likely assigned a Guid.NewGuid() to the result.
+            // When attached to the EF Core graph, a non-empty Guid makes EF Core assume it is an existing entity (UPDATE).
+            // 3.1 We MUST reset the Id to Guid.Empty so EF Core treats it as a completely new entity and generates an INSERT.
+            eligibilityResult.Id = Guid.Empty;
+
+            // 3.2 Explicitly link the new result to the application ID
+            eligibilityResult.ApplicationId = application.Id;
             application.EligibilityResult = eligibilityResult;
 
-            // 3.2 Update the status based on the evaluation result
+            // 3.4 Update the status based on the evaluation result
             if (eligibilityResult.Passed)
             {
                 application.Status = ApplicationStatus.DocumentsRequired;
@@ -273,11 +282,10 @@ namespace EduFlowAI.Admission.Application.Services
                 application.Status = ApplicationStatus.EligibilityFailed;
             }
 
-            // 3.3 Set submission and update timestamps
+            // 3.5 Set submission and update timestamps
             application.SubmittedAt = DateTimeOffset.UtcNow;
             application.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _applicationRepository.Update(application);
             await _applicationRepository.SaveChangesAsync();
 
             var applicationDetailsDto = new ApplicationDetailsDto(

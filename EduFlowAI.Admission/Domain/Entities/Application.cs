@@ -15,12 +15,14 @@ namespace EduFlowAI.Admission.Domain.Entities
         public DateTimeOffset UpdatedAt { get; set; }
         public string? AdminNotes { get; set; }
 
-        //public uint RowVersion { get; set; }
+        public Guid? AcceptedTrackBranchOfferingId { get; set; }        // New properties to track the final accepted offering
+        public TrackBranchOffering? AcceptedTrackBranchOffering { get; set; }
 
         // Navigation properties
         public AdmissionCycle Cycle { get; set; } = null!;
         public ICollection<ApplicationPreference> Preferences { get; set; } = new List<ApplicationPreference>();
         public EligibilityResult? EligibilityResult { get; set; }
         public ICollection<SimulatedStageResult> SimulatedStageResults { get; set; } = new List<SimulatedStageResult>();
+        public ICollection<ApplicationEnrollmentTask> EnrollmentTasks { get; set; } = new List<ApplicationEnrollmentTask>();
     }
 }

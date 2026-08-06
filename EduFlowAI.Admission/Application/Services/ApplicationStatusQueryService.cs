@@ -220,5 +220,48 @@ namespace EduFlowAI.Admission.Application.Services
                 FailureReasons = failureReasons
             };
         }
+
+        public async Task<EnrollmentChecklistDto?> GetEnrollmentChecklistAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            // 1. Fetch application, ensuring it belongs to the user, and include checklist data
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
+                include: query => query.Include(a => a.EnrollmentTasks)
+                                       .ThenInclude(t => t.TaskLookup)
+            );
+            if (application == null)
+                return null;
+
+            // 2. Handle null collections gracefully
+            var enrollmentTasks = application.EnrollmentTasks ?? new List<ApplicationEnrollmentTask>();
+
+            // 3. Map the tasks to DTOs and sort by DisplayOrder
+            var taskDtos = enrollmentTasks
+                .OrderBy(t => t.TaskLookup?.DisplayOrder ?? 0)
+                .Select(t => new EnrollmentTaskItemDto
+                {
+                    Id = t.Id,
+                    Title = t.TaskLookup?.Title ?? string.Empty,
+                    // Enum Status is converted to string for the frontend UI logic
+                    Status = t.Status.ToString(),
+                    // Enum TaskType is converted to string to dictate UI components (e.g., Payment, Signature)
+                    TaskType = t.TaskLookup?.TaskType.ToString() ?? string.Empty,
+                    SubtextMessage = t.Message,
+                    ActionUrl = t.ActionUrl
+                })
+                .ToList();
+
+            // 4. Calculate progress metrics based on the Completed status
+            int totalTasks = taskDtos.Count;
+            int completedTasks = enrollmentTasks.Count(t => t.Status == Domain.Enums.EnrollmentTaskStatus.Completed);
+
+            // 5. Return the constructed DTO wrapper
+            return new EnrollmentChecklistDto
+            {
+                CompletedTasksCount = completedTasks,
+                TotalTasksCount = totalTasks,
+                Tasks = taskDtos
+            };
+        }
     }
 }

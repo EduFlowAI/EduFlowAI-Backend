@@ -18,6 +18,8 @@ public interface IAdmissionDbContext
     DbSet<EligibilityResult> EligibilityResults { get; }
     DbSet<SimulatedStageResult> SimulatedStageResults { get; }
     DbSet<ProgramDocumentRequirement> ProgramDocumentRequirements { get; }
+    DbSet<EnrollmentTaskLookup> EnrollmentTaskLookups { get; }
+    DbSet<ApplicationEnrollmentTask> ApplicationEnrollmentTasks { get; }
 
     DatabaseFacade Database { get; }
 

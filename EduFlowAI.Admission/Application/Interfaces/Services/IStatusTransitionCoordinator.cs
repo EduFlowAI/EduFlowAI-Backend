@@ -1,7 +1,4 @@
 ﻿using EduFlowAI.Admission.Application.DTOs;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace EduFlowAI.Admission.Application.Interfaces.Services
 {
@@ -24,7 +21,18 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult);
         // Note: We will add more methods here later for document verification transitions, etc.
 
-        // transform the application to UnderDocumentVerification
+        /// <summary>
+        /// Transitions the application to UnderDocumentVerification.
+        /// </summary>
+        /// <param name="applicationId"></param>
+        /// <returns></returns>
         Task<(bool IsSuccess, string ErrorMessage)> MarkDocumentVerificationStartedAsync(Guid applicationId);
+
+        /// <summary>
+        /// Transitions the application to the Admitted state and automatically generates the required enrollment checklist tasks.
+        /// </summary>
+        /// <param name="applicationId"></param>
+        /// <returns></returns>
+        Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> AdmitApplicantAsync(Guid applicationId);
     }
 }

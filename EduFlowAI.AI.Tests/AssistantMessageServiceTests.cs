@@ -436,6 +436,11 @@ public class AssistantMessageServiceTests
             return Task.FromResult<EligibilityDetailsDto?>(null);
         }
 
+        public Task<EnrollmentChecklistDto?> GetEnrollmentChecklistAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
         public Task<PaginatedResult<ApplicationListDto>> GetMyApplicationsAsync(string applicantUserId, QueryParameters queryParams, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<PaginatedResult<ApplicationListDto>>(new PaginatedResult<ApplicationListDto>());
@@ -475,6 +480,11 @@ public class AssistantMessageServiceTests
             return Task.FromResult(
                 Result<IEnumerable<ApplicantDocumentDto>>.Success(
                     []));
+        }
+
+        public Task<Result<RequiredDocumentsDto>> GetRequiredDocumentTypesAsync(Guid applicationId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
     }
 

@@ -28,7 +28,7 @@ namespace EduFlowAI.Admission.Infrastructure.Configurations
             builder.Property(s => s.Score).HasColumnType("decimal(5,2)");
             builder.Property(s => s.CreatedAt).HasDefaultValueSql("now()");
 
-            builder.HasIndex(s => new { s.ApplicationId, s.Stage }).IsUnique();
+            builder.HasIndex(s => new { s.ApplicationId, s.Stage, s.TrackId }).IsUnique();
 
             builder.HasOne(s => s.Application)
                 .WithMany(a => a.SimulatedStageResults)

@@ -39,7 +39,12 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         public async Task<ActionResult<Result<ApplicationDto>>> CreateDraft([FromBody] ApplicationRequestDto request)
         {
             // Retrieve user ID from claims. Using a dummy value if not authenticated for now.
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)!.Value ?? "dummy-user-id";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)!.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<ApplicationDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
 
             var result = await _applicationService.CreateDraftApplicationAsync(userId, request);
             // Use the built-in StatusCode method to return both the HTTP code and the Result object
@@ -95,27 +100,16 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
         }
 
-
-        [HttpGet("{applicationId}/status")]
-        public async Task<ActionResult<ApplicationStatusDto>> GetApplicationStatus(Guid applicationId)
-        {
-            var statusDto = await _statusQueryService.GetApplicationStatusAsync(applicationId);
-            if(statusDto == null)
-            {
-                var error = Result<ApplicationStatusDto>.Failure(400, "Invalid application ID!");
-                return StatusCode(error.StatusCode, error);
-            }
-
-            // Return OK 200
-            var res = Result<ApplicationStatusDto>.Success(statusDto, message: "Application status is retreived successfully");
-            return StatusCode(res.StatusCode, res);
-        }
-
         [HttpPost("{applicationId}/withdraw")]
         public async Task<ActionResult<Result<ApplicationStatusDto>>> WithdrawApplication(Guid applicationId)
         {
             // Extract the user ID from the token claims
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<ApplicationStatusDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
 
             // Execute the business logic via the coordinator service
             var (isSuccess, errorMessage, data) = await _statusTransitionCoordinator.WithdrawApplicationAsync(applicationId, userId);
@@ -171,6 +165,40 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             return Ok(successResult);
         }
 
+        [HttpPut("{applicationId}/preferences")]
+        public async Task<ActionResult<Result<ApplicationDetailsDto>>> UpdatePreferences(
+            Guid applicationId,
+            [FromBody] UpdateApplicationPreferencesDto request,
+            CancellationToken cancellationToken)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<ApplicationDetailsDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
+
+            var result = await _applicationService.UpdateApplicationPreferencesAsync(applicationId, userId, request, cancellationToken);
+
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("{applicationId}/status")]
+        public async Task<ActionResult<ApplicationStatusDto>> GetApplicationStatus(Guid applicationId)
+        {
+            var statusDto = await _statusQueryService.GetApplicationStatusAsync(applicationId);
+            if (statusDto == null)
+            {
+                var error = Result<ApplicationStatusDto>.Failure(400, "Invalid application ID!");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            // Return OK 200
+            var res = Result<ApplicationStatusDto>.Success(statusDto, message: "Application status is retreived successfully");
+            return StatusCode(res.StatusCode, res);
+        }
+
         [HttpGet("{applicationId}/stages")]
         public async Task<ActionResult<Result<List<SimulatedStageDto>>>> GetStagesResults(Guid applicationId)
         {
@@ -203,7 +231,12 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         public async Task<ActionResult<Result<ApplicationDetailsDto>>> GetApplicationDetails(Guid applicationId, CancellationToken cancellationToken)
         {
             // Extract the user ID from the token claims
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<ApplicationDetailsDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
 
             var detailsDto = await _statusQueryService.GetApplicationDetailsAsync(applicationId, userId, cancellationToken);
             if(detailsDto == null)
@@ -216,27 +249,18 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             return StatusCode(successResult.StatusCode, successResult);
         }
 
-        [HttpPut("{applicationId}/preferences")]
-        public async Task<ActionResult<Result<ApplicationDetailsDto>>> UpdatePreferences(
-            Guid applicationId,
-            [FromBody] UpdateApplicationPreferencesDto request,
-            CancellationToken cancellationToken)
-        {
-            // Extract the user ID from the token claims
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
-
-            var result = await _applicationService.UpdateApplicationPreferencesAsync(applicationId, userId, request, cancellationToken);
-
-            return StatusCode(result.StatusCode, result);
-        }
-
         [HttpGet("my-applications")]
         public async Task<ActionResult<Result<PaginatedResult<ApplicationListDto>>>> GetMyApplications(
             [FromQuery] QueryParameters queryParameters,
             CancellationToken cancellationToken = default)
         {
             // Extract the user ID from the token claims
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<PaginatedResult<ApplicationListDto>>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
 
             var paginatedResult = await _statusQueryService.GetMyApplicationsAsync(userId, queryParameters, cancellationToken);
 
@@ -251,8 +275,13 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         public async Task<ActionResult<Result<EligibilityDetailsDto>>> GetEligibilityDetails(Guid applicationId,
             CancellationToken cancellationToken = default)
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "dummy-user-id";
-            
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<EligibilityDetailsDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
+
             var detailsDto = await _statusQueryService.GetEligibilityDetailsAsync(applicationId, userId, cancellationToken);
             if(detailsDto == null)
             {
@@ -263,6 +292,36 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             var successResult = Result<EligibilityDetailsDto>.Success(
                 detailsDto,
                 message: "Eligibility details retrieved successfully."
+            );
+
+            return Ok(successResult);
+        }
+
+        [HttpGet("{applicationId}/enrollment-checklist")]
+        public async Task<ActionResult<Result<EnrollmentChecklistDto>>> GetEnrollmentChecklist(
+            Guid applicationId,
+            CancellationToken cancellationToken = default)
+        {
+            // Extract the user ID from the token claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                var unauthorizedError = Result<EnrollmentChecklistDto>.Failure(401, "User is not authenticated or token is invalid.");
+                return StatusCode(unauthorizedError.StatusCode, unauthorizedError);
+            }
+
+            var checklistDto = await _statusQueryService.GetEnrollmentChecklistAsync(applicationId, userId, cancellationToken);
+
+            // If null is returned, it means the application doesn't exist or belongs to someone else
+            if (checklistDto == null)
+            {
+                var error = Result<EnrollmentChecklistDto>.Failure(404, "Application not found or unauthorized access.");
+                return StatusCode(error.StatusCode, error);
+            }
+
+            var successResult = Result<EnrollmentChecklistDto>.Success(
+                checklistDto,
+                message: "Enrollment checklist retrieved successfully."
             );
 
             return Ok(successResult);

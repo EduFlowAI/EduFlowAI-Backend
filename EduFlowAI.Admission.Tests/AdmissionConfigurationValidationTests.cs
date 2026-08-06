@@ -258,6 +258,10 @@ public sealed class AdmissionConfigurationValidationTests
 
         public DatabaseFacade Database => throw UnexpectedDatabaseAccess();
 
+        public DbSet<EnrollmentTaskLookup> EnrollmentTaskLookups => throw new NotImplementedException();
+
+        public DbSet<ApplicationEnrollmentTask> ApplicationEnrollmentTasks => throw new NotImplementedException();
+
         public Task<int> SaveChangesAsync(
             CancellationToken cancellationToken = default) =>
             throw UnexpectedDatabaseAccess();

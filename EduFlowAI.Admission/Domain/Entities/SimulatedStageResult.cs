@@ -1,7 +1,4 @@
 ﻿using EduFlowAI.Admission.Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace EduFlowAI.Admission.Domain.Entities
 {
@@ -10,6 +7,7 @@ namespace EduFlowAI.Admission.Domain.Entities
         public Guid Id { get; set; } = Guid.NewGuid();
 
         public Guid ApplicationId { get; set; }
+        public Guid? TrackId { get; set; }
 
         public SelectionStage Stage { get; set; }
         public StageResult Result { get; set; } = StageResult.Pending;
