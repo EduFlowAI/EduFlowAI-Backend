@@ -98,6 +98,10 @@ public interface IProgramConfigurationService
         Guid programId,
         UpdateProgramRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<Result<bool>> DeleteProgramAsync(
+        Guid programId,
+        CancellationToken cancellationToken = default);
 }
 
 internal sealed class ProgramConfigurationService : IProgramConfigurationService
@@ -435,6 +439,79 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                     message: "Program updated successfully.");
             },
             ("UX_Programs_Code", $"Program code '{code}' already exists."));
+    }
+
+    public async Task<Result<bool>> DeleteProgramAsync(
+        Guid programId,
+        CancellationToken cancellationToken = default)
+    {
+        if (programId == Guid.Empty)
+        {
+            return Result<bool>.Failure(
+                400,
+                "A valid program ID is required.");
+        }
+
+        return await _writeExecutor.ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var program = await _dbContext.Programs
+                    .SingleOrDefaultAsync(x => x.Id == programId, ct);
+
+                if (program is null)
+                {
+                    return Result<bool>.Failure(
+                        404,
+                        "Program was not found.");
+                }
+
+                if (await _applicationReader.IsProgramConfigurationLockedAsync(
+                        programId,
+                        ct))
+                {
+                    return Result<bool>.Failure(
+                        409,
+                        "Program cannot be deleted because one of its admission cycles is Active or already has applications.");
+                }
+
+                var cycles = await _dbContext.AdmissionCycles
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync(ct);
+                Guid[] cycleIds = cycles.Select(x => x.Id).ToArray();
+
+                var tracks = await _dbContext.Tracks
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync(ct);
+                Guid[] trackIds = tracks.Select(x => x.Id).ToArray();
+
+                var offerings = await _dbContext.TrackBranchOfferings
+                    .Where(x =>
+                        cycleIds.Contains(x.CycleId) ||
+                        trackIds.Contains(x.TrackId))
+                    .ToListAsync(ct);
+
+                var eligibilityRules = await _dbContext.CycleEligibilityRules
+                    .Where(x => cycleIds.Contains(x.CycleId))
+                    .ToListAsync(ct);
+
+                var documentRequirements = await _dbContext.ProgramDocumentRequirements
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync(ct);
+
+                _dbContext.TrackBranchOfferings.RemoveRange(offerings);
+                _dbContext.CycleEligibilityRules.RemoveRange(eligibilityRules);
+                _dbContext.ProgramDocumentRequirements.RemoveRange(documentRequirements);
+                _dbContext.AdmissionCycles.RemoveRange(cycles);
+                _dbContext.Tracks.RemoveRange(tracks);
+                _dbContext.Programs.Remove(program);
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<bool>.Success(
+                    true,
+                    message: "Program and its configuration data were deleted successfully.");
+            });
     }
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();

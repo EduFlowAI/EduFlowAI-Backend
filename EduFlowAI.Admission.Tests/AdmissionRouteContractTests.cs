@@ -44,6 +44,7 @@ public sealed class AdmissionRouteContractTests
             { typeof(AdminProgramsController), nameof(AdminProgramsController.GetPrograms), typeof(HttpGetAttribute), null, false },
             { typeof(AdminProgramsController), nameof(AdminProgramsController.CreateProgram), typeof(HttpPostAttribute), null, false },
             { typeof(AdminProgramsController), nameof(AdminProgramsController.UpdateProgram), typeof(HttpPutAttribute), "{programId:guid}", false },
+            { typeof(AdminProgramsController), nameof(AdminProgramsController.DeleteProgram), typeof(HttpDeleteAttribute), "{programId:guid}", false },
             { typeof(AdminProgramsController), nameof(AdminProgramsController.GetProgramDocumentRequirements), typeof(HttpGetAttribute), "{programId:guid}/document-requirements", false },
             { typeof(AdminProgramsController), nameof(AdminProgramsController.UpdateProgramDocumentRequirements), typeof(HttpPutAttribute), "{programId:guid}/document-requirements", false },
 

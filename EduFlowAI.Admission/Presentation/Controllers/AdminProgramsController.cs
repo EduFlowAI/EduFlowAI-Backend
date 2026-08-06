@@ -59,6 +59,18 @@ public sealed class AdminProgramsController : ControllerBase
         return this.ToActionResult(result);
     }
 
+    [HttpDelete("{programId:guid}")]
+    public async Task<ActionResult<Result<bool>>> DeleteProgram(
+        Guid programId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _programService.DeleteProgramAsync(
+            programId,
+            cancellationToken);
+
+        return this.ToActionResult(result);
+    }
+
     [HttpGet("{programId:guid}/document-requirements")]
     public async Task<ActionResult<Result<IReadOnlyList<ProgramDocumentRequirementDto>>>> GetProgramDocumentRequirements(
         Guid programId,
