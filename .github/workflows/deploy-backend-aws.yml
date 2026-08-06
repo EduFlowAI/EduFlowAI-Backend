@@ -1,0 +1,93 @@
+name: Deploy EduFlowAI Backend to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1                  # Replace with your AWS Region
+  ECR_REPOSITORY_API: eduflowai-api      # ECR Repository name for API
+  ECR_REPOSITORY_WORKER: eduflowai-worker# ECR Repository name for Worker
+  ECS_CLUSTER: eduflowai-cluster         # ECS Cluster name
+  ECS_SERVICE_API: eduflowai-api-service # ECS Service name for API
+  ECS_SERVICE_WORKER: eduflowai-worker-service # ECS Service name for Worker
+
+jobs:
+  build-and-test:
+    name: Build & Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore EduFlowAI.slnx
+
+      - name: Build Solution
+        run: dotnet build EduFlowAI.slnx --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test EduFlowAI.slnx --configuration Release --no-build --verbosity normal
+
+  deploy-to-aws:
+    name: Build Docker Images & Deploy to ECS
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # -------------------------------------------------------------
+      # Build & Push API Container Image
+      # -------------------------------------------------------------
+      - name: Build, Tag & Push EduFlowAI.Api Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_API:latest -f EduFlowAI.Api/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:latest
+
+      # -------------------------------------------------------------
+      # Build & Push Worker Container Image
+      # -------------------------------------------------------------
+      - name: Build, Tag & Push EduFlowAI.Worker Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest -f EduFlowAI.Worker/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
+
+      # -------------------------------------------------------------
+      # Force New Deployment on AWS ECS
+      # -------------------------------------------------------------
+      - name: Deploy API Service to AWS ECS
+        run: |
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_API }} --force-new-deployment
+
+      - name: Deploy Worker Service to AWS ECS
+        run: |
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_WORKER }} --force-new-deployment

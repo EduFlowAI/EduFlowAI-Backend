@@ -141,6 +141,9 @@ public class DocumentVerificationContextReaderTests
 
             return Task.FromResult(UserIdToReturn ?? "user-1");
         }
+
+        public Task<Guid> GetApplicationIdForUserAsync(string applicantUserId, CancellationToken cancellationToken)
+            => Task.FromResult(Guid.NewGuid());
     }
 
     private sealed class FakeProfileService : IProfileService
