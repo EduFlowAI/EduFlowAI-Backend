@@ -196,5 +196,9 @@ public sealed class AdmissionTrackMetadataSeederTests
             Set<SimulatedStageResult>();
         public DbSet<ProgramDocumentRequirement> ProgramDocumentRequirements =>
             Set<ProgramDocumentRequirement>();
+
+        public DbSet<EnrollmentTaskLookup> EnrollmentTaskLookups => Set<EnrollmentTaskLookup>();
+
+        public DbSet<ApplicationEnrollmentTask> ApplicationEnrollmentTasks => Set<ApplicationEnrollmentTask>();
     }
 }
