@@ -489,3 +489,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+# files
+
+aws_deployment_guide.md

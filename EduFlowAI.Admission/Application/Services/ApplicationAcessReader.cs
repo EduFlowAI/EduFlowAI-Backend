@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.Interfaces.Repositories;
+using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Identity.Domain.Constants;
 using EduFlowAI.Identity.Domain.Entities;
@@ -67,7 +67,6 @@ namespace EduFlowAI.Admission.Application.Services
             }
             return application.ApplicantUserId;
         }
-
         public async Task<Guid> GetApplicationIdForUserAsync(string applicantUserId, CancellationToken cancellationToken)
         {
             var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.ApplicantUserId == applicantUserId);

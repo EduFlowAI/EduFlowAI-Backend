@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.DTOs;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
@@ -344,37 +344,24 @@ public class AssistantMessageServiceTests
 
     private sealed class FakeSessionManager : ISessionManager
     {
-        private readonly ChatSessionDto _session = new()
-        {
-            SessionId = "test-session",
-            UserId = string.Empty
-        };
-
         public ChatSessionDto CreateSession(string userId)
         {
-            return _session;
+            return new ChatSessionDto { SessionId = Guid.NewGuid().ToString(), UserId = userId };
         }
 
         public ChatSessionDto? GetSession(string sessionId)
         {
-            return _session;
+            return new ChatSessionDto { SessionId = sessionId, UserId = "user-1" };
         }
 
-        public bool AddTurn(
-            string sessionId,
-            ConversationTurnDto turn)
+        public bool AddTurn(string sessionId, ConversationTurnDto turn)
         {
-            _session.History.Add(turn);
             return true;
         }
 
-        public List<ConversationTurnDto> GetHistory(
-            string sessionId,
-            int lastN = 3)
+        public List<ConversationTurnDto> GetHistory(string sessionId, int lastN = 3)
         {
-            return _session.History
-                .TakeLast(lastN)
-                .ToList();
+            return [];
         }
 
         public void EndSession(string sessionId)
@@ -432,10 +419,9 @@ public class AssistantMessageServiceTests
             return Task.FromResult<ApplicationStatusDto?>(null);
         }
 
-        public Task<ApplicationStatusDto?>
-            GetCurrentApplicationStatusForApplicantAsync(
-                string applicantUserId,
-                CancellationToken cancellationToken = default)
+        public Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(
+            string applicantUserId,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult<ApplicationStatusDto?>(null);
         }
