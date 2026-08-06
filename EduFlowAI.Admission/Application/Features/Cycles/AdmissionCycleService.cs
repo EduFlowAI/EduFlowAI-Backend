@@ -404,12 +404,13 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                 if (await _dbContext.AdmissionCycles.AnyAsync(
                         x =>
                             x.Id != cycleId &&
+                            x.ProgramId == cycle.ProgramId &&
                             x.Status == CycleStatus.Active,
                         ct))
                 {
                     return Result<AdmissionCycleDto>.Failure(
                         409,
-                        "Another admission cycle is already active.");
+                        "Another admission cycle is already active for this program.");
                 }
 
                 cycle.Status = CycleStatus.Active;
@@ -423,8 +424,8 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                     message: "Admission cycle activated successfully.");
             },
             (
-                "uq_cycle_active",
-                "The cycle could not be activated because another cycle became active at the same time."));
+                "uq_cycle_active_per_program",
+                "The cycle could not be activated because another cycle for this program became active at the same time."));
     }
 
     public async Task<Result<AdmissionCycleDto>> CloseCycleAsync(
