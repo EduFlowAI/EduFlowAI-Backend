@@ -1,6 +1,7 @@
 ﻿using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
 using EduFlowAI.Documents.Application.Interfaces;
@@ -53,7 +54,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var language = NormalizeLanguage(request.Language);
+        // Answer in the language the applicant actually wrote in - not just the UI toggle.
+        var language = ResolveLanguage(request.Message, request.Language);
 
         var session = GetOrCreateSession(
             request.SessionId,
@@ -728,6 +730,14 @@ public sealed class AssistantMessageService : IAssistantMessageService
             }
         ];
     }
+
+    // The answer language follows the language the applicant wrote in; the UI-selected language
+    // (request.Language) is only a fallback when the message carries no language signal (e.g. it is
+    // only numbers or punctuation). This fixes "asked in Arabic, answered in English".
+    private static string ResolveLanguage(string? message, string? requestedLanguage) =>
+        !string.IsNullOrWhiteSpace(message) && message.Any(char.IsLetter)
+            ? LanguageDetectionService.DetectLanguage(message)
+            : NormalizeLanguage(requestedLanguage);
 
     private static string NormalizeLanguage(
         string? language)

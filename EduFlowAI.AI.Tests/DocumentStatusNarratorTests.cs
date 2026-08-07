@@ -54,6 +54,20 @@ public class DocumentStatusNarratorTests
         Assert.Contains("Never add, change", chat.LastSystemPrompt);
     }
 
+    [Theory]
+    [InlineData("ar", "Arabic")]
+    [InlineData("en", "English")]
+    public async Task The_prompt_carries_a_strong_language_directive(string language, string expected)
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), language);
+
+        Assert.Contains("# LANGUAGE", chat.LastSystemPrompt);
+        Assert.Contains($"Write your ENTIRE reply in {expected}", chat.LastSystemPrompt);
+    }
+
     [Fact]
     public async Task Falls_back_to_the_plain_facts_when_the_model_returns_nothing()
     {
