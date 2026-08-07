@@ -89,6 +89,21 @@ public class AiChatServiceTests
         Assert.Contains("[hidden]", chat.LastUserMessage);
     }
 
+    // The reference material is English, so a single weak instruction let the model drift to English.
+    // A prominent LANGUAGE directive naming the target language keeps the answer in the right language.
+    [Theory]
+    [InlineData("ar", "Arabic")]
+    [InlineData("en", "English")]
+    public async Task The_prompt_carries_a_strong_language_directive(string language, string expected)
+    {
+        var (service, _, chat) = Build();
+
+        await service.AnswerWithContextAsync("question", NoHistory, language);
+
+        Assert.Contains("# LANGUAGE", chat.LastSystemPrompt);
+        Assert.Contains($"Write your ENTIRE reply in {expected}", chat.LastSystemPrompt);
+    }
+
     private static (AiChatService, FakeRetrieval, StubChat) Build()
     {
         var retrieval = new FakeRetrieval();

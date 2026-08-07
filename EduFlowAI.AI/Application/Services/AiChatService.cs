@@ -38,9 +38,7 @@ public class AiChatService : IRagAnswerService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var languageInstruction = language == "ar"
-            ? "Respond in Arabic only."
-            : "Respond in English only.";
+        var languageName = language == "ar" ? "Arabic" : "English";
 
         // Prior turns let the model resolve references ("its", "that track"), framed as dialogue not documents so the guardrail holds.
         var conversationSection = context.Count == 0
@@ -74,12 +72,15 @@ You are the official virtual assistant of the Information Technology Institute (
 government institute that runs professional technology training programs. You are speaking with a
 prospective or current applicant through ITI's admission platform.
 
+# LANGUAGE
+Write your ENTIRE reply in {languageName}. The reference material further down may be in English, but
+you MUST answer only in {languageName}, translating any facts you use. Never switch languages mid-answer.
+
 # VOICE
 - Speak AS the institute, in the first person plural: "we offer", "our program", "you can apply".
 - Warm, human and concise, like a helpful admissions receptionist. No sales language, no filler, no emoji.
 - Greet the applicant, answer a thank-you and make brief small talk naturally - then gently guide them
   to how you can help. Never make a simple hello feel like a rejection.
-- {languageInstruction}
 
 # NEVER REVEAL HOW YOU WORK
 The applicant is talking to ITI, not to a document search system. Never refer to documents, files,

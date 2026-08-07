@@ -38,6 +38,32 @@ public class AssistantMessageServiceTests
         Assert.False(response.RequiresClarification);
     }
 
+    // The answer language must follow the language the applicant wrote in, not just the UI toggle -
+    // an Arabic question stays Arabic even when the request's Language is null or "en".
+    [Theory]
+    [InlineData("ما هي متطلبات القبول؟", null, "ar")]       // Arabic message, no UI language -> Arabic
+    [InlineData("ما هي متطلبات القبول؟", "en", "ar")]       // Arabic message, UI says English -> still Arabic
+    [InlineData("What are the requirements?", "ar", "en")]  // English message, UI says Arabic -> English
+    [InlineData("12345", "ar", "ar")]                       // no letters -> fall back to the UI language
+    public async Task Answer_language_follows_the_message_not_just_the_ui_toggle(
+        string message,
+        string? requestLanguage,
+        string expected)
+    {
+        var rag = new FakeRagAnswerService();
+        var service = CreateService(
+            intent: "knowledge",
+            recommendationService: new FakeTrackRecommendationService(),
+            rag: rag);
+
+        await service.HandleAsync(
+            new AssistantMessageRequest(message, null, requestLanguage),
+            Guid.Empty,
+            false);
+
+        Assert.Equal(expected, rag.LastLanguage);
+    }
+
     [Fact]
     public async Task DocumentStatusIntent_AuthenticatedUser_ReturnsNarratedDocumentStatus()
     {
@@ -264,11 +290,12 @@ public class AssistantMessageServiceTests
     private static AssistantMessageService CreateService(
         string intent,
         FakeTrackRecommendationService recommendationService,
-        RecommendationUserContextDto? userContext = null)
+        RecommendationUserContextDto? userContext = null,
+        FakeRagAnswerService? rag = null)
     {
         return new AssistantMessageService(
             new FakeIntentRouter(intent),
-            new FakeRagAnswerService(),
+            rag ?? new FakeRagAnswerService(),
             new FakeSessionManager(),
             recommendationService,
             new FakeApplicationStatusQueryService(),
@@ -327,12 +354,16 @@ public class AssistantMessageServiceTests
 
     private sealed class FakeRagAnswerService : IRagAnswerService
     {
+        public string? LastLanguage { get; private set; }
+
         public Task<RagAnswerDto> AnswerWithContextAsync(
             string userQuestion,
             IReadOnlyList<ConversationTurnDto> context,
             string language,
             CancellationToken cancellationToken = default)
         {
+            LastLanguage = language;
+
             return Task.FromResult(
                 new RagAnswerDto
                 {

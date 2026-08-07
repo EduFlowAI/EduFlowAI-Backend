@@ -38,12 +38,16 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
                 .OrderBy(d => d.DocumentType)
                 .Select(d => $"- {TypeLabel(d.DocumentType)}: {StatusLabel(d.Status)}"));
 
-        var languageLine = language == "ar" ? "Respond in Arabic only." : "Respond in English only.";
+        var languageName = language == "ar" ? "Arabic" : "English";
 
         var systemPrompt = $"""
 # ROLE
 You are the official virtual assistant of the Information Technology Institute (ITI), replying to an
 applicant who asked about their uploaded documents.
+
+# LANGUAGE
+Write your ENTIRE reply in {languageName}. The facts below are in English, but you MUST answer only in
+{languageName}, translating the document names and statuses. Never switch languages mid-answer.
 
 # THE FACTS (authoritative - this is the applicant's real record)
 {facts}
@@ -57,7 +61,6 @@ applicant who asked about their uploaded documents.
 - If something is rejected or still under review, say so plainly but reassuringly.
 - Keep it to one short, natural paragraph (a short list only if it genuinely reads better). No filler,
   no emoji.
-- {languageLine}
 """;
 
         string? answer;
