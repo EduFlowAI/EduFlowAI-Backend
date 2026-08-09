@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,8 +15,6 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
         // Define the storage path and the 10 MB size limit
         private readonly string _storageDirectory;
         private const int MaxFileSizeBytes = 10 * 1024 * 1024;
-        private const string StoragePath = @"D:\EduFlowAI\SecureStorage";
-
 
         // Map allowed extensions to their true binary signatures (magic bytes)
         private static readonly Dictionary<string, byte[][]> AllowedMagicBytes = new()
@@ -26,10 +25,9 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
             { ".png", new[] { new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A } } }
         };
 
-        public FileStorageService()
+        public FileStorageService(IOptions<DocumentStorageOptions> options)
         {
-            // Set path outside wwwroot, directly in the app's base directory
-            _storageDirectory = StoragePath;
+            _storageDirectory = options.Value.Root;
 
             // Ensure the folder exists on startup
             if (!Directory.Exists(_storageDirectory))
