@@ -11,7 +11,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
     [ApiController]
     [Route("api/cycles")]
     // Extremely important: Restrict this endpoint to administrators only
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "SuperAdmin")]
     public class AllocationController : ControllerBase
     {
         private readonly IAllocationService _allocationService;
@@ -25,7 +25,10 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         public async Task<ActionResult<Result<string>>> RunAllocation(Guid cycleId, CancellationToken cancellationToken = default)
         {
             // Execute the allocation engine
-            var (isSuccess, errorMessage) = await _allocationService.RunAllocationAsync(cycleId);
+            var (isSuccess, errorMessage) =
+                await _allocationService.RunAllocationAsync(
+                    cycleId,
+                    cancellationToken);
 
             if (!isSuccess)
             {
