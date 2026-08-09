@@ -64,6 +64,47 @@ public class AssistantMessageServiceTests
         Assert.Equal(expected, rag.LastLanguage);
     }
 
+    // The router (an LLM) reads the true language even on code-switched messages the letter-count
+    // heuristic gets wrong (e.g. an Arabic sentence carrying an English job title). When it supplies a
+    // language, it wins over the heuristic - this is the fix for "اني Product Manager" answered in English.
+    [Fact]
+    public async Task Router_detected_language_wins_over_the_letter_count_heuristic()
+    {
+        var rag = new FakeRagAnswerService();
+        var service = CreateService(
+            intent: "knowledge",
+            recommendationService: new FakeTrackRecommendationService(),
+            rag: rag,
+            routerLanguage: "ar");
+
+        // The heuristic scores this "en" (more Latin letters than Arabic); the router's "ar" must win.
+        await service.HandleAsync(
+            new AssistantMessageRequest("اني Product Manager", null, "en"),
+            Guid.Empty,
+            false);
+
+        Assert.Equal("ar", rag.LastLanguage);
+    }
+
+    // A stray/unsupported language from the router is ignored - the message heuristic still decides.
+    [Fact]
+    public async Task Invalid_router_language_falls_back_to_the_message_heuristic()
+    {
+        var rag = new FakeRagAnswerService();
+        var service = CreateService(
+            intent: "knowledge",
+            recommendationService: new FakeTrackRecommendationService(),
+            rag: rag,
+            routerLanguage: "fr");   // not "ar"/"en" -> ignored
+
+        await service.HandleAsync(
+            new AssistantMessageRequest("ما هي متطلبات القبول؟", null, "en"),
+            Guid.Empty,
+            false);
+
+        Assert.Equal("ar", rag.LastLanguage);
+    }
+
     [Fact]
     public async Task DocumentStatusIntent_AuthenticatedUser_ReturnsNarratedDocumentStatus()
     {
@@ -291,10 +332,11 @@ public class AssistantMessageServiceTests
         string intent,
         FakeTrackRecommendationService recommendationService,
         RecommendationUserContextDto? userContext = null,
-        FakeRagAnswerService? rag = null)
+        FakeRagAnswerService? rag = null,
+        string? routerLanguage = null)
     {
         return new AssistantMessageService(
-            new FakeIntentRouter(intent),
+            new FakeIntentRouter(intent, routerLanguage),
             rag ?? new FakeRagAnswerService(),
             new FakeSessionManager(),
             recommendationService,
@@ -307,7 +349,8 @@ public class AssistantMessageServiceTests
     }
 
     private sealed class FakeIntentRouter(
-        string intent = "knowledge")
+        string intent = "knowledge",
+        string? language = null)
         : IIntentRouter
     {
         public Task<IntentClassificationDto> ClassifyAsync(
@@ -321,6 +364,7 @@ public class AssistantMessageServiceTests
                     PrimaryIntent = intent,
                     Confidence = 0.95m,
                     RoutedTo = GetRoute(intent),
+                    Language = language,
                     RequiresClarification = false,
                     Intents =
                     [
