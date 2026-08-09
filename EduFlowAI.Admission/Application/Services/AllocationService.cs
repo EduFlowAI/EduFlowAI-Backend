@@ -1,13 +1,8 @@
 ﻿using EduFlowAI.Admission.Application.DTOs;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
-using EduFlowAI.Admission.Application.Emails;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
-using EduFlowAI.Communication.Domain.Enums;
-using EduFlowAI.Identity.Application.Interfaces;
-using EduFlowAI.Shared.Kernel.Messaging;
-using EduFlowAI.Shared.Messaging.Contracts.Communication.V1;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -18,21 +13,16 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IApplicationRepository _applicationRepository;
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<EnrollmentTaskLookup> _taskLookupRepository;
-        private readonly IUserContactInfoReader _userContactInfoReader;
-        private readonly IOutboxPublisher _outboxPublisher;
 
         public AllocationService(
             IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
-            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository,
-            IUserContactInfoReader userContactInfoReader,
-            IOutboxPublisher outboxPublisher)
+            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository
+            )
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _taskLookupRepository = taskLookupRepository;
-            _userContactInfoReader = userContactInfoReader;
-            _outboxPublisher = outboxPublisher;
         }
 
         public async Task<(bool IsSuccess, string ErrorMessage)>
@@ -234,45 +224,8 @@ namespace EduFlowAI.Admission.Application.Services
                 _applicationRepository.Update(app);
             }
 
-            // 3.4: Load all active applicant email addresses in one query.
-            var contacts = await _userContactInfoReader.GetContactInfosAsync(
-                eligibleApplications.Select(app => app.ApplicantUserId),
-                cancellationToken);
-
-            var applicantsWithoutEmail = eligibleApplications
-                .Count(app => !contacts.ContainsKey(app.ApplicantUserId));
-
-            if (applicantsWithoutEmail > 0)
-            {
-                return (
-                    false,
-                    $"Allocation was not committed because {applicantsWithoutEmail} applicant email address(es) could not be resolved.");
-            }
-
-            // 3.5: Add one durable outgoing email message per applicant.
-            var correlationId = Guid.NewGuid();
-            var occurredAtUtc = DateTimeOffset.UtcNow;
-
-            foreach (var app in eligibleApplications)
-            {
-                var contact = contacts[app.ApplicantUserId];
-                var emailData = new ApplicationStatusChangedEmailData(
-                    app.Status);
-
-                await _outboxPublisher.PublishAsync(
-                    new SendEmailV1(
-                        MessageId: Guid.NewGuid(),
-                        CorrelationId: correlationId,
-                        CausationId: null,
-                        EmailType: (int)EmailType.ApplicationStatusChanged,
-                        RecipientEmail: contact.Email,
-                        DataJson: JsonSerializer.Serialize(emailData),
-                        OccurredAtUtc: occurredAtUtc));
-            }
-
-            // 3.6: Commit application changes and messages atomically.
-            await _outboxPublisher.SaveChangesAndFlushMessagesAsync(
-                cancellationToken);
+            // 3.4: Commit all changes to the database in a single transaction
+            await _applicationRepository.SaveChangesAsync();
 
             // Calculate metrics for the response
             int admittedCount = currentAllocations.Count;
