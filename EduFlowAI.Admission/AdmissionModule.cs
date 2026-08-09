@@ -84,8 +84,6 @@ namespace EduFlowAI.Admission
         public static IServiceCollection AddAdmissionWorkerModule(
             this IServiceCollection services)
         {
-            services.AddScoped<IEmailTemplate,
-                ApplicationStatusChangedEmailTemplate>();
             services.AddScoped<IApplicationRepository, ApplicationRepository>();
             services.AddScoped<IStatusTransitionCoordinator, StatusTransitionCoordinator>();
             services.AddScoped<IOfferedTrackReader, OfferedTrackReader>();
