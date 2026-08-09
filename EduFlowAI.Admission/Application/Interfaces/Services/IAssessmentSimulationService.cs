@@ -11,7 +11,15 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="applicationId"></param>
         /// <param name="stage"></param>
         /// <returns></returns>
-        Task<(bool isSuccess, string? ErrorMessage, SimulatedStageDto? Data)> SimulateStageAsync(Guid applicationId, SelectionStage stage);
+        Task<(bool isSuccess, string? ErrorMessage, SimulatedStageDto? Data)> SimulateStageAsync(Guid applicationId, SelectionStage stage, Guid? trackId = null);
+
+        /// <summary>
+        /// Generates simulated results for all applications in a specific cycle and stage.
+        /// </summary>
+        /// <param name="cycleId"></param>
+        /// <param name="stage"></param>
+        /// <returns></returns>
+        Task<(bool IsSuccess, string? ErrorMessage, int ProcessedCount)> BulkSimulateStageAsync(Guid cycleId, SelectionStage stage);
 
         /// <summary>
         /// A helper method to fetch all simulated stages for a specific applicant.
