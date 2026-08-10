@@ -9,15 +9,13 @@ using EduFlowAI.AI.Application.Validators;
 using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
 using Microsoft.Extensions.Logging;
 
-
 public sealed class TrackRecommendationService(
     IOfferedTrackReader offeredTrackReader,
     IRecommendationModelClient recommendationModelClient,
     ILogger<TrackRecommendationService> logger)
     : ITrackRecommendationService
 {
-
-private const int MaximumRecommendations = 3;
+    private const int MaximumRecommendations = 3;
 
     private const string AdvisoryNotice =
         "These recommendations are advisory only and do not determine eligibility or admission.";
@@ -37,7 +35,8 @@ private const int MaximumRecommendations = 3;
         }
 
         var offeredTracks =
-            await offeredTrackReader.GetActiveOfferedTracksAsync(cancellationToken);
+            await offeredTrackReader.GetActiveOfferedTracksAsync(
+                cancellationToken);
 
         if (offeredTracks.Count == 0)
         {
@@ -49,18 +48,31 @@ private const int MaximumRecommendations = 3;
             };
         }
 
+        logger.LogInformation(
+            "Active offered tracks sent to Gemini: {@Tracks}",
+            offeredTracks.Select(track => new
+            {
+                track.TrackId,
+                track.Name,
+                track.Description,
+                track.PrerequisiteTopics
+            }));
+
         try
         {
-            var modelResponse = await recommendationModelClient.RankAsync(
-                new RecommendationModelRequestDto
-                {
-                    Questionnaire = questionnaire,
-                    OfferedTracks = offeredTracks
-                },
-                cancellationToken);
+            var modelResponse =
+                await recommendationModelClient.RankAsync(
+                    new RecommendationModelRequestDto
+                    {
+                        Questionnaire = questionnaire,
+                        OfferedTracks = offeredTracks
+                    },
+                    cancellationToken);
 
             var validatedRecommendations =
-                ValidateRecommendations(modelResponse, offeredTracks);
+                ValidateRecommendations(
+                    modelResponse,
+                    offeredTracks);
 
             if (validatedRecommendations.Count == 0)
             {
@@ -88,7 +100,6 @@ private const int MaximumRecommendations = 3;
             logger.LogWarning(
                 exception,
                 "Gemini track recommendation failed. Using fallback recommendations.");
-
         }
 
         return CreateFallback(offeredTracks);
@@ -106,33 +117,36 @@ private const int MaximumRecommendations = 3;
 
         var offeredTracksById = offeredTracks
             .GroupBy(track => track.TrackId)
-            .ToDictionary(group => group.Key, group => group.First());
+            .ToDictionary(
+                group => group.Key,
+                group => group.First());
 
         return modelResponse.Recommendations
-                            .Where(item =>
-                                             item.TrackId != Guid.Empty &&
-                                             item.Rank > 0 &&
-                                             !string.IsNullOrWhiteSpace(item.Reason) &&
-                                             offeredTracksById.ContainsKey(item.TrackId))
-                            .GroupBy(item => item.TrackId)
-                            .Select(group => group
-                                .OrderBy(item => item.Rank)
-                                .First())
-                            .OrderBy(item => item.Rank)
-                            .Take(MaximumRecommendations)
-                            .Select((item, index) =>
-                                                    {
-                                                        var track = offeredTracksById[item.TrackId];
+            .Where(item =>
+                item.TrackId != Guid.Empty &&
+                item.Rank > 0 &&
+                !string.IsNullOrWhiteSpace(item.Reason) &&
+                offeredTracksById.ContainsKey(item.TrackId))
+            .GroupBy(item => item.TrackId)
+            .Select(group => group
+                .OrderBy(item => item.Rank)
+                .First())
+            .OrderBy(item => item.Rank)
+            .Take(MaximumRecommendations)
+            .Select((item, index) =>
+            {
+                var track =
+                    offeredTracksById[item.TrackId];
 
-                                                        return new RecommendedTrackResultDto
-                                                        {
-                                                            TrackId = track.TrackId,
-                                                            TrackName = track.Name,
-                                                            Rank = index + 1,
-                                                            Reason = item.Reason.Trim()
-                                                        };
-                                                    })
-                            .ToList();
+                return new RecommendedTrackResultDto
+                {
+                    TrackId = track.TrackId,
+                    TrackName = track.Name,
+                    Rank = index + 1,
+                    Reason = item.Reason.Trim()
+                };
+            })
+            .ToList();
     }
 
     private static TrackRecommendationResultDto CreateFallback(
@@ -143,14 +157,15 @@ private const int MaximumRecommendations = 3;
             .Select(group => group.First())
             .OrderBy(track => track.Name)
             .Take(MaximumRecommendations)
-            .Select((track, index) => new RecommendedTrackResultDto
-            {
-                TrackId = track.TrackId,
-                TrackName = track.Name,
-                Rank = index + 1,
-                Reason =
-                    "This track is currently offered. Review its description and prerequisites to assess your fit."
-            })
+            .Select((track, index) =>
+                new RecommendedTrackResultDto
+                {
+                    TrackId = track.TrackId,
+                    TrackName = track.Name,
+                    Rank = index + 1,
+                    Reason =
+                        "This track is currently offered. Review its description and prerequisites to assess your fit."
+                })
             .ToList();
 
         return new TrackRecommendationResultDto
