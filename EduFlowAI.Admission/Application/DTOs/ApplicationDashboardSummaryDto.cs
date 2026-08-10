@@ -19,6 +19,11 @@
         // A descriptive message for the user based on status
         public string StatusMessage { get; init; } = string.Empty;
 
+        // --- Fields for Final Result Outcomes ---
+        public string? TrackName { get; init; }
+        public string? BranchName { get; init; }
+        public int? WaitlistPosition { get; init; }
+
         // Progress percentage for the timeline bar (0 to 100)
         public int TimelineProgressPercentage { get; init; }
 
