@@ -1,4 +1,5 @@
 using EduFlowAI.Admission;
+using EduFlowAI.Admission.Application.Messages;
 using EduFlowAI.AI;
 using EduFlowAI.Communication;
 using EduFlowAI.Documents;
@@ -15,6 +16,7 @@ using JasperFx.Resources;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Wolverine;
+using Wolverine.RabbitMQ;
 
 namespace EduFlowAI.Worker
 {
@@ -51,6 +53,8 @@ namespace EduFlowAI.Worker
             {
                 options.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
                 MessagingConfiguration.ConfigureWorkerListeners(options);
+
+                options.ListenToRabbitQueue(AdmissionQueueNames.AdmissionStatusEmails);
             });
 
             // messaging dev only
