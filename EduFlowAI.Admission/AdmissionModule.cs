@@ -1,4 +1,3 @@
-using EduFlowAI.Admission.Application.Emails;
 using EduFlowAI.Admission.Application.EligibilityRuleStrategy;
 using EduFlowAI.Admission.Application.Features.Branches;
 using EduFlowAI.Admission.Application.Features.Configuration.Common;
