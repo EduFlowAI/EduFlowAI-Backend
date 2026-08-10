@@ -8,6 +8,8 @@
         /// </summary>
         /// <param name="cycleId">The unique identifier of the admission cycle.</param>
         /// <returns>A tuple indicating success or failure along with a message.</returns>
-        Task<(bool IsSuccess, string ErrorMessage)> RunAllocationAsync(Guid cycleId);
+        Task<(bool IsSuccess, string ErrorMessage)> RunAllocationAsync(
+            Guid cycleId,
+            CancellationToken cancellationToken = default);
     }
 }

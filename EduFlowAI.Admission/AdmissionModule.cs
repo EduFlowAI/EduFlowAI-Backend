@@ -1,3 +1,4 @@
+using EduFlowAI.Admission.Application.Emails;
 using EduFlowAI.Admission.Application.EligibilityRuleStrategy;
 using EduFlowAI.Admission.Application.Features.Branches;
 using EduFlowAI.Admission.Application.Features.Configuration.Common;
@@ -13,6 +14,7 @@ using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Infrastructure.Repositories;
+using EduFlowAI.Communication.Application.Interfaces.Emails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -73,6 +75,7 @@ namespace EduFlowAI.Admission
             services.AddScoped<IFinalRankingService, FinalRankingService>();
             services.AddScoped<ITimelineCalculator, TimelineCalculator>();
             services.AddScoped<ICycleQueryService, CycleQueryService>();
+            services.AddScoped<IAllocationService, AllocationService>();
 
             return services;
         }

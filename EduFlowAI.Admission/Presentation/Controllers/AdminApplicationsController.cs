@@ -4,14 +4,13 @@ using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.Security.Claims;
 
 namespace EduFlowAI.Admission.Presentation.Controllers
 {
     [ApiController]
     [Route("api/modules/admission/admin/applications")]
-    [Authorize(Roles = "Admin")] // Uncomment this later when Identity is implemented
+    [Authorize(Roles = "SuperAdmin")] // Uncomment this later when Identity is implemented
     public class AdminApplicationsController : ControllerBase
     {
         private readonly IAdminOperationsService _adminOperationsService;
@@ -58,6 +57,23 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
 
             var successResult = Result<SimulatedStageDto>.Success(data!, message: "Assessment stage simulated successfully.");
+            return Ok(successResult);
+        }
+
+        [HttpPost("cycles/{cycleId}/bulk-simulate-stage")]
+        public async Task<ActionResult<Result<string>>> BulkSimulateStage(Guid cycleId, [FromQuery] SelectionStage stage)
+        {
+            var (isSuccess, errorMessage, processedCount) = await _simulationService.BulkSimulateStageAsync(cycleId, stage);
+
+            if (!isSuccess)
+            {
+                var failureResult = Result<string>.Failure(400, errorMessage!);
+                return BadRequest(failureResult);
+            }
+
+            string resultMessage = $"Bulk simulation completed. Successfully processed {processedCount} applications for stage: {stage}.";
+            var successResult = Result<string>.Success(resultMessage, message: "Bulk simulation executed successfully.");
+
             return Ok(successResult);
         }
 

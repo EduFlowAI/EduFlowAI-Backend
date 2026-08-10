@@ -4,6 +4,7 @@ using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace EduFlowAI.Admission.Application.Services
 {
@@ -16,14 +17,18 @@ namespace EduFlowAI.Admission.Application.Services
         public AllocationService(
             IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
-            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository)
+            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository
+            )
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _taskLookupRepository = taskLookupRepository;
         }
 
-        public async Task<(bool IsSuccess, string ErrorMessage)> RunAllocationAsync(Guid cycleId)
+        public async Task<(bool IsSuccess, string ErrorMessage)>
+            RunAllocationAsync(
+                Guid cycleId,
+                CancellationToken cancellationToken = default)
         {
             // =================================================================================
             // STEP 1: DATA GATHERING
