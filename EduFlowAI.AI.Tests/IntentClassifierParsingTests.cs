@@ -123,4 +123,38 @@ public class IntentClassifierParsingTests
         Assert.False(ok);
         Assert.Equal("knowledge", dto.PrimaryIntent);
     }
+
+    [Fact]
+    public void Language_FromTheModel_IsParsed()
+    {
+        var raw = "{\"intents\":[{\"intent\":\"knowledge\",\"confidence\":0.9}],\"language\":\"ar\"}";
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("ar", dto.Language);
+    }
+
+    [Fact]
+    public void Language_IsNormalizedToLowercase()
+    {
+        var raw = "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"EN\"}";
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("en", dto.Language);
+    }
+
+    [Theory]
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9}")]                     // no language field
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"fr\"}")]  // unsupported value
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"\"}")]    // empty
+    public void UnusableLanguage_IsNull_SoTheCallerCanFallBack(string raw)
+    {
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Null(dto.Language);
+    }
 }

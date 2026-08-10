@@ -54,9 +54,6 @@ public sealed class AssistantMessageService : IAssistantMessageService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Answer in the language the applicant actually wrote in - not just the UI toggle.
-        var language = ResolveLanguage(request.Message, request.Language);
-
         var session = GetOrCreateSession(
             request.SessionId,
             isAuthenticated ? userId : Guid.Empty);
@@ -69,6 +66,13 @@ public sealed class AssistantMessageService : IAssistantMessageService
             request.Message,
             history,
             cancellationToken);
+
+        // Prefer the language the router (an LLM) detected from the message - it reads code-switched
+        // Arabic (e.g. an Arabic sentence with an English job title) correctly, where the letter-count
+        // heuristic cannot. Fall back to that heuristic / the UI toggle when the router gives nothing.
+        var language = classification.Language is "ar" or "en"
+            ? classification.Language!
+            : ResolveLanguage(request.Message, request.Language);
 
         if (classification.RequiresClarification)
         {

@@ -41,9 +41,11 @@ public class IntentClassifierService : IIntentRouter
                     },
                     required = new[] { "intent", "confidence" }
                 }
-            }
+            },
+            // The language the message is written in - the assistant answers in this language.
+            language = new { type = "STRING", @enum = new[] { "ar", "en" } }
         },
-        required = new[] { "intents" }
+        required = new[] { "intents", "language" }
     };
 
     private const string SystemPrompt = """
@@ -83,6 +85,12 @@ intent it belongs to - but a clear greeting, thanks or bit of small talk is conf
 not low confidence. A message that is ambiguous between two intents is NOT a
 multi-intent message - it is one intent with low confidence. Only list several intents when the user
 clearly asks for several things.
+
+Also detect the language the CURRENT message is written in and return it as "language": "ar" for Arabic,
+"en" for English or anything else. Judge by the sentence the user actually wrote, not by the conversation
+history. A mostly-Arabic sentence that contains English tech terms, job titles or proper nouns (for
+example "اني Product Manager" or "عايز اشتغل Backend Developer") is Arabic -> "ar". Only return "en" when
+the message is genuinely English, or has no real words to judge (e.g. only digits or symbols).
 
 Examples:
 "Which are available tracks?" -> knowledge
@@ -222,10 +230,19 @@ Message to classify:
             PrimaryIntent = intents[0].Intent,
             Confidence = intents[0].Confidence,
             RoutedTo = intents[0].RoutedTo,
+            Language = NormalizeRouterLanguage(parsed.Language),
             RequiresClarification = false
         };
 
         return true;
+    }
+
+    // Accept only the two values we support; anything else becomes null so the caller falls back
+    // to the letter-count heuristic / UI toggle instead of trusting a stray value from the model.
+    private static string? NormalizeRouterLanguage(string? language)
+    {
+        var normalized = language?.Trim().ToLowerInvariant();
+        return normalized is "ar" or "en" ? normalized : null;
     }
 
     public string GetClarificationMessage(string language) => language == "ar"
@@ -280,6 +297,9 @@ Message to classify:
         public string? PrimaryIntent { get; set; }
 
         public decimal Confidence { get; set; }
+
+        // The language the model detected the message is written in ("ar" / "en").
+        public string? Language { get; set; }
     }
 
     private sealed class RawDetectedIntent

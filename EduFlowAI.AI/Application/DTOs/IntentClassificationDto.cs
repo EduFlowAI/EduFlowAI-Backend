@@ -16,6 +16,11 @@ public class IntentClassificationDto
     [JsonPropertyName("confidence")]
     public decimal Confidence { get; set; }  // 0.0 to 1.0
 
+    // The language the router detected the message is written in ("ar"/"en"), or null when it
+    // supplied nothing usable - the assistant then falls back to the letter-count heuristic / UI toggle.
+    [JsonPropertyName("language")]
+    public string? Language { get; set; }
+
     // Derived from PrimaryIntent by the classifier; never read from the model's JSON.
     [JsonIgnore]
     public string RoutedTo { get; set; } = string.Empty;
