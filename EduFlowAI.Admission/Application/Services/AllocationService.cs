@@ -1,10 +1,13 @@
 ﻿using EduFlowAI.Admission.Application.DTOs;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Application.Messages;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Identity.Application.Interfaces;
+using EduFlowAI.Shared.Kernel.Messaging;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
+using Wolverine;
 
 namespace EduFlowAI.Admission.Application.Services
 {
@@ -13,16 +16,30 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IApplicationRepository _applicationRepository;
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<EnrollmentTaskLookup> _taskLookupRepository;
+        private readonly IUserContactInfoReader _userContactInfoReader;
+        //private readonly IAdmissionEmailNotificationService _admissionEmailNotificationService;
+        //private readonly IMessageBus _messageBus;
+        private readonly IOutboxPublisher _outboxPublisher;
+
+        private const int MaxConcurrentEmailRequests = 8;
 
         public AllocationService(
             IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
-            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository
+            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository,
+            IUserContactInfoReader userContactInfoReader,
+            IOutboxPublisher outboxPublisher
+            //IMessageBus messageBus
+            //IAdmissionEmailNotificationService admissionEmailNotificationService
             )
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _taskLookupRepository = taskLookupRepository;
+            _userContactInfoReader = userContactInfoReader;
+            _outboxPublisher = outboxPublisher;
+            //_messageBus = messageBus;
+            //_admissionEmailNotificationService = admissionEmailNotificationService;
         }
 
         public async Task<(bool IsSuccess, string ErrorMessage)>
@@ -53,6 +70,7 @@ namespace EduFlowAI.Admission.Application.Services
                 include: query => query
                     .Include(a => a.Preferences.OrderBy(p => p.Rank)) // Fetch preferences in order
                     .Include(a => a.SimulatedStageResults)            // Fetch all exam results
+                    .Include(a => a.EnrollmentTasks)
             );
 
             if (eligibleApplications == null || !eligibleApplications.Any())
@@ -120,6 +138,7 @@ namespace EduFlowAI.Admission.Application.Services
                 .ThenByDescending(s => s.TechnicalExamScore)
                 .ThenByDescending(s => s.TechnicalInterviewScore)
                 .ThenBy(s => s.PreferenceRank)
+                .ThenBy(s => eligibleApplications.First(a => a.Id == s.ApplicationId).SubmittedAt)
                 .ToList();
 
             // 2.3: The Allocation Loop (Matching applicants to seats)
@@ -224,8 +243,27 @@ namespace EduFlowAI.Admission.Application.Services
                 _applicationRepository.Update(app);
             }
 
+            // Generate and publish email commands to Wolverine's Outbox
+            // This does NOT send the emails immediately. It stages them in memory.
+            var emailTargets = await ResolveEmailTargetsAsync(cycleId, eligibleApplications,
+                                        cancellationToken);
+
+            foreach (var target in emailTargets)
+            {
+                var emailCommand = new SendAdmissionEmailCommand(
+                    target.Email,
+                    target.Subject,
+                    target.HtmlBody,
+                    target.IdempotencyKey
+                );
+
+                // Publish pushes the message into Wolverine's transactional outbox wrapper
+                await _outboxPublisher.PublishAsync(emailCommand);
+            }
+
             // 3.4: Commit all changes to the database in a single transaction
-            await _applicationRepository.SaveChangesAsync();
+            //await _applicationRepository.SaveChangesAsync();
+            await _outboxPublisher.SaveChangesAndFlushMessagesAsync(cancellationToken);
 
             // Calculate metrics for the response
             int admittedCount = currentAllocations.Count;
@@ -233,5 +271,105 @@ namespace EduFlowAI.Admission.Application.Services
 
             return (true, $"Allocation completed successfully. Admitted: {admittedCount}, Waitlisted: {waitlistedCount}.");
         }
+
+        // ====================== Helper Methods ======================
+
+        private async Task<IReadOnlyList<AdmissionEmailTarget>> ResolveEmailTargetsAsync(Guid cycleId, IReadOnlyCollection<Domain.Entities.Application> applications,
+        CancellationToken cancellationToken)
+        {
+            var targets = new List<AdmissionEmailTarget>(applications.Count);
+
+            foreach (var application in applications)
+            {
+                var contact = await _userContactInfoReader.GetContactInfoAsync(application.ApplicantUserId,
+                    cancellationToken
+                );
+
+                if (contact is null || !contact.IsActive || string.IsNullOrWhiteSpace(contact.Email))
+                {
+                    throw new InvalidOperationException(
+                        $"An active email address could not be resolved for applicant '{application.ApplicantUserId}'.");
+                }
+
+                var emailContent = BuildStatusEmail(application.Status);
+
+                targets.Add(new AdmissionEmailTarget(
+                    contact.Email,
+                    emailContent.Subject,
+                    emailContent.HtmlBody,
+                    BuildIdempotencyKey(cycleId, application.Id, application.Status))
+                );
+            }
+
+            return targets;
+        }
+
+        private static AdmissionEmailContent BuildStatusEmail(ApplicationStatus status)
+        {
+            return status switch
+            {
+                ApplicationStatus.Admitted => new AdmissionEmailContent(
+                    "Congratulations - You have been admitted to ITI",
+                    """
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <body>
+                        <h2>Congratulations!</h2>
+                        <p>Your ITI application has been accepted.</p>
+                        <p>You will receive further enrollment instructions soon.</p>
+                    </body>
+                    </html>
+                    """
+                ),
+
+                ApplicationStatus.Waitlisted => new AdmissionEmailContent(
+                    "ITI Admission Update - Waitlist",
+                    """
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <body>
+                        <h2>Application Status Update</h2>
+                        <p>Your application has been placed on the ITI waitlist.</p>
+                        <p>We will contact you if a place becomes available.</p>
+                    </body>
+                    </html>
+                    """
+                ),
+
+                ApplicationStatus.NotSelected => new AdmissionEmailContent(
+                    "Your ITI admission result",
+                    """
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <body>
+                        <h2>Application Status Update</h2>
+                        <p>Thank you for your interest in ITI.</p>
+                        <p>Unfortunately, your application was not selected for this admission cycle.</p>
+                    </body>
+                    </html>
+                    """
+                ),
+
+                _ => throw new ArgumentOutOfRangeException(nameof(status), status,
+                    "The application status cannot be used for a final admission email.")
+            };
+        }
+
+
+        private static string BuildIdempotencyKey(Guid cycleId, Guid applicationId, ApplicationStatus status)
+        {
+            return string.Create(provider: null,
+                $"admission-result:{cycleId:N}:{applicationId:N}:{status}");
+        }
+
+        private sealed record AdmissionEmailTarget(
+            string Email,
+            string Subject,
+            string HtmlBody,
+            string IdempotencyKey);
+
+        private sealed record AdmissionEmailContent(
+            string Subject,
+            string HtmlBody);
     }
 }
