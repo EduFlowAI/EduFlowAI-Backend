@@ -197,6 +197,24 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
     {
         var documents = await _repository.GetAllDocumentsAsync(cancellationToken);
 
+        // Refuse before deleting: a wipe with missing sources destroys chunks that cannot be rebuilt.
+        var missing = documents
+            .Where(d => !string.IsNullOrWhiteSpace(d.StorageKey) && !_fileStorage.Exists(d.StorageKey))
+            .Select(d => d.FileName)
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            _logger.LogError(
+                "Resync aborted: {MissingCount} of {TotalCount} source files are missing ({Missing}).",
+                missing.Count, documents.Count, string.Join(", ", missing.Take(5)));
+
+            throw new InvalidOperationException(
+                $"Resync aborted: {missing.Count} of {documents.Count} source files are missing from " +
+                $"storage (for example: {string.Join(", ", missing.Take(3))}). Nothing was deleted - " +
+                "restore the files, or delete and re-upload those documents individually.");
+        }
+
         // Wipe first so a failed document cannot leave stale vectors behind.
         await _repository.DeleteAllChunksAsync(cancellationToken);
 
@@ -264,6 +282,9 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
 
         if (chunks.Count == 0)
             throw new InvalidOperationException("The document did not yield any readable text.");
+
+        // Stamp each chunk so a fragment split from its heading still says what it belongs to.
+        chunks = ChunkContextualizer.Contextualize(document.FileName, text, chunks);
 
         var embeddedChunks = new List<KnowledgeBaseChunk>();
         foreach (var chunkText in chunks)

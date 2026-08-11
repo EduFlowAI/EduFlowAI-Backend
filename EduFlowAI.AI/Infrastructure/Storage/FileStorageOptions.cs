@@ -4,6 +4,6 @@ public class FileStorageOptions
 {
     public const string SectionName = "FileStorage";
 
-    // Relative values resolve against the app base directory.
-    public string Root { get; set; } = "protected-files";
+    // Empty uses a per-user path outside the build output; set an absolute path when hosting.
+    public string Root { get; set; } = string.Empty;
 }

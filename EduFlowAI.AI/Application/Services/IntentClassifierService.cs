@@ -19,6 +19,9 @@ public class IntentClassifierService : IIntentRouter
         PropertyNameCaseInsensitive = true
     };
 
+    // Long enough for a resolved, self-contained query; anything beyond this is the model rambling.
+    private const int MaxSearchQueryLength = 300;
+
     private static readonly string[] ValidIntents = { "knowledge", "application_status", "document_status", "recommendation" };
 
     // The enum constraint makes an out-of-vocabulary intent impossible.
@@ -43,9 +46,11 @@ public class IntentClassifierService : IIntentRouter
                 }
             },
             // The language the message is written in - the assistant answers in this language.
-            language = new { type = "STRING", @enum = new[] { "ar", "en" } }
+            language = new { type = "STRING", @enum = new[] { "ar", "en" } },
+            // A self-contained English query for the document lookup ("" when none is needed).
+            searchQuery = new { type = "STRING" }
         },
-        required = new[] { "intents", "language" }
+        required = new[] { "intents", "language", "searchQuery" }
     };
 
     private const string SystemPrompt = """
@@ -91,6 +96,20 @@ Also detect the language the CURRENT message is written in and return it as "lan
 history. A mostly-Arabic sentence that contains English tech terms, job titles or proper nouns (for
 example "اني Product Manager" or "عايز اشتغل Backend Developer") is Arabic -> "ar". Only return "en" when
 the message is genuinely English, or has no real words to judge (e.g. only digits or symbols).
+
+Finally, write "searchQuery": a short, self-contained search query IN ENGLISH describing what the user
+wants to look up in ITI's official documents. Always write it in English even when the message is Arabic,
+because the documents are English. Resolve references from the conversation ("its prerequisites" ->
+"<track name> prerequisites"). Keep the specific nouns that matter - branch or city names, track names,
+requirement names. Never include greetings, thanks or small talk. Return an empty string when no document
+lookup is needed (a pure greeting, or a question only about the user's own application or documents).
+
+searchQuery examples:
+"ايه التراكات المتاحة في الإسكندرية" -> "tracks offered at Alexandria branch"
+"ما هي مواعيد التقديم؟" -> "application dates and deadlines"
+"What about its prerequisites?" (after discussing the .NET track) -> ".NET track prerequisites"
+"مرحبا" -> ""
+"هل تم قبولي؟" -> ""
 
 Examples:
 "Which are available tracks?" -> knowledge
@@ -153,7 +172,18 @@ Message to classify:
 {maskedQuestion}
 """;
 
-        var responseText = await _chatClient.GenerateJsonAsync(SystemPrompt, userMessage, ResponseSchema, cancellationToken);
+        string? responseText;
+        try
+        {
+            responseText = await _chatClient.GenerateJsonAsync(
+                SystemPrompt, userMessage, ResponseSchema, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Quota or transport failure. Answering from the knowledge base beats failing the message.
+            _logger.LogWarning(ex, "Intent classification call failed; falling back to 'knowledge'.");
+            return KnowledgeFallback();
+        }
 
         if (!TryParseIntentResponse(responseText, out var classification))
         {
@@ -231,18 +261,28 @@ Message to classify:
             Confidence = intents[0].Confidence,
             RoutedTo = intents[0].RoutedTo,
             Language = NormalizeRouterLanguage(parsed.Language),
+            SearchQuery = NormalizeSearchQuery(parsed.SearchQuery),
             RequiresClarification = false
         };
 
         return true;
     }
 
-    // Accept only the two values we support; anything else becomes null so the caller falls back
-    // to the letter-count heuristic / UI toggle instead of trusting a stray value from the model.
+    // Only the two supported values are usable; anything else becomes null so the caller falls back.
     private static string? NormalizeRouterLanguage(string? language)
     {
         var normalized = language?.Trim().ToLowerInvariant();
         return normalized is "ar" or "en" ? normalized : null;
+    }
+
+    // Blank means no lookup is needed; an over-long value is dropped rather than embedded.
+    private static string? NormalizeSearchQuery(string? searchQuery)
+    {
+        var normalized = searchQuery?.Trim();
+
+        return string.IsNullOrEmpty(normalized) || normalized.Length > MaxSearchQueryLength
+            ? null
+            : normalized;
     }
 
     public string GetClarificationMessage(string language) => language == "ar"
@@ -300,6 +340,9 @@ Message to classify:
 
         // The language the model detected the message is written in ("ar" / "en").
         public string? Language { get; set; }
+
+        // A self-contained English query for the knowledge lookup ("" when none is needed).
+        public string? SearchQuery { get; set; }
     }
 
     private sealed class RawDetectedIntent

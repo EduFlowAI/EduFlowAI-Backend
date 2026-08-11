@@ -26,6 +26,7 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
     public async Task<string> NarrateAsync(
         IEnumerable<ApplicantDocumentDto> documents,
         string language,
+        bool isContinuingConversation = false,
         CancellationToken cancellationToken = default)
     {
         var docs = documents?.ToList() ?? new List<ApplicantDocumentDto>();
@@ -39,6 +40,11 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
                 .Select(d => $"- {TypeLabel(d.DocumentType)}: {StatusLabel(d.Status)}"));
 
         var languageName = language == "ar" ? "Arabic" : "English";
+
+        // Without this the narrator opens cold, so switching intent produced a fresh welcome.
+        var greetingRule = isContinuingConversation
+            ? "- You are mid-conversation: do NOT greet or introduce the institute again. Answer directly."
+            : "- A brief warm opening is fine before the answer.";
 
         var systemPrompt = $"""
 # ROLE
@@ -55,12 +61,15 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
 # RULES
 - Speak as the institute, first person plural ("we"), in a warm, human, professional tone. Never sound
   like a template or a form; vary your wording naturally.
+{greetingRule}
 - Report exactly these facts. Never add, change, soften, upgrade or downgrade a status, and never
   invent documents, dates, timelines or next steps.
 - If nothing has been uploaded yet, say so kindly and mention they can upload from their account.
 - If something is rejected or still under review, say so plainly but reassuringly.
 - Keep it to one short, natural paragraph (a short list only if it genuinely reads better). No filler,
   no emoji.
+- Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols. If
+  you list items, number them: each on its own line starting with "1. ", "2. ", and so on.
 """;
 
         string? answer;
