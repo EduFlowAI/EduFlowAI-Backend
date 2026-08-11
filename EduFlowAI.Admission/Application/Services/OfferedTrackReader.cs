@@ -61,9 +61,11 @@ internal static class OfferedTrackRecommendationProjection
             .ThenBy(track => track.Id)
             .Select(track =>
             {
-                bool isNineMonthProgram = StringComparer.OrdinalIgnoreCase.Equals(
-                    track.Program?.Code,
-                    "9M");
+                bool isNineMonthProgram =
+                    track.ProgramId == AdmissionSeedIds.NineMonthProgramId ||
+                    StringComparer.OrdinalIgnoreCase.Equals(
+                        track.Program?.Code,
+                        "9M");
                 var definition = isNineMonthProgram
                     ? AdmissionTrackSeedCatalog.Find(track.Id, track.Name)
                     : null;
@@ -71,13 +73,10 @@ internal static class OfferedTrackRecommendationProjection
                 return new OfferedTrackForRecommendationDto
                 {
                     TrackId = track.Id,
-                    Name = definition?.Name ?? track.Name,
-                    Description = definition is null
-                        ? track.Description
-                        : definition.Description,
+                    Name = track.Name,
+                    Description = track.Description,
                     PrerequisiteTopics = Array.AsReadOnly(
-                        (definition?.PrerequisiteTopics ?? track.PrerequisiteTopics)
-                        .ToArray()),
+                        track.PrerequisiteTopics.ToArray()),
                     Category = definition?.Category,
                     MinimumGrade = definition?.MinimumGrade,
                     EligibilitySummary = definition?.EligibilitySummary,
@@ -96,19 +95,31 @@ internal static class OfferedTrackRecommendationProjection
 
     internal static bool IsAllowedOffering(TrackBranchOffering offering)
     {
-        string? programCode = offering.Track.Program?.Code;
-        if (!StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M"))
+        bool isNineMonthProgram =
+            offering.Track.ProgramId == AdmissionSeedIds.NineMonthProgramId ||
+            StringComparer.OrdinalIgnoreCase.Equals(
+                offering.Track.Program?.Code,
+                "9M");
+
+        if (!isNineMonthProgram)
         {
             return true;
+        }
+
+        if (AdmissionLegacyTrackCatalog.IsHistorical(
+                offering.Track.Id,
+                offering.Track.Name))
+        {
+            return false;
         }
 
         var definition = AdmissionTrackSeedCatalog.Find(
             offering.Track.Id,
             offering.Track.Name);
 
-        return definition is not null &&
+        return definition is null ||
             AdmissionTrackSeedCatalog.IsCanonicalLocation(
                 definition,
-                offering.Branch.Name);
+                offering.Branch.Id);
     }
 }

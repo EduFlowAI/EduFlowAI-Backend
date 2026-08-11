@@ -6,7 +6,7 @@ namespace EduFlowAI.Admission.Tests;
 public sealed class AdmissionDataSeederReconciliationTests
 {
     [Fact]
-    public void Supported_legacy_name_is_renamed_in_place_and_reactivated()
+    public void Supported_legacy_name_is_renamed_and_missing_metadata_is_backfilled_without_reactivating()
     {
         var definition = AdmissionTrackSeedCatalog.All.Single(track =>
             track.Id == AdmissionSeedIds.OpenSourceApplicationsDevelopmentTrackId);
@@ -33,8 +33,38 @@ public sealed class AdmissionDataSeederReconciliationTests
         Assert.Equal(definition.Name, track.Name);
         Assert.Equal(definition.Description, track.Description);
         Assert.Equal(definition.PrerequisiteTopics, track.PrerequisiteTopics);
-        Assert.True(track.IsActive);
+        Assert.False(track.IsActive);
         Assert.Equal(now, track.UpdatedAt);
+    }
+
+    [Fact]
+    public void Administrator_edits_on_stable_official_id_are_not_overwritten()
+    {
+        var definition = AdmissionTrackSeedCatalog.All[0];
+        var originalUpdatedAt = new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero);
+        var track = new Track
+        {
+            Id = definition.Id,
+            ProgramId = AdmissionSeedIds.NineMonthProgramId,
+            Name = "Admin renamed track",
+            Description = "Admin description",
+            PrerequisiteTopics = ["Admin topic"],
+            IsActive = false,
+            UpdatedAt = originalUpdatedAt
+        };
+
+        bool changed = AdmissionDataSeeder.ReconcileOfficialTrack(
+            track,
+            AdmissionSeedIds.NineMonthProgramId,
+            definition,
+            originalUpdatedAt.AddDays(1));
+
+        Assert.False(changed);
+        Assert.Equal("Admin renamed track", track.Name);
+        Assert.Equal("Admin description", track.Description);
+        Assert.Equal(new[] { "Admin topic" }, track.PrerequisiteTopics);
+        Assert.False(track.IsActive);
+        Assert.Equal(originalUpdatedAt, track.UpdatedAt);
     }
 
     [Fact]
@@ -60,12 +90,14 @@ public sealed class AdmissionDataSeederReconciliationTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Non_official_9m_tracks_are_inactive_without_being_deleted(
-        bool useKnownLegacyTrack)
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void Only_known_ambiguous_legacy_tracks_are_deactivated(
+        bool useKnownLegacyTrack,
+        bool expectedChanged)
     {
         var now = new DateTimeOffset(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
+        var originalUpdatedAt = now.AddDays(-1);
         var track = new Track
         {
             Id = useKnownLegacyTrack
@@ -74,9 +106,10 @@ public sealed class AdmissionDataSeederReconciliationTests
             ProgramId = AdmissionSeedIds.NineMonthProgramId,
             Name = useKnownLegacyTrack
                 ? AdmissionLegacyTrackCatalog.IntegratedSoftwareArchitectureName
-                : "Unrecognized historical track",
+                : "Admin configured 9M track",
             PrerequisiteTopics = [],
-            IsActive = true
+            IsActive = true,
+            UpdatedAt = originalUpdatedAt
         };
 
         bool changed = AdmissionDataSeeder.DeactivateNonOfficialTrack(
@@ -84,13 +117,13 @@ public sealed class AdmissionDataSeederReconciliationTests
             AdmissionSeedIds.NineMonthProgramId,
             now);
 
-        Assert.True(changed);
-        Assert.False(track.IsActive);
-        Assert.Equal(now, track.UpdatedAt);
+        Assert.Equal(expectedChanged, changed);
+        Assert.Equal(!expectedChanged, track.IsActive);
+        Assert.Equal(expectedChanged ? now : originalUpdatedAt, track.UpdatedAt);
     }
 
     [Fact]
-    public void Renamed_official_branch_is_reconciled_without_changing_its_id()
+    public void Official_branch_reconciliation_preserves_admin_name_and_active_state()
     {
         var definition = AdmissionBranchSeedCatalog.All.Single(branch =>
             branch.Name == "Smart Village");
@@ -108,8 +141,8 @@ public sealed class AdmissionDataSeederReconciliationTests
 
         Assert.True(changed);
         Assert.Equal(definition.Id, branch.Id);
-        Assert.Equal(definition.Name, branch.Name);
+        Assert.Equal("Renamed branch", branch.Name);
         Assert.Equal(definition.Governorate, branch.Governorate);
-        Assert.True(branch.IsActive);
+        Assert.False(branch.IsActive);
     }
 }

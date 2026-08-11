@@ -173,6 +173,7 @@ internal sealed class OfferingService : IOfferingService
                 if (!IsAllowedByOfficialCatalog(
                         track,
                         branch,
+                        cycle.ProgramId,
                         cycle.Program.Code))
                 {
                     return Result<OfferingDto>.Failure(
@@ -350,22 +351,32 @@ internal sealed class OfferingService : IOfferingService
     internal static bool IsAllowedByOfficialCatalog(
         Track track,
         Branch branch,
-        string programCode)
+        Guid programId,
+        string? programCode)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(branch);
 
-        if (!StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M"))
+        bool isNineMonthProgram =
+            programId == AdmissionSeedIds.NineMonthProgramId ||
+            StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M");
+
+        if (!isNineMonthProgram)
         {
             return true;
         }
 
+        if (AdmissionLegacyTrackCatalog.IsHistorical(track.Id, track.Name))
+        {
+            return false;
+        }
+
         var definition = AdmissionTrackSeedCatalog.Find(track.Id, track.Name);
 
-        return definition is not null &&
+        return definition is null ||
             AdmissionTrackSeedCatalog.IsCanonicalLocation(
                 definition,
-                branch.Name);
+                branch.Id);
     }
 }
 

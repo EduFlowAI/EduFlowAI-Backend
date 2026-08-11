@@ -48,5 +48,8 @@ public sealed class RecommendationPromptBuilderCatalogTests
         Assert.Contains("\"totalHours\":null", prompt);
         Assert.Contains("\"locations\":[\"Smart Village\"]", prompt);
         Assert.Contains("Graduation must be within the last 5 years", prompt);
+        Assert.Contains("official ITI track reference metadata only", prompt);
+        Assert.Contains("not the active", prompt);
+        Assert.Contains("common eligibility rule", prompt);
     }
 }

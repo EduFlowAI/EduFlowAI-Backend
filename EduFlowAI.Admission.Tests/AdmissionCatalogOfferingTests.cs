@@ -10,71 +10,70 @@ namespace EduFlowAI.Admission.Tests;
 public sealed class AdmissionCatalogOfferingTests
 {
     [Fact]
-    public void Official_track_accepts_only_its_canonical_locations()
+    public void Official_track_accepts_only_its_canonical_locations_by_stable_branch_id()
     {
         var definition = AdmissionTrackSeedCatalog.All.Single(track =>
             track.Name.StartsWith(".NET Enterprise", StringComparison.Ordinal));
         var track = CreateTrack(definition);
-        var validBranch = new Branch { Id = Guid.NewGuid(), Name = "Tanta" };
-        var invalidBranch = new Branch { Id = Guid.NewGuid(), Name = "Zagazig" };
+        var validBranch = new Branch
+        {
+            Id = AdmissionSeedIds.TantaBranchId,
+            Name = "Renamed Tanta"
+        };
+        var invalidBranch = new Branch
+        {
+            Id = AdmissionSeedIds.ZagazigBranchId,
+            Name = "Tanta"
+        };
 
         Assert.True(OfferingService.IsAllowedByOfficialCatalog(
             track,
             validBranch,
+            AdmissionSeedIds.NineMonthProgramId,
             "9M"));
         Assert.False(OfferingService.IsAllowedByOfficialCatalog(
             track,
             invalidBranch,
+            AdmissionSeedIds.NineMonthProgramId,
             "9M"));
     }
 
     [Fact]
-    public void Invalid_existing_9m_offering_is_hidden_but_non_9m_is_preserved()
+    public void Invalid_existing_official_9m_offering_is_hidden_but_custom_tracks_are_preserved()
     {
         var definition = AdmissionTrackSeedCatalog.All.Single(track =>
             track.Name == "Digital IC Design");
         var track = CreateTrack(definition);
-        var invalidBranch = new Branch { Id = Guid.NewGuid(), Name = "Alexandria" };
+        var invalidBranch = new Branch
+        {
+            Id = AdmissionSeedIds.AlexandriaBranchId,
+            Name = "Alexandria"
+        };
 
         Assert.False(TrackService.IsPublicOfferingAllowed(
             track,
             invalidBranch,
+            AdmissionSeedIds.NineMonthProgramId,
             "9M"));
         Assert.True(TrackService.IsPublicOfferingAllowed(
             track,
             invalidBranch,
+            Guid.NewGuid(),
             "CUSTOM"));
-        Assert.True(OfferingService.IsAllowedByOfficialCatalog(
-            track,
-            invalidBranch,
-            "CUSTOM"));
-    }
 
-    [Fact]
-    public void Unknown_track_cannot_be_offered_in_9m_but_non_9m_is_preserved()
-    {
-        var track = new Track
+        var customNineMonthTrack = new Track
         {
             Id = Guid.NewGuid(),
             ProgramId = AdmissionSeedIds.NineMonthProgramId,
-            Name = "Custom track",
-            IsActive = true
-        };
-        var branch = new Branch
-        {
-            Id = AdmissionSeedIds.SmartVillageBranchId,
-            Name = "Smart Village",
+            Name = "Admin configured 9M track",
             IsActive = true
         };
 
-        Assert.False(OfferingService.IsAllowedByOfficialCatalog(
-            track,
-            branch,
-            "9M"));
         Assert.True(OfferingService.IsAllowedByOfficialCatalog(
-            track,
-            branch,
-            "CUSTOM"));
+            customNineMonthTrack,
+            invalidBranch,
+            AdmissionSeedIds.NineMonthProgramId,
+            "9M"));
     }
 
     [Fact]
@@ -144,13 +143,29 @@ public sealed class AdmissionCatalogOfferingTests
             ApplicationService.HasOnlySelectableStoredPreferences(application));
         application.CycleId = cycle.Id;
 
-        offering.Branch.Name = "Alexandria";
+        // Admin display-name changes do not invalidate canonical locations;
+        // source identity is the stable branch ID.
+        offering.Branch.Name = "Renamed Smart Village";
+        Assert.True(ApplicationService.IsSelectablePreferenceOffering(offering));
+
+        offering.BranchId = AdmissionSeedIds.AlexandriaBranchId;
+        offering.Branch = new Branch
+        {
+            Id = AdmissionSeedIds.AlexandriaBranchId,
+            Name = "Alexandria",
+            IsActive = true
+        };
         Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
         Assert.False(
             ApplicationService.HasOnlySelectableStoredPreferences(application));
 
-        offering.Branch.Name = "Smart Village";
-        offering.Branch.IsActive = false;
+        offering.BranchId = AdmissionSeedIds.SmartVillageBranchId;
+        offering.Branch = new Branch
+        {
+            Id = AdmissionSeedIds.SmartVillageBranchId,
+            Name = "Smart Village",
+            IsActive = false
+        };
         Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
 
         offering.Branch.IsActive = true;

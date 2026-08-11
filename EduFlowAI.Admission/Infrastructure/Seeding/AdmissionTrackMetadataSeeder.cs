@@ -104,17 +104,15 @@ internal static class AdmissionTrackMetadataSeeder
 
         bool changed = false;
 
-        if (!StringComparer.Ordinal.Equals(
-                track.Description,
-                definition.Description))
+        if (string.IsNullOrWhiteSpace(track.Description) &&
+            !string.IsNullOrWhiteSpace(definition.Description))
         {
             track.Description = definition.Description;
             changed = true;
         }
 
-        if (!track.PrerequisiteTopics.SequenceEqual(
-                definition.PrerequisiteTopics,
-                StringComparer.Ordinal))
+        if (track.PrerequisiteTopics.Count == 0 &&
+            definition.PrerequisiteTopics.Count > 0)
         {
             track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
             changed = true;
@@ -136,17 +134,6 @@ internal static class AdmissionTrackMetadataSeeder
         var idMatch = candidates.SingleOrDefault(
             program => program.Id == AdmissionSeedIds.NineMonthProgramId);
 
-        if (idMatch is not null &&
-            !StringComparer.OrdinalIgnoreCase.Equals(
-                idMatch.Code,
-                NineMonthProgramCode))
-        {
-            throw new InvalidOperationException(
-                $"Admission track metadata seed conflict: program ID " +
-                $"'{AdmissionSeedIds.NineMonthProgramId}' has code " +
-                $"'{idMatch.Code}' instead of '{NineMonthProgramCode}'.");
-        }
-
         var codeMatches = candidates
             .Where(program =>
                 StringComparer.OrdinalIgnoreCase.Equals(
@@ -163,16 +150,19 @@ internal static class AdmissionTrackMetadataSeeder
 
         var codeMatch = codeMatches.SingleOrDefault();
 
-        if (idMatch is not null &&
-            codeMatch is not null &&
-            idMatch.Id != codeMatch.Id)
+        if (idMatch is not null)
         {
-            throw new InvalidOperationException(
-                "Admission track metadata seed found different programs for " +
-                $"the stable ID and code '{NineMonthProgramCode}'.");
+            if (codeMatch is not null && idMatch.Id != codeMatch.Id)
+            {
+                throw new InvalidOperationException(
+                    "Admission track metadata seed found different programs for " +
+                    $"the stable ID and code '{NineMonthProgramCode}'.");
+            }
+
+            return idMatch;
         }
 
-        return idMatch ?? codeMatch ?? throw new InvalidOperationException(
+        return codeMatch ?? throw new InvalidOperationException(
             $"Admission track metadata seed could not find program code " +
             $"'{NineMonthProgramCode}'.");
     }
@@ -188,19 +178,12 @@ internal static class AdmissionTrackMetadataSeeder
         var idMatch = candidates.SingleOrDefault(
             track => track.Id == definition.Id);
 
-        if (idMatch is not null &&
-            (idMatch.ProgramId != programId ||
-             (!StringComparer.OrdinalIgnoreCase.Equals(
-                  idMatch.Name,
-                  definition.Name) &&
-              !definition.SupportedLegacyNames.Contains(
-                  idMatch.Name,
-                  StringComparer.OrdinalIgnoreCase))))
+        if (idMatch is not null && idMatch.ProgramId != programId)
         {
             throw new InvalidOperationException(
                 $"Admission track metadata seed conflict for track ID " +
-                $"'{definition.Id}': the existing row has a different " +
-                "program or name.");
+                $"'{definition.Id}': the existing row belongs to a " +
+                "different program.");
         }
 
         var nameMatches = candidates

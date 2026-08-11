@@ -8,15 +8,6 @@ public static class AdmissionSeedingExtensions
 {
     private const string ApiApplicationName = "EduFlowAI.Api";
 
-    public static IServiceCollection AddAdmissionDataSeeding(
-        this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        services.AddHostedService<AdmissionDataSeedHostedService>();
-        return services;
-    }
-
     /// <summary>
     /// Runs Admission seed data after database migrations have completed.
     /// The method rejects non-API hosts and coordinates concurrent API replicas

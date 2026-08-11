@@ -1,6 +1,5 @@
 using EduFlowAI.Admission;
 using EduFlowAI.Admission.Application.Messages;
-using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.AI;
 using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
@@ -106,7 +105,6 @@ public class Program
             builder.Services.AddResourceSetupOnStartup();
         }
 
-        builder.Services.AddAdmissionDataSeeding();
 
         builder.Services.AddSwaggerGen(options =>
         {

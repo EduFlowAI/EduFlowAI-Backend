@@ -27,10 +27,15 @@ internal static class AdmissionDataSeeder
                 "Admission seed data requires the PostgreSQL EF Core provider.");
         }
 
-        var compiledMigrations = context.Database.GetMigrations().ToArray();
-        if (compiledMigrations.Length > 0 &&
-            (await context.Database.GetPendingMigrationsAsync(
-                cancellationToken)).Any())
+        if (!context.Database.GetMigrations().Any())
+        {
+            throw new InvalidOperationException(
+                "Admission seed data requires an EF Core migration for the shared database schema.");
+        }
+
+        var pendingMigrations = await context.Database
+            .GetPendingMigrationsAsync(cancellationToken);
+        if (pendingMigrations.Any())
         {
             throw new InvalidOperationException(
                 "Apply all pending database migrations before running Admission seed data.");
@@ -79,15 +84,6 @@ internal static class AdmissionDataSeeder
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-        if (idMatch is not null &&
-            !StringComparer.OrdinalIgnoreCase.Equals(idMatch.Code, seed.Code))
-        {
-            throw SeedCollision(
-                nameof(Institution),
-                seed.Id,
-                $"the existing row has code '{idMatch.Code}' instead of '{seed.Code}'");
-        }
-
         var codeMatches = candidates
             .Where(candidate =>
                 StringComparer.OrdinalIgnoreCase.Equals(candidate.Code, seed.Code))
@@ -98,10 +94,10 @@ internal static class AdmissionDataSeeder
             $"code '{seed.Code}'",
             codeMatches.Count);
 
-        var existing = codeMatches.SingleOrDefault();
-        if (existing is not null)
+        var codeMatch = codeMatches.SingleOrDefault();
+        if (idMatch is not null)
         {
-            if (idMatch is not null && idMatch.Id != existing.Id)
+            if (codeMatch is not null && codeMatch.Id != idMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Institution),
@@ -109,7 +105,13 @@ internal static class AdmissionDataSeeder
                     $"the stable ID and code '{seed.Code}' identify different rows");
             }
 
-            return existing;
+            // Stable ID wins. Name/code may have been changed by an administrator.
+            return idMatch;
+        }
+
+        if (codeMatch is not null)
+        {
+            return codeMatch;
         }
 
         context.Institutions.Add(seed);
@@ -130,14 +132,12 @@ internal static class AdmissionDataSeeder
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-        if (idMatch is not null &&
-            (!StringComparer.OrdinalIgnoreCase.Equals(idMatch.Code, seed.Code) ||
-             idMatch.InstitutionId != institutionId))
+        if (idMatch is not null && idMatch.InstitutionId != institutionId)
         {
             throw SeedCollision(
                 nameof(Program),
                 seed.Id,
-                "the existing row has a different code or parent institution");
+                "the existing row belongs to a different institution");
         }
 
         var codeMatches = candidates
@@ -150,17 +150,17 @@ internal static class AdmissionDataSeeder
             $"code '{seed.Code}'",
             codeMatches.Count);
 
-        var existing = codeMatches.SingleOrDefault();
-        if (existing is not null)
+        var codeMatch = codeMatches.SingleOrDefault();
+        if (codeMatch is not null && codeMatch.InstitutionId != institutionId)
         {
-            if (existing.InstitutionId != institutionId)
-            {
-                throw new InvalidOperationException(
-                    $"Admission seed conflict: program code '{seed.Code}' already belongs " +
-                    "to a different institution.");
-            }
+            throw new InvalidOperationException(
+                $"Admission seed conflict: program code '{seed.Code}' already belongs " +
+                "to a different institution.");
+        }
 
-            if (idMatch is not null && idMatch.Id != existing.Id)
+        if (idMatch is not null)
+        {
+            if (codeMatch is not null && codeMatch.Id != idMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Program),
@@ -168,7 +168,13 @@ internal static class AdmissionDataSeeder
                     $"the stable ID and code '{seed.Code}' identify different rows");
             }
 
-            return existing;
+            // Stable ID wins. Name/code/duration may be administrator configuration.
+            return idMatch;
+        }
+
+        if (codeMatch is not null)
+        {
+            return codeMatch;
         }
 
         context.Programs.Add(seed);
@@ -293,13 +299,13 @@ internal static class AdmissionDataSeeder
             ReconcileOfficialTrack(existing, programId, definition, now);
         }
 
-        foreach (var nonOfficial in candidates.Where(candidate =>
+        foreach (var historical in candidates.Where(candidate =>
                      candidate.ProgramId == programId &&
-                     AdmissionTrackSeedCatalog.Find(
+                     AdmissionLegacyTrackCatalog.IsHistorical(
                          candidate.Id,
-                         candidate.Name) is null))
+                         candidate.Name)))
         {
-            DeactivateNonOfficialTrack(nonOfficial, programId, now);
+            DeactivateNonOfficialTrack(historical, programId, now);
         }
     }
 
@@ -311,7 +317,7 @@ internal static class AdmissionDataSeeder
         ArgumentNullException.ThrowIfNull(track);
 
         if (track.ProgramId != programId ||
-            AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is not null ||
+            !AdmissionLegacyTrackCatalog.IsHistorical(track.Id, track.Name) ||
             !track.IsActive)
         {
             return false;
@@ -339,6 +345,7 @@ internal static class AdmissionDataSeeder
                 "the existing row belongs to a different program");
         }
 
+        bool stableIdMatch = track.Id == definition.Id;
         bool hasOfficialName = StringComparer.OrdinalIgnoreCase.Equals(
             track.Name,
             definition.Name);
@@ -346,7 +353,7 @@ internal static class AdmissionDataSeeder
             track.Name,
             StringComparer.OrdinalIgnoreCase);
 
-        if (!hasOfficialName && !hasSupportedLegacyName)
+        if (!stableIdMatch && !hasOfficialName && !hasSupportedLegacyName)
         {
             throw SeedCollision(
                 nameof(Track),
@@ -356,29 +363,24 @@ internal static class AdmissionDataSeeder
 
         bool changed = false;
 
-        if (!hasOfficialName)
+        // Safe one-time taxonomy migration: only known legacy names are renamed.
+        // Later administrator edits are preserved because the stable internal ID
+        // still identifies the official Intake-47 track.
+        if (hasSupportedLegacyName && !hasOfficialName)
         {
             track.Name = definition.Name;
             changed = true;
         }
 
-        if (!track.IsActive)
-        {
-            track.IsActive = true;
-            changed = true;
-        }
-
-        if (!StringComparer.Ordinal.Equals(
-                track.Description,
-                definition.Description))
+        if (string.IsNullOrWhiteSpace(track.Description) &&
+            !string.IsNullOrWhiteSpace(definition.Description))
         {
             track.Description = definition.Description;
             changed = true;
         }
 
-        if (!track.PrerequisiteTopics.SequenceEqual(
-                definition.PrerequisiteTopics,
-                StringComparer.Ordinal))
+        if (track.PrerequisiteTopics.Count == 0 &&
+            definition.PrerequisiteTopics.Count > 0)
         {
             track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
             changed = true;
@@ -458,28 +460,16 @@ internal static class AdmissionDataSeeder
                 $"the existing row has unsupported name '{branch.Name}'");
         }
 
-        bool changed = false;
-
-        if (!StringComparer.Ordinal.Equals(branch.Name, definition.Name))
-        {
-            branch.Name = definition.Name;
-            changed = true;
-        }
-
-        if (!branch.IsActive)
-        {
-            branch.IsActive = true;
-            changed = true;
-        }
-
+        // Existing branch name/active state are administrator configuration.
+        // Only backfill missing reference metadata.
         if (string.IsNullOrWhiteSpace(branch.Governorate) &&
             !string.IsNullOrWhiteSpace(definition.Governorate))
         {
             branch.Governorate = definition.Governorate;
-            changed = true;
+            return true;
         }
 
-        return changed;
+        return false;
     }
 
     private static void EnsureAtMostOneBusinessKeyMatch(

@@ -105,23 +105,25 @@ public sealed class OfferedTrackReaderTests
             trackIsActive: true,
             branchIsActive: true,
             track: track);
-        offering.Branch.Name = "Alexandria";
+        offering.Branch.Id = AdmissionSeedIds.AlexandriaBranchId;
+        offering.BranchId = offering.Branch.Id;
 
         Assert.Empty(OfferedTrackRecommendationProjection.Project([offering]));
 
-        offering.Branch.Name = "Smart Village";
+        offering.Branch.Id = AdmissionSeedIds.SmartVillageBranchId;
+        offering.BranchId = offering.Branch.Id;
         var projected = Assert.Single(
             OfferedTrackRecommendationProjection.Project([offering]));
 
         Assert.Equal(definition.Category, projected.Category);
         Assert.Equal(definition.MinimumGrade, projected.MinimumGrade);
         Assert.Equal(definition.EligibilitySummary, projected.EligibilitySummary);
-        Assert.Equal(definition.PrerequisiteTopics, projected.PrerequisiteTopics);
+        Assert.Equal(new[] { "Legacy topic" }, projected.PrerequisiteTopics);
         Assert.Equal(definition.Locations, projected.Locations);
     }
 
     [Fact]
-    public void Projection_preserves_authoritative_null_description()
+    public void Projection_preserves_current_admin_description_and_topics()
     {
         var definition = AdmissionTrackSeedCatalog.All.Single(track =>
             track.Name == "3D Generalist");
@@ -141,13 +143,16 @@ public sealed class OfferedTrackReaderTests
             trackIsActive: true,
             branchIsActive: true,
             track: track);
-        offering.Branch.Name = "Smart Village";
+        offering.Branch.Id = AdmissionSeedIds.SmartVillageBranchId;
+        offering.BranchId = offering.Branch.Id;
 
         var projected = Assert.Single(
             OfferedTrackRecommendationProjection.Project([offering]));
 
-        Assert.Null(projected.Description);
-        Assert.Equal(definition.PrerequisiteTopics, projected.PrerequisiteTopics);
+        Assert.Equal("Stale inferred description", projected.Description);
+        Assert.Equal(new[] { "Stale topic" }, projected.PrerequisiteTopics);
+        Assert.Equal(definition.Category, projected.Category);
+        Assert.Equal(definition.MinimumGrade, projected.MinimumGrade);
     }
 
     private static Track CreateTrack(

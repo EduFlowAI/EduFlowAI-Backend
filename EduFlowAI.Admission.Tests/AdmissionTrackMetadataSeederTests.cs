@@ -37,7 +37,7 @@ public sealed class AdmissionTrackMetadataSeederTests
     }
 
     [Fact]
-    public void Backfill_replaces_non_source_metadata_with_canonical_values()
+    public void Backfill_preserves_existing_administrator_metadata()
     {
         var definition = AdmissionTrackSeedCatalog.All[0];
         var originalUpdatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -57,14 +57,14 @@ public sealed class AdmissionTrackMetadataSeederTests
             definition,
             now);
 
-        Assert.True(changed);
-        Assert.Equal(definition.Description, track.Description);
-        Assert.Equal(definition.PrerequisiteTopics, track.PrerequisiteTopics);
-        Assert.Equal(now, track.UpdatedAt);
+        Assert.False(changed);
+        Assert.Equal("Custom administrator description.", track.Description);
+        Assert.Equal(new[] { "Custom Topic" }, track.PrerequisiteTopics);
+        Assert.Equal(originalUpdatedAt, track.UpdatedAt);
     }
 
     [Fact]
-    public void Backfill_reconciles_all_source_managed_fields()
+    public void Backfill_only_fills_missing_fields_and_keeps_existing_description()
     {
         var definition = AdmissionTrackSeedCatalog.All[0];
         var now = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
@@ -84,7 +84,7 @@ public sealed class AdmissionTrackMetadataSeederTests
             now);
 
         Assert.True(changed);
-        Assert.Equal(definition.Description, track.Description);
+        Assert.Equal("Keep this description.", track.Description);
         Assert.Equal(
             definition.PrerequisiteTopics.ToArray(),
             track.PrerequisiteTopics);
@@ -157,7 +157,7 @@ public sealed class AdmissionTrackMetadataSeederTests
         Assert.Equal(
             AdmissionTrackSeedCatalog.All.Select(track => track.Name).OrderBy(name => name),
             tracks.Select(track => track.Name));
-        Assert.All(tracks, track => Assert.True(track.IsActive));
+        Assert.All(tracks, track => Assert.False(track.IsActive));
         Assert.Null(tracks.Single(track => track.Name == "3D Generalist").Description);
         Assert.All(
             tracks.Where(track => track.Name != "3D Generalist"),

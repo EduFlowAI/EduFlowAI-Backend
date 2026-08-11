@@ -398,6 +398,7 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                         !OfferingService.IsAllowedByOfficialCatalog(
                             x.Track,
                             x.Branch,
+                            cycle.ProgramId,
                             cycle.Program.Code)))
                 {
                     return Result<AdmissionCycleDto>.Failure(
