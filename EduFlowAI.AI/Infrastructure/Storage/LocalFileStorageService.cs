@@ -14,12 +14,28 @@ public class LocalFileStorageService : IFileStorageService
     public LocalFileStorageService(IOptions<FileStorageOptions> options)
     {
         var configured = options?.Value?.Root;
-        if (string.IsNullOrWhiteSpace(configured))
-            configured = "protected-files";
 
-        _root = Path.IsPathRooted(configured)
-            ? Path.GetFullPath(configured)
-            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
+        // Nothing configured: keep uploads OUT of the build output. "protected-files" used to resolve
+        // against AppContext.BaseDirectory (bin/...), so every rebuild, clean or fresh clone silently
+        // deleted the whole knowledge base while the database still pointed at those files.
+        _root = string.IsNullOrWhiteSpace(configured)
+            ? DefaultRoot()
+            : Path.IsPathRooted(configured)
+                ? Path.GetFullPath(configured)
+                : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
+    }
+
+    // Per-user application data: outside the repository and outside bin, so it survives rebuilds without
+    // anyone having to configure anything. Falls back beside the build output only if the platform has no
+    // such location (some minimal containers), where an explicit FileStorage:Root should be set anyway.
+    private static string DefaultRoot()
+    {
+        var localAppData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+
+        return string.IsNullOrWhiteSpace(localAppData)
+            ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "protected-files"))
+            : Path.Combine(localAppData, "EduFlowAI", "protected-files");
     }
 
     public async Task<string> SaveAsync(Stream content, string relativeKey, CancellationToken cancellationToken = default)
