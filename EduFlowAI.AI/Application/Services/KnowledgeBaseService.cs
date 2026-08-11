@@ -197,9 +197,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
     {
         var documents = await _repository.GetAllDocumentsAsync(cancellationToken);
 
-        // A resync deletes every chunk before rebuilding, so it is only safe while every source file is
-        // still there. If any is missing (for example a database restored without its file storage) the
-        // wipe would destroy a knowledge base that cannot be rebuilt - so refuse before deleting anything.
+        // Refuse before deleting: a wipe with missing sources destroys chunks that cannot be rebuilt.
         var missing = documents
             .Where(d => !string.IsNullOrWhiteSpace(d.StorageKey) && !_fileStorage.Exists(d.StorageKey))
             .Select(d => d.FileName)
@@ -285,8 +283,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
         if (chunks.Count == 0)
             throw new InvalidOperationException("The document did not yield any readable text.");
 
-        // Stamp each chunk with its document and section so a fragment that lost its heading during
-        // splitting still says what it belongs to - both for the model and for the embedding.
+        // Stamp each chunk so a fragment split from its heading still says what it belongs to.
         chunks = ChunkContextualizer.Contextualize(document.FileName, text, chunks);
 
         var embeddedChunks = new List<KnowledgeBaseChunk>();

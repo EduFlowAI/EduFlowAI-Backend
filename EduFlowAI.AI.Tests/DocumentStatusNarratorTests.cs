@@ -93,8 +93,7 @@ public class DocumentStatusNarratorTests
         Assert.Contains("National ID: Under manual review", result);
     }
 
-    // Switching intent mid-conversation reached this narrator with its own prompt, so it welcomed the
-    // applicant all over again. It now only opens warmly when the conversation is actually new.
+    // This narrator has its own prompt, so it used to welcome the applicant all over again.
     [Fact]
     public async Task Mid_conversation_the_prompt_forbids_greeting_again()
     {

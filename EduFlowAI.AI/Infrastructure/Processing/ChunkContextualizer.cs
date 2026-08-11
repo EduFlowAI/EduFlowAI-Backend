@@ -4,10 +4,7 @@ using System.Linq;
 
 namespace EduFlowAI.AI.Infrastructure.Processing;
 
-// Chunking can separate a heading from the list underneath it, leaving a chunk that reads
-// "- Systems Administration - 2D Animation ..." with nothing saying which branch those belong to. Such a
-// chunk is unusable to the model and near-unfindable by embedding. Stamping each chunk with its document
-// and section keeps it self-describing.
+// Stamps each chunk with its document and section so a fragment split from its heading stays usable.
 public static class ChunkContextualizer
 {
     private const char LineFeed = '\n';
@@ -32,9 +29,7 @@ public static class ChunkContextualizer
         {
             var position = LocateChunk(normalized, chunk, ref searchFrom);
 
-            // Only a chunk with no heading of its own needs one supplied. A chunk that spans a section
-            // boundary carries its own "## ..." lines, and labelling it with the section it merely
-            // started in would describe it wrongly - worse than leaving it to speak for itself.
+            // Only a chunk with no heading of its own needs one supplied.
             var heading = ContainsHeading(chunk)
                 ? null
                 : HeadingAt(headings, position);
@@ -74,8 +69,7 @@ public static class ChunkContextualizer
         return string.Join(" ", parts) + LineFeed;
     }
 
-    // Every Markdown heading line with the offset it starts at, so a chunk can be mapped to the last
-    // heading that precedes it.
+    // Every Markdown heading with its offset, so a chunk maps to the one preceding it.
     private static List<(int Position, string Text)> FindHeadings(string text)
     {
         var headings = new List<(int, string)>();
@@ -117,8 +111,7 @@ public static class ChunkContextualizer
         return current;
     }
 
-    // Chunks are contiguous slices of the source, so the opening line locates one. The cursor moves
-    // forward so repeated text (overlap, or a list repeated per section) maps to the right occurrence.
+    // Chunks are contiguous slices; the cursor keeps repeated text on the right occurrence.
     private static int LocateChunk(string text, string chunk, ref int searchFrom)
     {
         var probe = chunk

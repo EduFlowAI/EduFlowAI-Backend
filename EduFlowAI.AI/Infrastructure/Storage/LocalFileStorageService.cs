@@ -15,9 +15,7 @@ public class LocalFileStorageService : IFileStorageService
     {
         var configured = options?.Value?.Root;
 
-        // Nothing configured: keep uploads OUT of the build output. "protected-files" used to resolve
-        // against AppContext.BaseDirectory (bin/...), so every rebuild, clean or fresh clone silently
-        // deleted the whole knowledge base while the database still pointed at those files.
+        // Nothing configured: keep uploads out of the build output, which a rebuild deletes.
         _root = string.IsNullOrWhiteSpace(configured)
             ? DefaultRoot()
             : Path.IsPathRooted(configured)
@@ -25,9 +23,7 @@ public class LocalFileStorageService : IFileStorageService
                 : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
     }
 
-    // Per-user application data: outside the repository and outside bin, so it survives rebuilds without
-    // anyone having to configure anything. Falls back beside the build output only if the platform has no
-    // such location (some minimal containers), where an explicit FileStorage:Root should be set anyway.
+    // Per-user data, outside the repo and bin, so uploads survive a rebuild with no configuration.
     private static string DefaultRoot()
     {
         var localAppData = Environment.GetFolderPath(

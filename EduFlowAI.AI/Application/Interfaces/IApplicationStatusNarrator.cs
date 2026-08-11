@@ -4,8 +4,7 @@ using System.Threading.Tasks;
 
 namespace EduFlowAI.AI.Application.Interfaces;
 
-// Turns an applicant's application status into a warm, natural reply. The status is an authoritative
-// fact the model phrases - it never decides, changes or invents it.
+// Phrases the application status warmly; the status is a fact the model never decides or invents.
 public interface IApplicationStatusNarrator
 {
     Task<string> NarrateAsync(

@@ -268,16 +268,14 @@ Message to classify:
         return true;
     }
 
-    // Accept only the two values we support; anything else becomes null so the caller falls back
-    // to the letter-count heuristic / UI toggle instead of trusting a stray value from the model.
+    // Only the two supported values are usable; anything else becomes null so the caller falls back.
     private static string? NormalizeRouterLanguage(string? language)
     {
         var normalized = language?.Trim().ToLowerInvariant();
         return normalized is "ar" or "en" ? normalized : null;
     }
 
-    // The router writes this query, so treat it as untrusted: blank means "no lookup needed", and an
-    // over-long value is dropped rather than embedded, leaving the caller on its own retrieval query.
+    // Blank means no lookup is needed; an over-long value is dropped rather than embedded.
     private static string? NormalizeSearchQuery(string? searchQuery)
     {
         var normalized = searchQuery?.Trim();

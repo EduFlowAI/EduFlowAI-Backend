@@ -75,9 +75,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             history,
             cancellationToken);
 
-        // Prefer the language the router (an LLM) detected from the message - it reads code-switched
-        // Arabic (e.g. an Arabic sentence with an English job title) correctly, where the letter-count
-        // heuristic cannot. Fall back to that heuristic / the UI toggle when the router gives nothing.
+        // The router reads code-switched Arabic correctly; the heuristic is the fallback.
         var language = classification.Language is "ar" or "en"
             ? classification.Language!
             : ResolveLanguage(request.Message, request.Language);
@@ -98,8 +96,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
         foreach (var detectedIntent in detectedIntents)
         {
-            // One failing subsystem must not cost the applicant the whole reply. A multi-intent message
-            // keeps the parts that worked, and a single failure becomes a sentence instead of a 500.
+            // One failing subsystem must not cost the applicant the whole reply.
             try
             {
                 results.Add(await DispatchAsync(
@@ -381,9 +378,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 });
         }
 
-        // StatusMessage is the Admission module's internal wording ("Status retrieved successfully.")
-        // and is English-only, so the status itself is narrated instead. It stays in the metadata for
-        // clients that want the raw value.
+        // StatusMessage is internal, English-only wording; the status itself is narrated.
         var content = await _applicationStatusNarrator.NarrateAsync(
             applicationStatus.CurrentStatus,
             applicationStatus.LastUpdatedAt,
@@ -713,8 +708,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         return missingContext;
     }
 
-    // Shown when one intent's subsystem threw. Deliberately plain and non-technical - the applicant
-    // should see an apology, never a stack trace or a dead conversation.
+    // Shown when one intent's subsystem threw - an apology, never a stack trace.
     private static AssistantResultDto CreateFailedResult(
         string intent,
         string language)

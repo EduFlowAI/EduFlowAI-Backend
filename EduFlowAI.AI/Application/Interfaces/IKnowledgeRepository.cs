@@ -27,8 +27,7 @@ public interface IKnowledgeRepository
         int limit = 5,
         CancellationToken cancellationToken = default);
 
-    // Literal term match, so a proper noun (a branch or track name) always has a route to its chunk
-    // even when the embedding ranks it outside the nearest neighbours.
+    // Literal term match, so a proper noun always has a route to its chunk.
     Task<List<RetrievedChunkDto>> SearchChunksByKeywordAsync(
         IReadOnlyList<string> terms,
         int limit,

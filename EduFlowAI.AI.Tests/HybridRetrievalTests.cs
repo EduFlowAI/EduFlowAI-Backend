@@ -11,8 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Tests;
 
-// A dense vector alone ranked the "tracks offered at Alexandria" chunk outside the top results, because
-// the rest of the question was generic. The keyword pass gives an exact name its own route.
+// A dense vector ranked the Alexandria chunk out of the top results; the keyword pass rescues it.
 public class HybridRetrievalTests
 {
     [Fact]

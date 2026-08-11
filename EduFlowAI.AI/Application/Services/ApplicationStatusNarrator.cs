@@ -6,10 +6,7 @@ using EduFlowAI.AI.Application.Interfaces;
 
 namespace EduFlowAI.AI.Application.Services;
 
-// The Admission module's StatusMessage carries internal wording such as "Status retrieved successfully."
-// and is English-only, so it must never be shown to an applicant. The status itself is the authoritative
-// fact; this narrator phrases it in the applicant's language, and falls back to a plain sentence when the
-// model is unavailable - mirroring how document status is handled.
+// StatusMessage is internal, English-only wording, so the status itself is narrated instead.
 public sealed class ApplicationStatusNarrator : IApplicationStatusNarrator
 {
     private readonly IGeminiChatClient _chatClient;
@@ -76,8 +73,7 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
             ? $"حالة طلبك الحالية هي: {readableStatus}."
             : $"Your current application status is: {readableStatus}.";
 
-    // "UnderDocumentVerification" reads as a database value; spacing the words keeps the fact intact
-    // while giving the model something it can phrase naturally.
+    // A database value like "UnderDocumentVerification" is spaced so the model can phrase it.
     private static string Humanize(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))

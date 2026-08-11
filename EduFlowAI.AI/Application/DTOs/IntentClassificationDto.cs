@@ -16,13 +16,11 @@ public class IntentClassificationDto
     [JsonPropertyName("confidence")]
     public decimal Confidence { get; set; }  // 0.0 to 1.0
 
-    // The language the router detected the message is written in ("ar"/"en"), or null when it
-    // supplied nothing usable - the assistant then falls back to the letter-count heuristic / UI toggle.
+    // Language the router detected, or null when it gave nothing usable.
     [JsonPropertyName("language")]
     public string? Language { get; set; }
 
-    // A self-contained English query the router wrote for the knowledge lookup, or null when it supplied
-    // nothing usable - retrieval then falls back to the raw message joined with the recent turns.
+    // The router's English lookup query, or null when it gave nothing usable.
     [JsonPropertyName("searchQuery")]
     public string? SearchQuery { get; set; }
 

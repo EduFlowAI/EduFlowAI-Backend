@@ -6,8 +6,7 @@ using EduFlowAI.AI.Application.Services;
 
 namespace EduFlowAI.AI.Tests;
 
-// The Admission module fills StatusMessage with internal wording ("Status retrieved successfully.") in
-// English only, so the status itself is narrated instead - grounded, translated, never invented.
+// StatusMessage is internal, English-only wording, so the status itself is narrated instead.
 public class ApplicationStatusNarratorTests
 {
     [Fact]

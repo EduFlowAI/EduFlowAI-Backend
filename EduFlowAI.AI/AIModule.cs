@@ -76,8 +76,7 @@ public static class AIModule
         // Phrases the applicant's document statuses warmly, grounded in the facts (§ document_status).
         services.AddScoped<IDocumentStatusNarrator, DocumentStatusNarrator>();
 
-        // Same treatment for the application status: the Admission module's StatusMessage is internal
-        // wording, so the status itself is narrated instead (§ application_status).
+        // Narrates the application status, which is otherwise internal wording (§ application_status).
         services.AddScoped<IApplicationStatusNarrator, ApplicationStatusNarrator>();
 
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();

@@ -231,9 +231,7 @@ public class KnowledgeIndexingServiceTests
         Assert.Equal(firstPass, ctx.Repository.Chunks.Count);
     }
 
-    // A resync wipes every chunk before rebuilding, so it is only safe while the source files are all
-    // present. A database restored without its file storage would otherwise be emptied of embeddings that
-    // cannot be regenerated - so the wipe is refused and the existing chunks survive untouched.
+    // A resync wipes every chunk first, so it is refused when a source file is missing.
     [Fact]
     public async Task Resync_refuses_and_deletes_nothing_when_a_source_file_is_gone()
     {

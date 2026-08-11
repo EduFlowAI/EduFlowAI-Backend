@@ -104,8 +104,7 @@ public class AiChatServiceTests
         Assert.Contains($"Write your ENTIRE reply in {expected}", chat.LastSystemPrompt);
     }
 
-    // A self-contained query from the router replaces the history-joined one, so a greeting earlier in
-    // the conversation can no longer dominate the search vector.
+    // The router's query replaces the history-joined one, so a greeting cannot dominate the vector.
     [Fact]
     public async Task Router_search_query_is_what_gets_retrieved_on()
     {

@@ -5,8 +5,7 @@ using System.Text;
 
 namespace EduFlowAI.AI.Application.Services;
 
-// Pulls the words worth matching literally out of a search query - the proper nouns (a branch, a city,
-// a track) that a dense vector can rank away but a reader would consider the whole point of the question.
+// Pulls out the proper nouns worth matching literally, which a dense vector can rank away.
 public static class SearchTermExtractor
 {
     private const int MinTermLength = 4;
@@ -36,8 +35,7 @@ public static class SearchTermExtractor
             .ToList();
     }
 
-    // Any run of letters or digits is a word; everything else separates. Avoids maintaining a
-    // punctuation list and works the same for Arabic input.
+    // Any run of letters or digits is a word; everything else separates.
     private static IEnumerable<string> SplitWords(string query)
     {
         var word = new StringBuilder();

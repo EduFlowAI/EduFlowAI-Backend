@@ -65,9 +65,7 @@ public class AssistantMessageServiceTests
         Assert.Equal(expected, rag.LastLanguage);
     }
 
-    // The router (an LLM) reads the true language even on code-switched messages the letter-count
-    // heuristic gets wrong (e.g. an Arabic sentence carrying an English job title). When it supplies a
-    // language, it wins over the heuristic - this is the fix for "اني Product Manager" answered in English.
+    // The router reads code-switched messages the letter-count heuristic gets wrong, so it wins.
     [Fact]
     public async Task Router_detected_language_wins_over_the_letter_count_heuristic()
     {
@@ -329,8 +327,7 @@ public class AssistantMessageServiceTests
             questionnaire.AdditionalContext);
     }
 
-    // The router's English query is what retrieval embeds. Without it an Arabic question about a branch
-    // was embedded together with the previous greeting, and the branch chunk never made the top results.
+    // The router's English query is what retrieval embeds.
     [Fact]
     public async Task Router_search_query_is_handed_to_retrieval()
     {
@@ -366,8 +363,7 @@ public class AssistantMessageServiceTests
         Assert.Null(rag.LastSearchQuery);
     }
 
-    // A subsystem falling over (a failing query, an exhausted model) must cost the applicant that one
-    // answer - not the whole reply. Before this, any such failure surfaced as a 500 in the chat widget.
+    // A failing subsystem costs that one answer, not the whole reply.
     [Theory]
     [InlineData("en", "Something Went Wrong")]
     [InlineData("ar", "تعذّر إتمام الطلب")]
@@ -396,8 +392,7 @@ public class AssistantMessageServiceTests
         Assert.False(response.RequiresClarification);
     }
 
-    // Switching intent mid-chat used to reach a narrator that had never seen the conversation, so it
-    // opened with a fresh welcome every time.
+    // Switching intent used to reach a narrator that had never seen the conversation.
     [Fact]
     public async Task Document_status_is_told_when_the_conversation_is_already_underway()
     {
@@ -525,8 +520,7 @@ public class AssistantMessageServiceTests
         }
     }
 
-    // Stateful on purpose: whether a turn is a continuation is derived from stored history, so a fake
-    // that always reported "no history" would hide the very behaviour these tests cover.
+    // Stateful on purpose: continuation is derived from stored history.
     private sealed class FakeSessionManager : ISessionManager
     {
         private readonly Dictionary<string, ChatSessionDto> _sessions = new();

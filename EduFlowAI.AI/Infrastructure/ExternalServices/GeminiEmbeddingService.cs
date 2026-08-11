@@ -57,10 +57,7 @@ public class GeminiEmbeddingService : IEmbeddingService
             outputDimensionality = _options.EmbeddingDimensions
         };
 
-        // One network blip shouldn't fail a whole multi-chunk document. Rate limiting is different from
-        // a blip: re-indexing the knowledge base fires hundreds of embeddings in a row and will exhaust a
-        // per-minute quota, so a 429 waits long enough for that window to roll over instead of burning
-        // its retries in a few seconds and failing the document.
+        // A blip just retries; a 429 waits for the quota window to roll over.
         const int maxAttempts = 5;
         Exception? lastException = null;
 

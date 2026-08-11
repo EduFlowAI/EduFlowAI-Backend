@@ -99,8 +99,7 @@ public class KnowledgeRepository : IKnowledgeRepository
 
         var patterns = terms.Select(term => $"%{term}%").ToList();
 
-        // Matching ANY term keeps the SQL simple; the ranking below then prefers the chunks that hit the
-        // most terms. The candidate cap keeps this bounded as the knowledge base grows.
+        // Match ANY term in SQL, then rank in memory; the cap keeps it bounded.
         var candidates = await _context.KnowledgeBaseChunks
             .Where(c => patterns.Any(pattern => EF.Functions.ILike(c.Content, pattern)))
             .Take(MaxKeywordCandidates)
@@ -113,8 +112,7 @@ public class KnowledgeRepository : IKnowledgeRepository
             })
             .ToListAsync(cancellationToken);
 
-        // A chunk naming several of the query's terms is a better hit than one that merely repeats a
-        // common word, so rank by how many distinct terms it actually contains.
+        // A chunk naming several terms beats one repeating a common word.
         return candidates
             .OrderByDescending(c => terms.Count(term =>
                 c.Content.Contains(term, StringComparison.OrdinalIgnoreCase)))

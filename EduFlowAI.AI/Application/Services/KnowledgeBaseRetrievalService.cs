@@ -10,9 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
-// Hybrid retrieval: nearest neighbours by embedding, plus a literal keyword pass. A dense vector alone
-// can rank a proper noun (a branch or track name) outside the top results when the rest of the question
-// is generic, which left questions like "which tracks are offered at Alexandria" unanswered.
+// Hybrid retrieval: embedding neighbours plus a literal keyword pass, so an exact name is never missed.
 public class KnowledgeBaseRetrievalService : IKnowledgeRetrievalService
 {
     private readonly IEmbeddingService _embeddingService;
@@ -57,10 +55,7 @@ public class KnowledgeBaseRetrievalService : IKnowledgeRetrievalService
         return Merge(vectorHits, keywordHits, limit, keywordBudget);
     }
 
-    // Semantic hits lead, but a few slots are RESERVED for literal matches - otherwise the nearest
-    // neighbours fill the whole budget and the exact-name chunk this pass exists to rescue is crowded
-    // out again. Any reserved slot the keyword pass does not use falls back to the next semantic hit,
-    // and the same chunk never appears twice.
+    // Slots are reserved for literal matches, or the nearest neighbours crowd them out.
     private static List<RetrievedChunkDto> Merge(
         List<RetrievedChunkDto> vectorHits,
         List<RetrievedChunkDto> keywordHits,

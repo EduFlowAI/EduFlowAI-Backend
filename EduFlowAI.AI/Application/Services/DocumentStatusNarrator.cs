@@ -41,8 +41,7 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
 
         var languageName = language == "ar" ? "Arabic" : "English";
 
-        // This narrator has its own prompt, so without this it always opened cold - which is why simply
-        // switching intent mid-chat produced a fresh "welcome to ITI".
+        // Without this the narrator opens cold, so switching intent produced a fresh welcome.
         var greetingRule = isContinuingConversation
             ? "- You are mid-conversation: do NOT greet or introduce the institute again. Answer directly."
             : "- A brief warm opening is fine before the answer.";

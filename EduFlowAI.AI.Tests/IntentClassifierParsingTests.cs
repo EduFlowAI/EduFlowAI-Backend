@@ -124,8 +124,7 @@ public class IntentClassifierParsingTests
         Assert.Equal("knowledge", dto.PrimaryIntent);
     }
 
-    // The router writes the search query that retrieval embeds, so a self-contained English query
-    // replaces the raw message - this is what keeps greeting text out of the search vector.
+    // The router writes the query retrieval embeds, keeping greeting text out of the vector.
     [Fact]
     public void SearchQuery_FromTheModel_IsParsed()
     {
@@ -148,8 +147,7 @@ public class IntentClassifierParsingTests
         Assert.Equal("admission dates", dto.SearchQuery);
     }
 
-    // Blank means "no document lookup needed" (a greeting, or a purely personal question); an
-    // over-long value is the model rambling. Both leave the caller on its own retrieval query.
+    // Blank means no lookup is needed; an over-long value is the model rambling.
     [Fact]
     public void BlankOrMissingSearchQuery_IsNull()
     {

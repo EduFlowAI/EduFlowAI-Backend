@@ -40,9 +40,7 @@ public class AiChatService : IRagAnswerService
         // Mask national IDs and other long digit runs before any user text reaches the model.
         userQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
 
-        // The router's query is preferred: it is self-contained, already in the documents' language, and
-        // carries none of the greeting text that used to dominate the search vector. Without it, fall
-        // back to the old behaviour so a bare follow-up still embeds with its topic.
+        // The router's query is self-contained and already in the documents' language.
         var retrievalQuery = string.IsNullOrWhiteSpace(searchQuery)
             ? BuildRetrievalQuery(userQuestion, context)
             : InputSanitizerService.MaskSensitiveNumbers(searchQuery);
@@ -58,8 +56,7 @@ public class AiChatService : IRagAnswerService
 
         var languageName = language == "ar" ? "Arabic" : "English";
 
-        // Only the FIRST turn should open with a welcome. Re-introducing the institute on every reply is
-        // what made a running conversation read like a series of unrelated first contacts.
+        // Only the first turn opens with a welcome.
         var greetingGuidance = context.Count == 0
             ? """
 - Greet the applicant, answer a thank-you and make brief small talk naturally - then gently guide them
@@ -142,8 +139,7 @@ Never use phrasing such as "based on the available documents", "in the current m
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The model being unavailable (quota, transport) is our problem: answer with an apology in
-            // the applicant's language instead of failing the whole request.
+            // The model being unavailable is our problem, not the applicant's.
             _logger?.LogWarning(ex, "Knowledge answer generation failed; returning the fallback message.");
             answer = null;
         }

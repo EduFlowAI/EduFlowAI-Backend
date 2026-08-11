@@ -62,8 +62,7 @@ public class ChunkContextualizerTests
 - 2D Animation and Motion Graphics
 """;
 
-    // A chunk that lost its heading during splitting is unusable on its own - it lists tracks without
-    // saying whose they are. The stamp restores that, for the reader and for the embedding.
+    // A chunk that lost its heading lists tracks without saying whose they are.
     [Fact]
     public void An_orphaned_list_is_stamped_with_its_document_and_section()
     {
@@ -90,8 +89,7 @@ public class ChunkContextualizerTests
         Assert.Contains("[Section: Alexandria]", result[1]);
     }
 
-    // A chunk that spans a section boundary carries its own headings; labelling it with the section it
-    // merely started in would misdescribe it, so no section is added.
+    // A chunk spanning a boundary carries its own headings, so no section is added.
     [Fact]
     public void A_chunk_with_its_own_heading_is_not_given_a_section()
     {

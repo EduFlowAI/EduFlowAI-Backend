@@ -62,9 +62,7 @@ public class LocalFileStorageServiceTests : IDisposable
             _storage.SaveAsync(new MemoryStream(new byte[] { 1 }), "../escape.pdf"));
     }
 
-    // Knowledge-base uploads used to default under AppContext.BaseDirectory (bin/...), so a rebuild or a
-    // fresh clone deleted every file while the database still referenced them. The default must sit
-    // outside the build output.
+    // Uploads used to default under the build output, so a rebuild deleted every file.
     [Fact]
     public void An_unconfigured_root_is_not_inside_the_build_output()
     {
