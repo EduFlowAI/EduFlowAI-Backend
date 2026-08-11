@@ -128,7 +128,12 @@ Never use phrasing such as "based on the available documents", "in the current m
 - For a real question, lead with the direct answer, then add only detail that genuinely helps.
 - When asked what is offered or available, name the specific programs or tracks you know of.
   If you know of exactly one, present it plainly as what we currently offer.
-- Use a short bullet list only when listing several items; otherwise write plain prose.
+- Use a short list only when listing several items; otherwise write plain prose.
+
+# FORMAT
+Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols, and
+never bold or italicise anything. To list items, put each on its own line starting with "- ". Separate
+paragraphs with a single blank line.
 {conversationSection}{knowledgeSection}
 """;
 

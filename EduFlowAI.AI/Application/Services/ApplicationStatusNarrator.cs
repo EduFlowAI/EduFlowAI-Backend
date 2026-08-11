@@ -50,6 +50,7 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
   timelines, next steps or reasons that are not stated above.
 - Explain briefly what the status means for the applicant, without promising any outcome.
 - Keep it to one short, natural paragraph. No filler, no emoji, no bullet lists.
+- Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols.
 """;
 
         string? answer;

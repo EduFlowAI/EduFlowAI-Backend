@@ -68,6 +68,8 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
 - If something is rejected or still under review, say so plainly but reassuringly.
 - Keep it to one short, natural paragraph (a short list only if it genuinely reads better). No filler,
   no emoji.
+- Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols. If
+  you list items, put each on its own line starting with "- ".
 """;
 
         string? answer;

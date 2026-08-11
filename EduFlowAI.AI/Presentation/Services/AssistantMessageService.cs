@@ -99,7 +99,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             // One failing subsystem must not cost the applicant the whole reply.
             try
             {
-                results.Add(await DispatchAsync(
+                var result = await DispatchAsync(
                     detectedIntent.Intent,
                     request.Message,
                     classification.SearchQuery,
@@ -109,7 +109,10 @@ public sealed class AssistantMessageService : IAssistantMessageService
                     language,
                     userId,
                     isAuthenticated,
-                    cancellationToken));
+                    cancellationToken);
+
+                // The chat renders plain text, so Markdown would show up as literal asterisks.
+                results.Add(result with { Content = PlainTextFormatter.Clean(result.Content) });
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
