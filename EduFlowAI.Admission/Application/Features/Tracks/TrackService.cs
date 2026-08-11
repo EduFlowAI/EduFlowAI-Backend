@@ -3,6 +3,7 @@ using EduFlowAI.Admission.Application.Features.Configuration.Common;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -18,6 +19,13 @@ public sealed class BranchOfferingDto
     public int Capacity { get; init; }
 }
 
+public sealed class TrackLocationDto
+{
+    public Guid BranchId { get; init; }
+    public string BranchName { get; init; } = string.Empty;
+    public string? Governorate { get; init; }
+}
+
 public sealed class TrackDto
 {
     public Guid Id { get; init; }
@@ -26,6 +34,18 @@ public sealed class TrackDto
     public string? Description { get; init; }
     public IReadOnlyList<string> PrerequisiteTopics { get; init; } = Array.Empty<string>();
     public bool IsActive { get; init; }
+    public bool IsSourceManaged { get; init; }
+    public bool IsOfficialIntake47 { get; init; }
+    public Guid? OfficialTrackId { get; init; }
+    public string? OfficialTrackUrl { get; init; }
+    public int? Intake { get; init; }
+    public int? Year { get; init; }
+    public string? Category { get; init; }
+    public int? TotalHours { get; init; }
+    public string? MinimumGrade { get; init; }
+    public string? EligibilitySummary { get; init; }
+    public int? GraduationYearLimitYears { get; init; }
+    public IReadOnlyList<TrackLocationDto> Locations { get; init; } = Array.Empty<TrackLocationDto>();
     public IReadOnlyList<BranchOfferingDto> Offerings { get; init; } = Array.Empty<BranchOfferingDto>();
 }
 
@@ -84,6 +104,8 @@ public interface ITrackService
 
 internal sealed class TrackService : ITrackService
 {
+    private const string NineMonthProgramCode = "9M";
+
     private readonly IAdmissionDbContext _dbContext;
     private readonly IAdmissionApplicationReader _applicationReader;
     private readonly TimeProvider _timeProvider;
@@ -110,13 +132,75 @@ internal sealed class TrackService : ITrackService
         Guid? cycleId = null,       // Accept the optional cycleId parameter
         CancellationToken cancellationToken = default)
     {
+        if (cycleId is null)
+        {
+            var officialTracks = await _dbContext.Tracks
+                .AsNoTracking()
+                .Include(track => track.Program)
+                .Where(track =>
+                    track.IsActive &&
+                    track.Program.Code.ToUpper() == NineMonthProgramCode)
+                .OrderBy(track => track.Name)
+                .ToListAsync(cancellationToken);
+
+            var activeOfferings = await _dbContext.TrackBranchOfferings
+                .AsNoTracking()
+                .Include(offering => offering.Track)
+                    .ThenInclude(track => track.Program)
+                .Include(offering => offering.Branch)
+                .Where(offering =>
+                    offering.Cycle.Status == CycleStatus.Active &&
+                    offering.Track.IsActive &&
+                    offering.Branch.IsActive)
+                .OrderBy(offering => offering.Branch.Name)
+                .ToListAsync(cancellationToken);
+
+            activeOfferings = activeOfferings
+                .Where(offering => IsPublicOfferingAllowed(
+                    offering.Track,
+                    offering.Branch,
+                    offering.Track.Program.Code))
+                .ToList();
+
+            var offeringsByTrack = activeOfferings
+                .GroupBy(offering => offering.TrackId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<BranchOfferingDto>)group
+                        .Select(MapBranchOffering)
+                        .ToList());
+
+            var locationsByName = await LoadLocationLookupAsync(
+                cancellationToken);
+
+            var publicTracks = officialTracks
+                .Where(track => AdmissionTrackSeedCatalog.Find(
+                    track.Id,
+                    track.Name) is not null)
+                .Concat(activeOfferings
+                    .Select(offering => offering.Track)
+                    .Where(track => !IsNineMonthProgram(track.Program.Code)))
+                .DistinctBy(track => track.Id);
+
+            return publicTracks
+                .Select(track => MapTrack(
+                    track,
+                    offeringsByTrack.GetValueOrDefault(
+                        track.Id,
+                        Array.Empty<BranchOfferingDto>()),
+                    IsNineMonthProgram(track.Program.Code),
+                    locationsByName))
+                .OrderBy(track => track.Name)
+                .ToList();
+        }
+
         var offerings = await _dbContext.TrackBranchOfferings
             .AsNoTracking()
             .Include(x => x.Track)
+                .ThenInclude(track => track.Program)
             .Include(x => x.Branch)
             .Where(x =>
-                // Filter by cycleId if provided, otherwise ignore this condition
-                (cycleId == null || x.CycleId == cycleId) &&
+                x.CycleId == cycleId.Value &&
                 x.Cycle.Status == CycleStatus.Active &&
                 x.Track.IsActive &&
                 x.Branch.IsActive)
@@ -124,11 +208,29 @@ internal sealed class TrackService : ITrackService
             .ThenBy(x => x.Branch.Name)
             .ToListAsync(cancellationToken);
 
+        var cycleLocationsByName = await LoadLocationLookupAsync(
+            cancellationToken);
+
+        offerings = offerings
+            .Where(offering => IsPublicOfferingAllowed(
+                offering.Track,
+                offering.Branch,
+                offering.Track.Program.Code))
+            .ToList();
+
         return offerings
             .GroupBy(x => x.TrackId)
+            .Where(group =>
+            {
+                var track = group.First().Track;
+                return !IsNineMonthProgram(track.Program.Code) ||
+                    AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is not null;
+            })
             .Select(group => MapTrack(
                 group.First().Track,
-                group.Select(MapBranchOffering).ToList()))
+                group.Select(MapBranchOffering).ToList(),
+                IsNineMonthProgram(group.First().Track.Program.Code),
+                cycleLocationsByName))
             .ToList();
     }
 
@@ -136,9 +238,30 @@ internal sealed class TrackService : ITrackService
         Guid trackId,
         CancellationToken cancellationToken = default)
     {
+        var track = await _dbContext.Tracks
+            .AsNoTracking()
+            .Include(candidate => candidate.Program)
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == trackId &&
+                    candidate.IsActive,
+                cancellationToken);
+
+        if (track is null)
+        {
+            return null;
+        }
+
+        bool isNineMonthProgram = IsNineMonthProgram(track.Program.Code);
+
+        if (isNineMonthProgram &&
+            AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is null)
+        {
+            return null;
+        }
+
         var offerings = await _dbContext.TrackBranchOfferings
             .AsNoTracking()
-            .Include(x => x.Track)
             .Include(x => x.Branch)
             .Where(x =>
                 x.TrackId == trackId &&
@@ -148,14 +271,26 @@ internal sealed class TrackService : ITrackService
             .OrderBy(x => x.Branch.Name)
             .ToListAsync(cancellationToken);
 
-        if (offerings.Count == 0)
+        offerings = offerings
+            .Where(offering => IsPublicOfferingAllowed(
+                track,
+                offering.Branch,
+                track.Program.Code))
+            .ToList();
+
+        if (!isNineMonthProgram && offerings.Count == 0)
         {
             return null;
         }
 
+        var detailLocationsByName = await LoadLocationLookupAsync(
+            cancellationToken);
+
         return MapTrack(
-            offerings[0].Track,
-            offerings.Select(MapBranchOffering).ToList());
+            track,
+            offerings.Select(MapBranchOffering).ToList(),
+            isNineMonthProgram,
+            detailLocationsByName);
     }
 
     public async Task<IReadOnlyList<TrackDto>> GetAdminTracksAsync(
@@ -163,11 +298,25 @@ internal sealed class TrackService : ITrackService
     {
         var tracks = await _dbContext.Tracks
             .AsNoTracking()
+            .Include(track => track.Program)
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
+        var locationsByName = await LoadLocationLookupAsync(
+            cancellationToken);
+
         return tracks
-            .Select(x => MapTrack(x, Array.Empty<BranchOfferingDto>()))
+            .Where(track =>
+                !IsNineMonthProgram(track.Program.Code) ||
+                AdmissionTrackSeedCatalog.Find(
+                    track.Id,
+                    track.Name) is not null)
+            .Select(track => MapTrack(
+                track,
+                Array.Empty<BranchOfferingDto>(),
+                IsNineMonthProgram(track.Program.Code),
+                locationsByName))
+            .OrderBy(track => track.Name)
             .ToList();
     }
 
@@ -213,19 +362,29 @@ internal sealed class TrackService : ITrackService
             cancellationToken,
             async ct =>
             {
-                if (!await _dbContext.Programs.AnyAsync(
-                        x => x.Id == request.ProgramId,
-                        ct))
+                var programCode = await _dbContext.Programs
+                    .Where(program => program.Id == request.ProgramId)
+                    .Select(program => program.Code)
+                    .SingleOrDefaultAsync(ct);
+
+                if (programCode is null)
                 {
                     return Result<TrackDto>.Failure(
                         404,
                         "Program was not found.");
                 }
 
+                if (IsNineMonthProgram(programCode))
+                {
+                    return Result<TrackDto>.Failure(
+                        400,
+                        "Official Intake-47 tracks are seed-managed and cannot be created manually.");
+                }
+
                 if (await _dbContext.Tracks.AnyAsync(
                         x =>
                             x.ProgramId == request.ProgramId &&
-                            x.Name == name,
+                            x.Name.ToUpper() == name.ToUpper(),
                         ct))
                 {
                     return Result<TrackDto>.Failure(
@@ -249,7 +408,10 @@ internal sealed class TrackService : ITrackService
                 await _dbContext.SaveChangesAsync(ct);
 
                 return Result<TrackDto>.Success(
-                    MapTrack(track, Array.Empty<BranchOfferingDto>()),
+                    MapTrack(
+                        track,
+                        Array.Empty<BranchOfferingDto>(),
+                        IsNineMonthProgram(programCode)),
                     statusCode: 201,
                     message: "Track created successfully.");
             },
@@ -301,15 +463,30 @@ internal sealed class TrackService : ITrackService
             cancellationToken,
             async ct =>
             {
-                var track = await _dbContext.Tracks.SingleOrDefaultAsync(
-                    x => x.Id == trackId,
-                    ct);
+                var track = await _dbContext.Tracks
+                    .Include(candidate => candidate.Program)
+                    .SingleOrDefaultAsync(
+                        candidate => candidate.Id == trackId,
+                        ct);
 
                 if (track is null)
                 {
                     return Result<TrackDto>.Failure(
                         404,
                         "Track was not found.");
+                }
+
+                if (IsNineMonthProgram(track.Program.Code))
+                {
+                    bool isOfficial = AdmissionTrackSeedCatalog.Find(
+                        track.Id,
+                        track.Name) is not null;
+
+                    return Result<TrackDto>.Failure(
+                        400,
+                        isOfficial
+                            ? "Official Intake-47 tracks are fully seed-managed and cannot be edited."
+                            : "Non-official 9M tracks are historical and cannot be edited.");
                 }
 
                 if (await _applicationReader.IsTrackConfigurationLockedAsync(
@@ -325,7 +502,7 @@ internal sealed class TrackService : ITrackService
                         x =>
                             x.Id != trackId &&
                             x.ProgramId == track.ProgramId &&
-                            x.Name == name,
+                            x.Name.ToUpper() == name.ToUpper(),
                         ct))
                 {
                     return Result<TrackDto>.Failure(
@@ -342,7 +519,10 @@ internal sealed class TrackService : ITrackService
                 await _dbContext.SaveChangesAsync(ct);
 
                 return Result<TrackDto>.Success(
-                    MapTrack(track, Array.Empty<BranchOfferingDto>()),
+                    MapTrack(
+                        track,
+                        Array.Empty<BranchOfferingDto>(),
+                        IsNineMonthProgram(track.Program.Code)),
                     message: "Track updated successfully.");
             },
             (
@@ -354,18 +534,124 @@ internal sealed class TrackService : ITrackService
 
     private static TrackDto MapTrack(
         Track track,
-        IReadOnlyList<BranchOfferingDto> offerings)
+        IReadOnlyList<BranchOfferingDto> offerings,
+        bool isNineMonthProgram,
+        IReadOnlyDictionary<string, TrackLocationDto>? locationsByName = null)
     {
+        var definition = isNineMonthProgram
+            ? AdmissionTrackSeedCatalog.Find(track.Id, track.Name)
+            : null;
+
+        var locations = definition is not null
+            ? definition.Locations
+                .Select(location => ResolveLocation(
+                    location,
+                    locationsByName))
+                .ToList()
+            : offerings
+                .DistinctBy(offering => offering.BranchId)
+                .Select(offering => new TrackLocationDto
+                {
+                    BranchId = offering.BranchId,
+                    BranchName = offering.BranchName,
+                    Governorate = offering.Governorate
+                })
+                .ToList();
+
         return new TrackDto
         {
             Id = track.Id,
             ProgramId = track.ProgramId,
-            Name = track.Name,
-            Description = track.Description,
-            PrerequisiteTopics = track.PrerequisiteTopics.ToList(),
+            Name = definition?.Name ?? track.Name,
+            Description = definition is null
+                ? track.Description
+                : definition.Description,
+            PrerequisiteTopics = definition?.PrerequisiteTopics.ToList()
+                ?? track.PrerequisiteTopics.ToList(),
             IsActive = track.IsActive,
+            IsSourceManaged = definition is not null,
+            IsOfficialIntake47 = definition is not null,
+            OfficialTrackId = definition?.OfficialTrackId,
+            OfficialTrackUrl = definition?.OfficialTrackUrl,
+            Intake = definition is null ? null : AdmissionTrackSeedCatalog.Intake,
+            Year = definition is null ? null : AdmissionTrackSeedCatalog.Year,
+            Category = definition?.Category,
+            TotalHours = definition?.TotalHours,
+            MinimumGrade = definition?.MinimumGrade,
+            EligibilitySummary = definition?.EligibilitySummary,
+            GraduationYearLimitYears = definition?.MaxYearsSinceGraduation,
+            Locations = locations,
             Offerings = offerings
         };
+    }
+
+    private async Task<IReadOnlyDictionary<string, TrackLocationDto>>
+        LoadLocationLookupAsync(CancellationToken cancellationToken)
+    {
+        var branches = await _dbContext.Branches
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return branches
+            .GroupBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var branch = group.Single();
+                    return new TrackLocationDto
+                    {
+                        BranchId = branch.Id,
+                        BranchName = branch.Name,
+                        Governorate = branch.Governorate
+                    };
+                },
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static TrackLocationDto ResolveLocation(
+        string branchName,
+        IReadOnlyDictionary<string, TrackLocationDto>? locationsByName)
+    {
+        if (locationsByName is not null &&
+            locationsByName.TryGetValue(branchName, out var location))
+        {
+            return location;
+        }
+
+        var seed = AdmissionBranchSeedCatalog.FindByName(branchName)
+            ?? throw new InvalidOperationException(
+                $"Official Intake-47 location '{branchName}' has no branch definition.");
+
+        return new TrackLocationDto
+        {
+            BranchId = seed.Id,
+            BranchName = seed.Name,
+            Governorate = seed.Governorate
+        };
+    }
+
+    private static bool IsNineMonthProgram(string? programCode) =>
+        StringComparer.OrdinalIgnoreCase.Equals(
+            programCode,
+            NineMonthProgramCode);
+
+    internal static bool IsPublicOfferingAllowed(
+        Track track,
+        Branch branch,
+        string? programCode)
+    {
+        if (!IsNineMonthProgram(programCode))
+        {
+            return true;
+        }
+
+        var definition = AdmissionTrackSeedCatalog.Find(track.Id, track.Name);
+
+        return definition is not null &&
+            AdmissionTrackSeedCatalog.IsCanonicalLocation(
+                definition,
+                branch.Name);
     }
 
     private static BranchOfferingDto MapBranchOffering(

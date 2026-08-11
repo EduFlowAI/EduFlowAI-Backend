@@ -37,7 +37,7 @@ public sealed class AdmissionTrackMetadataSeederTests
     }
 
     [Fact]
-    public void Backfill_preserves_admin_customized_metadata()
+    public void Backfill_replaces_non_source_metadata_with_canonical_values()
     {
         var definition = AdmissionTrackSeedCatalog.All[0];
         var originalUpdatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -51,19 +51,20 @@ public sealed class AdmissionTrackMetadataSeederTests
             UpdatedAt = originalUpdatedAt
         };
 
+        var now = originalUpdatedAt.AddDays(1);
         bool changed = AdmissionTrackMetadataSeeder.BackfillMissingMetadata(
             track,
             definition,
-            originalUpdatedAt.AddDays(1));
+            now);
 
-        Assert.False(changed);
-        Assert.Equal("Custom administrator description.", track.Description);
-        Assert.Equal(new[] { "Custom Topic" }, track.PrerequisiteTopics);
-        Assert.Equal(originalUpdatedAt, track.UpdatedAt);
+        Assert.True(changed);
+        Assert.Equal(definition.Description, track.Description);
+        Assert.Equal(definition.PrerequisiteTopics, track.PrerequisiteTopics);
+        Assert.Equal(now, track.UpdatedAt);
     }
 
     [Fact]
-    public void Backfill_only_fills_the_missing_field()
+    public void Backfill_reconciles_all_source_managed_fields()
     {
         var definition = AdmissionTrackSeedCatalog.All[0];
         var now = new DateTimeOffset(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
@@ -83,7 +84,7 @@ public sealed class AdmissionTrackMetadataSeederTests
             now);
 
         Assert.True(changed);
-        Assert.Equal("Keep this description.", track.Description);
+        Assert.Equal(definition.Description, track.Description);
         Assert.Equal(
             definition.PrerequisiteTopics.ToArray(),
             track.PrerequisiteTopics);
@@ -128,10 +129,11 @@ public sealed class AdmissionTrackMetadataSeederTests
                 Id = Guid.NewGuid(),
                 ProgramId = legacyProgram.Id,
                 Program = legacyProgram,
-                Name = definition.Name,
+                Name = definition.SupportedLegacyNames.FirstOrDefault()
+                    ?? definition.Name,
                 Description = null,
                 PrerequisiteTopics = [],
-                IsActive = true,
+                IsActive = false,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -152,10 +154,19 @@ public sealed class AdmissionTrackMetadataSeederTests
 
         Assert.Equal(AdmissionTrackSeedCatalog.All.Count, tracks.Count);
         Assert.All(tracks, track => Assert.Equal(legacyProgram.Id, track.ProgramId));
+        Assert.Equal(
+            AdmissionTrackSeedCatalog.All.Select(track => track.Name).OrderBy(name => name),
+            tracks.Select(track => track.Name));
+        Assert.All(tracks, track => Assert.True(track.IsActive));
+        Assert.Null(tracks.Single(track => track.Name == "3D Generalist").Description);
         Assert.All(
-            tracks,
+            tracks.Where(track => track.Name != "3D Generalist"),
             track => Assert.False(string.IsNullOrWhiteSpace(track.Description)));
-        Assert.All(tracks, track => Assert.NotEmpty(track.PrerequisiteTopics));
+        Assert.Empty(tracks.Single(track =>
+            track.Name == "Industrial Automation").PrerequisiteTopics);
+        Assert.All(
+            tracks.Where(track => track.Name != "Industrial Automation"),
+            track => Assert.NotEmpty(track.PrerequisiteTopics));
         Assert.All(tracks, track => Assert.Equal(firstRunAt, track.UpdatedAt));
 
         await AdmissionTrackMetadataSeeder.SeedAsync(

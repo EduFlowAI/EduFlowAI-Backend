@@ -67,6 +67,11 @@ internal static class AdmissionTrackMetadataSeeder
                     program.Id,
                     definition);
 
+                hasChanges |= AdmissionDataSeeder.ReconcileOfficialTrack(
+                    track,
+                    program.Id,
+                    definition,
+                    now);
                 hasChanges |= BackfillMissingMetadata(track, definition, now);
             }
 
@@ -99,13 +104,17 @@ internal static class AdmissionTrackMetadataSeeder
 
         bool changed = false;
 
-        if (string.IsNullOrWhiteSpace(track.Description))
+        if (!StringComparer.Ordinal.Equals(
+                track.Description,
+                definition.Description))
         {
             track.Description = definition.Description;
             changed = true;
         }
 
-        if (track.PrerequisiteTopics.Count == 0)
+        if (!track.PrerequisiteTopics.SequenceEqual(
+                definition.PrerequisiteTopics,
+                StringComparer.Ordinal))
         {
             track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
             changed = true;
@@ -181,9 +190,12 @@ internal static class AdmissionTrackMetadataSeeder
 
         if (idMatch is not null &&
             (idMatch.ProgramId != programId ||
-             !StringComparer.OrdinalIgnoreCase.Equals(
-                 idMatch.Name,
-                 definition.Name)))
+             (!StringComparer.OrdinalIgnoreCase.Equals(
+                  idMatch.Name,
+                  definition.Name) &&
+              !definition.SupportedLegacyNames.Contains(
+                  idMatch.Name,
+                  StringComparer.OrdinalIgnoreCase))))
         {
             throw new InvalidOperationException(
                 $"Admission track metadata seed conflict for track ID " +
@@ -194,9 +206,12 @@ internal static class AdmissionTrackMetadataSeeder
         var nameMatches = candidates
             .Where(track =>
                 track.ProgramId == programId &&
-                StringComparer.OrdinalIgnoreCase.Equals(
-                    track.Name,
-                    definition.Name))
+                (StringComparer.OrdinalIgnoreCase.Equals(
+                     track.Name,
+                     definition.Name) ||
+                 definition.SupportedLegacyNames.Contains(
+                     track.Name,
+                     StringComparer.OrdinalIgnoreCase)))
             .ToList();
 
         if (nameMatches.Count > 1)

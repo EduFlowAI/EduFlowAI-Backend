@@ -5,6 +5,7 @@ using EduFlowAI.Admission.Application.Features.Dashboard;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -68,6 +69,28 @@ public sealed class ActiveCyclePerProgramTests
         Assert.Equal(
             "Another admission cycle is already active for this program.",
             result.Message);
+    }
+
+    [Fact]
+    public async Task Activation_rejects_legacy_noncanonical_9m_offering()
+    {
+        await using var dbContext = CreateDbContext();
+        var program = await SeedOfficialNineMonthProgramAsync(dbContext);
+        Guid cycleId = await AddConfiguredCycleAsync(
+            dbContext,
+            program,
+            "Legacy invalid draft",
+            CycleStatus.Draft);
+
+        var result = await CreateCycleService(dbContext)
+            .ActivateCycleAsync(cycleId);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(400, result.StatusCode);
+        Assert.Contains("official Intake-47 locations", result.Message);
+        Assert.Equal(
+            CycleStatus.Draft,
+            (await dbContext.AdmissionCycles.FindAsync(cycleId))!.Status);
     }
 
     [Fact]
@@ -231,6 +254,63 @@ public sealed class ActiveCyclePerProgramTests
 
         await dbContext.SaveChangesAsync();
         return cycleId;
+    }
+
+    private static async Task<SeededProgram> SeedOfficialNineMonthProgramAsync(
+        TestAdmissionDbContext dbContext)
+    {
+        var definition = AdmissionTrackSeedCatalog.All.Single(track =>
+            track.Name == "Digital IC Design");
+        Guid institutionId = Guid.NewGuid();
+        Guid programId = Guid.NewGuid();
+        var institution = new Institution
+        {
+            Id = institutionId,
+            Name = "Information Technology Institute",
+            Code = "ITI-TEST"
+        };
+        var program = new AdmissionProgram
+        {
+            Id = programId,
+            InstitutionId = institutionId,
+            Institution = institution,
+            Name = "9-Month Professional Training Program",
+            Code = "9M",
+            Description = string.Empty,
+            DurationMonths = 9
+        };
+        var track = new Track
+        {
+            Id = definition.Id,
+            ProgramId = programId,
+            Program = program,
+            Name = definition.Name,
+            Description = definition.Description,
+            PrerequisiteTopics = [.. definition.PrerequisiteTopics],
+            IsActive = true
+        };
+        var invalidBranch = new Branch
+        {
+            Id = AdmissionSeedIds.AlexandriaBranchId,
+            Name = "Alexandria",
+            Governorate = "Alexandria",
+            IsActive = true
+        };
+
+        dbContext.Institutions.Add(institution);
+        dbContext.Programs.Add(program);
+        dbContext.Tracks.Add(track);
+        dbContext.Branches.Add(invalidBranch);
+        dbContext.ProgramDocumentRequirements.Add(
+            new ProgramDocumentRequirement
+            {
+                Id = Guid.NewGuid(),
+                ProgramId = programId,
+                DocumentType = DocumentType.NationalId
+            });
+
+        await dbContext.SaveChangesAsync();
+        return new SeededProgram(programId, track.Id, invalidBranch.Id);
     }
 
     private readonly record struct SeededProgram(

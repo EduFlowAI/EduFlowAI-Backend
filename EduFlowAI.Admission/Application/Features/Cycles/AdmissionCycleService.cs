@@ -394,11 +394,15 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                         x.Capacity <= 0 ||
                         !x.Track.IsActive ||
                         !x.Branch.IsActive ||
-                        x.Track.ProgramId != cycle.ProgramId))
+                        x.Track.ProgramId != cycle.ProgramId ||
+                        !OfferingService.IsAllowedByOfficialCatalog(
+                            x.Track,
+                            x.Branch,
+                            cycle.Program.Code)))
                 {
                     return Result<AdmissionCycleDto>.Failure(
                         400,
-                        "All offerings must use active tracks and branches, positive capacity, and tracks belonging to the cycle's program.");
+                        "All offerings must use active tracks and branches, positive capacity, tracks belonging to the cycle's program, and official Intake-47 locations for 9M tracks.");
                 }
 
                 if (await _dbContext.AdmissionCycles.AnyAsync(

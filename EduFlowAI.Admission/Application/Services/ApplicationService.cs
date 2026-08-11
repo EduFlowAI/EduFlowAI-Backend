@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Features.Offerings;
 using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
@@ -118,10 +119,16 @@ namespace EduFlowAI.Admission.Application.Services
             var requestedBranchIds = request.Preferences.Select(p => p.BranchId).Distinct().ToList();
 
             // 4. Fetch matching offerings for the current Cycle in a SINGLE query (Performance optimization - Avoids N+1)
-            var availableOfferings = await _offeringRepository.GetAllAsync(o =>
-                o.CycleId == application.CycleId &&
-                requestedTrackIds.Contains(o.TrackId) &&
-                requestedBranchIds.Contains(o.BranchId));
+            var availableOfferings = await _offeringRepository.GetAllAsync(
+                o =>
+                    o.CycleId == application.CycleId &&
+                    requestedTrackIds.Contains(o.TrackId) &&
+                    requestedBranchIds.Contains(o.BranchId),
+                query => query
+                    .Include(o => o.Cycle)
+                        .ThenInclude(cycle => cycle.Program)
+                    .Include(o => o.Track)
+                    .Include(o => o.Branch));
 
 
             // 5. Robustly sync existing preferences instead of using .Clear()
@@ -134,7 +141,8 @@ namespace EduFlowAI.Admission.Application.Services
                     o.TrackId == prefDto.TrackId &&
                     o.BranchId == prefDto.BranchId);
 
-                if (matchedOffering == null)
+                if (matchedOffering == null ||
+                    !IsSelectablePreferenceOffering(matchedOffering))
                 {
                     return Result<ApplicationDetailsDto>.Failure(400, "The selected Track and Branch combination is not available for this admission cycle.");
                 }
@@ -223,6 +231,20 @@ namespace EduFlowAI.Admission.Application.Services
             return Result<ApplicationDetailsDto>.Success(resultDto, 200, "Preferences updated successfully.");
         }
 
+        internal static bool IsSelectablePreferenceOffering(
+            TrackBranchOffering offering)
+        {
+            ArgumentNullException.ThrowIfNull(offering);
+
+            return offering.Cycle.Status == CycleStatus.Active &&
+                offering.Track.IsActive &&
+                offering.Branch.IsActive &&
+                OfferingService.IsAllowedByOfficialCatalog(
+                    offering.Track,
+                    offering.Branch,
+                    offering.Cycle.Program.Code);
+        }
+
         public async Task<Result<ApplicationDetailsDto>> SubmitApplicationAsync(Guid applicationId,
             string applicantUserId, CancellationToken cancellationToken = default)
         {
@@ -230,9 +252,20 @@ namespace EduFlowAI.Admission.Application.Services
             // 1. Fetch the application along with required related data (Cycle and Preferences)
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
-                include: query => query.Include(a => a.Cycle)
-                                       .Include(a => a.Preferences)
-                                            .ThenInclude(p => p.TrackBranchOffering)
+                include: query => query
+                    .Include(a => a.Cycle)
+                        .ThenInclude(cycle => cycle.Program)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Track)
+                                .ThenInclude(track => track.Program)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Branch)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Cycle)
+                                .ThenInclude(cycle => cycle.Program)
             );
             if(application == null)
             {
@@ -347,8 +380,30 @@ namespace EduFlowAI.Admission.Application.Services
                 return $"The deadline for '{application.Cycle.Label}' has passed. Submissions are no longer accepted.";
             }
 
+            // Rule F: Stored draft preferences may predate the current catalog.
+            // Revalidate them at submission so stale or crafted offerings cannot
+            // bypass the current active/canonical selection policy.
+            if (!HasOnlySelectableStoredPreferences(application))
+            {
+                return "One or more selected Track and Branch combinations are no longer available for this admission cycle.";
+            }
+
             // Return null if all validations pass successfully
             return null;
+        }
+
+        internal static bool HasOnlySelectableStoredPreferences(
+            Domain.Entities.Application application)
+        {
+            ArgumentNullException.ThrowIfNull(application);
+
+            return application.Preferences is { Count: > 0 } &&
+                application.Preferences.All(preference =>
+                    preference.TrackBranchOffering is not null &&
+                    preference.TrackBranchOffering.CycleId ==
+                        application.CycleId &&
+                    IsSelectablePreferenceOffering(
+                        preference.TrackBranchOffering));
         }
     }
 }

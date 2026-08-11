@@ -2,6 +2,7 @@ using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Application.Features.Configuration.Common;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -116,6 +117,7 @@ internal sealed class OfferingService : IOfferingService
             async ct =>
             {
                 var cycle = await _dbContext.AdmissionCycles
+                    .Include(x => x.Program)
                     .SingleOrDefaultAsync(x => x.Id == cycleId, ct);
 
                 if (cycle is null)
@@ -166,6 +168,16 @@ internal sealed class OfferingService : IOfferingService
                     return Result<OfferingDto>.Failure(
                         400,
                         "Inactive tracks or branches cannot be offered.");
+                }
+
+                if (!IsAllowedByOfficialCatalog(
+                        track,
+                        branch,
+                        cycle.Program.Code))
+                {
+                    return Result<OfferingDto>.Failure(
+                        400,
+                        "The selected branch is not an official Intake-47 location for this track.");
                 }
 
                 if (await _dbContext.TrackBranchOfferings.AnyAsync(
@@ -334,6 +346,27 @@ internal sealed class OfferingService : IOfferingService
     }
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
+
+    internal static bool IsAllowedByOfficialCatalog(
+        Track track,
+        Branch branch,
+        string programCode)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        ArgumentNullException.ThrowIfNull(branch);
+
+        if (!StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M"))
+        {
+            return true;
+        }
+
+        var definition = AdmissionTrackSeedCatalog.Find(track.Id, track.Name);
+
+        return definition is not null &&
+            AdmissionTrackSeedCatalog.IsCanonicalLocation(
+                definition,
+                branch.Name);
+    }
 }
 
 internal static class OfferingMapper

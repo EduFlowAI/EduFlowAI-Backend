@@ -2,6 +2,7 @@ using EduFlowAI.Admission.Application.DTOs;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.AI.Application.DTOs;
 
 namespace EduFlowAI.Admission.Tests;
@@ -81,6 +82,72 @@ public sealed class OfferedTrackReaderTests
         var topics = Assert.IsAssignableFrom<ICollection<string>>(
             result[0].PrerequisiteTopics);
         Assert.Throws<NotSupportedException>(() => topics.Add("Statistics"));
+    }
+
+    [Fact]
+    public void Projection_hides_invalid_9m_location_and_adds_canonical_metadata()
+    {
+        var definition = AdmissionTrackSeedCatalog.All
+            .Single(track => track.Name == "Digital IC Design");
+        var track = CreateTrack(definition.Name, ["Legacy topic"]);
+        track.Id = definition.Id;
+        track.Program = new EduFlowAI.Admission.Domain.Entities.Program
+        {
+            Id = track.ProgramId,
+            InstitutionId = Guid.NewGuid(),
+            Name = "9-Month Professional Training Program",
+            Code = "9M",
+            DurationMonths = 9
+        };
+
+        var offering = CreateOffering(
+            CycleStatus.Active,
+            trackIsActive: true,
+            branchIsActive: true,
+            track: track);
+        offering.Branch.Name = "Alexandria";
+
+        Assert.Empty(OfferedTrackRecommendationProjection.Project([offering]));
+
+        offering.Branch.Name = "Smart Village";
+        var projected = Assert.Single(
+            OfferedTrackRecommendationProjection.Project([offering]));
+
+        Assert.Equal(definition.Category, projected.Category);
+        Assert.Equal(definition.MinimumGrade, projected.MinimumGrade);
+        Assert.Equal(definition.EligibilitySummary, projected.EligibilitySummary);
+        Assert.Equal(definition.PrerequisiteTopics, projected.PrerequisiteTopics);
+        Assert.Equal(definition.Locations, projected.Locations);
+    }
+
+    [Fact]
+    public void Projection_preserves_authoritative_null_description()
+    {
+        var definition = AdmissionTrackSeedCatalog.All.Single(track =>
+            track.Name == "3D Generalist");
+        var track = CreateTrack(definition.Name, ["Stale topic"]);
+        track.Id = definition.Id;
+        track.Description = "Stale inferred description";
+        track.Program = new EduFlowAI.Admission.Domain.Entities.Program
+        {
+            Id = track.ProgramId,
+            InstitutionId = Guid.NewGuid(),
+            Name = "9-Month Professional Training Program",
+            Code = "9M",
+            DurationMonths = 9
+        };
+        var offering = CreateOffering(
+            CycleStatus.Active,
+            trackIsActive: true,
+            branchIsActive: true,
+            track: track);
+        offering.Branch.Name = "Smart Village";
+
+        var projected = Assert.Single(
+            OfferedTrackRecommendationProjection.Project([offering]));
+
+        Assert.Null(projected.Description);
+        Assert.Equal(definition.PrerequisiteTopics, projected.PrerequisiteTopics);
     }
 
     private static Track CreateTrack(
