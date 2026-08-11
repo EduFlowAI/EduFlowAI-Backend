@@ -55,7 +55,13 @@ public sealed class TrackRecommendationService(
                 track.TrackId,
                 track.Name,
                 track.Description,
-                track.PrerequisiteTopics
+                track.PrerequisiteTopics,
+                track.Category,
+                track.MinimumGrade,
+                track.EligibilitySummary,
+                track.TotalHours,
+                track.GraduationYearLimitYears,
+                track.Locations
             }));
 
         try

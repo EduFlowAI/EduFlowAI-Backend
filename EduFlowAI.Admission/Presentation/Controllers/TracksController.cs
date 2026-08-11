@@ -40,7 +40,7 @@ public sealed class TracksController : ControllerBase
         return track is null
             ? NotFound(Result<TrackDto>.Failure(
                 404,
-                "Track was not found in the active admission cycle."))
+                "Track was not found in the public catalog."))
             : Ok(Result<TrackDto>.Success(track));
     }
 }

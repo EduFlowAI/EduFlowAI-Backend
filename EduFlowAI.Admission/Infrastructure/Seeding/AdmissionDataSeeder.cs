@@ -27,15 +27,10 @@ internal static class AdmissionDataSeeder
                 "Admission seed data requires the PostgreSQL EF Core provider.");
         }
 
-        if (!context.Database.GetMigrations().Any())
-        {
-            throw new InvalidOperationException(
-                "Admission seed data requires an EF Core migration for the shared database schema.");
-        }
-
-        var pendingMigrations = await context.Database
-            .GetPendingMigrationsAsync(cancellationToken);
-        if (pendingMigrations.Any())
+        var compiledMigrations = context.Database.GetMigrations().ToArray();
+        if (compiledMigrations.Length > 0 &&
+            (await context.Database.GetPendingMigrationsAsync(
+                cancellationToken)).Any())
         {
             throw new InvalidOperationException(
                 "Apply all pending database migrations before running Admission seed data.");
@@ -248,32 +243,38 @@ internal static class AdmissionDataSeeder
             .Where(track => track.ProgramId == programId || seedIds.Contains(track.Id))
             .ToListAsync(cancellationToken);
 
-        foreach (var seed in seeds)
+        foreach (var definition in AdmissionTrackSeedCatalog.All)
         {
+            var seed = seeds.Single(candidate => candidate.Id == definition.Id);
             var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-            if (idMatch is not null &&
-                (idMatch.ProgramId != seed.ProgramId ||
-                 !StringComparer.OrdinalIgnoreCase.Equals(idMatch.Name, seed.Name)))
+            if (idMatch is not null && idMatch.ProgramId != seed.ProgramId)
             {
                 throw SeedCollision(
                     nameof(Track),
                     seed.Id,
-                    "the existing row has a different program or name");
+                    "the existing row belongs to a different program");
             }
 
             var naturalKeyMatches = candidates
                 .Where(candidate =>
                     candidate.ProgramId == seed.ProgramId &&
-                    StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, seed.Name))
+                    (StringComparer.OrdinalIgnoreCase.Equals(
+                         candidate.Name,
+                         definition.Name) ||
+                     definition.SupportedLegacyNames.Contains(
+                         candidate.Name,
+                         StringComparer.OrdinalIgnoreCase)))
                 .ToList();
 
             EnsureAtMostOneBusinessKeyMatch(
                 nameof(Track),
-                $"{seed.ProgramId}/'{seed.Name}'",
+                $"{seed.ProgramId}/'{definition.Name}' and its supported legacy names",
                 naturalKeyMatches.Count);
 
-            var existing = naturalKeyMatches.SingleOrDefault();
-            if (idMatch is not null && existing is not null && idMatch.Id != existing.Id)
+            var naturalKeyMatch = naturalKeyMatches.SingleOrDefault();
+            if (idMatch is not null &&
+                naturalKeyMatch is not null &&
+                idMatch.Id != naturalKeyMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Track),
@@ -281,11 +282,114 @@ internal static class AdmissionDataSeeder
                     "the stable ID and natural key identify different rows");
             }
 
+            var existing = idMatch ?? naturalKeyMatch;
             if (existing is null)
             {
                 context.Tracks.Add(seed);
+                candidates.Add(seed);
+                continue;
             }
+
+            ReconcileOfficialTrack(existing, programId, definition, now);
         }
+
+        foreach (var nonOfficial in candidates.Where(candidate =>
+                     candidate.ProgramId == programId &&
+                     AdmissionTrackSeedCatalog.Find(
+                         candidate.Id,
+                         candidate.Name) is null))
+        {
+            DeactivateNonOfficialTrack(nonOfficial, programId, now);
+        }
+    }
+
+    internal static bool DeactivateNonOfficialTrack(
+        Track track,
+        Guid programId,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+
+        if (track.ProgramId != programId ||
+            AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is not null ||
+            !track.IsActive)
+        {
+            return false;
+        }
+
+        track.IsActive = false;
+        track.UpdatedAt = now;
+        return true;
+    }
+
+    internal static bool ReconcileOfficialTrack(
+        Track track,
+        Guid programId,
+        AdmissionTrackSeedDefinition definition,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (track.ProgramId != programId)
+        {
+            throw SeedCollision(
+                nameof(Track),
+                definition.Id,
+                "the existing row belongs to a different program");
+        }
+
+        bool hasOfficialName = StringComparer.OrdinalIgnoreCase.Equals(
+            track.Name,
+            definition.Name);
+        bool hasSupportedLegacyName = definition.SupportedLegacyNames.Contains(
+            track.Name,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!hasOfficialName && !hasSupportedLegacyName)
+        {
+            throw SeedCollision(
+                nameof(Track),
+                definition.Id,
+                $"the existing row has unsupported name '{track.Name}'");
+        }
+
+        bool changed = false;
+
+        if (!hasOfficialName)
+        {
+            track.Name = definition.Name;
+            changed = true;
+        }
+
+        if (!track.IsActive)
+        {
+            track.IsActive = true;
+            changed = true;
+        }
+
+        if (!StringComparer.Ordinal.Equals(
+                track.Description,
+                definition.Description))
+        {
+            track.Description = definition.Description;
+            changed = true;
+        }
+
+        if (!track.PrerequisiteTopics.SequenceEqual(
+                definition.PrerequisiteTopics,
+                StringComparer.Ordinal))
+        {
+            track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
+            changed = true;
+        }
+
+        if (changed)
+        {
+            track.UpdatedAt = now;
+        }
+
+        return changed;
     }
 
     private static async Task SeedBranchesAsync(
@@ -300,15 +404,6 @@ internal static class AdmissionDataSeeder
         foreach (var seed in seeds)
         {
             var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-            if (idMatch is not null &&
-                !StringComparer.OrdinalIgnoreCase.Equals(idMatch.Name, seed.Name))
-            {
-                throw SeedCollision(
-                    nameof(Branch),
-                    seed.Id,
-                    $"the existing row has name '{idMatch.Name}' instead of '{seed.Name}'");
-            }
-
             var naturalKeyMatches = candidates
                 .Where(candidate =>
                     StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, seed.Name))
@@ -319,8 +414,10 @@ internal static class AdmissionDataSeeder
                 $"name '{seed.Name}'",
                 naturalKeyMatches.Count);
 
-            var existing = naturalKeyMatches.SingleOrDefault();
-            if (idMatch is not null && existing is not null && idMatch.Id != existing.Id)
+            var naturalKeyMatch = naturalKeyMatches.SingleOrDefault();
+            if (idMatch is not null &&
+                naturalKeyMatch is not null &&
+                idMatch.Id != naturalKeyMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Branch),
@@ -328,11 +425,61 @@ internal static class AdmissionDataSeeder
                     "the stable ID and natural key identify different rows");
             }
 
+            var existing = idMatch ?? naturalKeyMatch;
             if (existing is null)
             {
                 context.Branches.Add(seed);
+                candidates.Add(seed);
+                continue;
             }
+
+            var definition = AdmissionBranchSeedCatalog.Find(
+                seed.Id,
+                seed.Name)!;
+            ReconcileOfficialBranch(existing, definition);
         }
+    }
+
+    internal static bool ReconcileOfficialBranch(
+        Branch branch,
+        AdmissionBranchSeedDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(branch);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (branch.Id != definition.Id &&
+            !StringComparer.OrdinalIgnoreCase.Equals(
+                branch.Name,
+                definition.Name))
+        {
+            throw SeedCollision(
+                nameof(Branch),
+                definition.Id,
+                $"the existing row has unsupported name '{branch.Name}'");
+        }
+
+        bool changed = false;
+
+        if (!StringComparer.Ordinal.Equals(branch.Name, definition.Name))
+        {
+            branch.Name = definition.Name;
+            changed = true;
+        }
+
+        if (!branch.IsActive)
+        {
+            branch.IsActive = true;
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(branch.Governorate) &&
+            !string.IsNullOrWhiteSpace(definition.Governorate))
+        {
+            branch.Governorate = definition.Governorate;
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static void EnsureAtMostOneBusinessKeyMatch(
@@ -431,74 +578,23 @@ internal static class AdmissionDataSeeder
         Guid programId,
         DateTimeOffset now)
     {
-        return
-        [
-            CreateTrack(
-                AdmissionSeedIds.OpenSourceApplicationsDevelopmentTrackId,
-                programId,
-                "Open Source Applications Development",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.AiAndMachineLearningTrackId,
-                programId,
-                "AI and Machine Learning",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.SystemsAdministrationTrackId,
-                programId,
-                "Systems Administration",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId,
-                programId,
-                "Professional Development & BI-infused CRM",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.CloudPlatformDevelopmentTrackId,
-                programId,
-                "Cloud Platform Development",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.CloudArchitectureTrackId,
-                programId,
-                "Cloud Architecture",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId,
-                programId,
-                "Integrated Software Development & Architecture",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.CyberSecurityTrackId,
-                programId,
-                "Cyber Security",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.EnterpriseJavaTrackId,
-                programId,
-                "Enterprise & Web Applications Development (Java)",
-                now),
-            CreateTrack(
-                AdmissionSeedIds.TelecomApplicationDevelopmentTrackId,
-                programId,
-                "Telecom Application Development",
-                now)
-        ];
+        return AdmissionTrackSeedCatalog.All
+            .Select(definition => CreateTrack(definition, programId, now))
+            .ToArray();
     }
 
     private static Track CreateTrack(
-        Guid id,
+        AdmissionTrackSeedDefinition definition,
         Guid programId,
-        string name,
         DateTimeOffset now)
     {
         return new Track
         {
-            Id = id,
+            Id = definition.Id,
             ProgramId = programId,
-            Name = name,
-            Description = null,
-            PrerequisiteTopics = [],
+            Name = definition.Name,
+            Description = definition.Description,
+            PrerequisiteTopics = [.. definition.PrerequisiteTopics],
             IsActive = true,
             CreatedAt = now,
             UpdatedAt = now
@@ -507,48 +603,15 @@ internal static class AdmissionDataSeeder
 
     private static IReadOnlyList<Branch> CreateBranches(DateTimeOffset now)
     {
-        return
-        [
-            new()
+        return AdmissionBranchSeedCatalog.All
+            .Select(definition => new Branch
             {
-                Id = AdmissionSeedIds.SmartVillageBranchId,
-                Name = "Smart Village",
-                Governorate = "Giza",
+                Id = definition.Id,
+                Name = definition.Name,
+                Governorate = definition.Governorate,
                 IsActive = true,
                 CreatedAt = now
-            },
-            new()
-            {
-                Id = AdmissionSeedIds.AlexandriaBranchId,
-                Name = "Alexandria",
-                Governorate = "Alexandria",
-                IsActive = true,
-                CreatedAt = now
-            },
-            new()
-            {
-                Id = AdmissionSeedIds.AssiutBranchId,
-                Name = "Assiut",
-                Governorate = "Assiut",
-                IsActive = true,
-                CreatedAt = now
-            },
-            new()
-            {
-                Id = AdmissionSeedIds.MansouraBranchId,
-                Name = "Mansoura",
-                Governorate = "Dakahlia",
-                IsActive = true,
-                CreatedAt = now
-            },
-            new()
-            {
-                Id = AdmissionSeedIds.ZagazigBranchId,
-                Name = "Zagazig",
-                Governorate = "Sharqia",
-                IsActive = true,
-                CreatedAt = now
-            }
-        ];
+            })
+            .ToArray();
     }
 }
