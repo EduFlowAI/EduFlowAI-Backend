@@ -31,12 +31,29 @@ public static class ChunkContextualizer
         foreach (var chunk in chunks)
         {
             var position = LocateChunk(normalized, chunk, ref searchFrom);
-            var heading = HeadingAt(headings, position);
+
+            // Only a chunk with no heading of its own needs one supplied. A chunk that spans a section
+            // boundary carries its own "## ..." lines, and labelling it with the section it merely
+            // started in would describe it wrongly - worse than leaving it to speak for itself.
+            var heading = ContainsHeading(chunk)
+                ? null
+                : HeadingAt(headings, position);
 
             contextualized.Add(BuildHeader(documentName, heading) + chunk);
         }
 
         return contextualized;
+    }
+
+    private static bool ContainsHeading(string chunk)
+    {
+        foreach (var line in chunk.Split(LineFeed))
+        {
+            if (line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 
     private static string BuildHeader(string? documentName, string? heading)

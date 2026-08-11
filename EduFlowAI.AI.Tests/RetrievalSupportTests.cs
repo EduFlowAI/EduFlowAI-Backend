@@ -90,6 +90,19 @@ public class ChunkContextualizerTests
         Assert.Contains("[Section: Alexandria]", result[1]);
     }
 
+    // A chunk that spans a section boundary carries its own headings; labelling it with the section it
+    // merely started in would misdescribe it, so no section is added.
+    [Fact]
+    public void A_chunk_with_its_own_heading_is_not_given_a_section()
+    {
+        var spanning = "- Cloud Architecture\n\n## Alexandria\n6 track(s) offered at Alexandria:";
+
+        var result = ChunkContextualizer.Contextualize("Locations.md", Source, new[] { spanning }).Single();
+
+        Assert.StartsWith("[Document: Locations.md]", result);
+        Assert.DoesNotContain("[Section:", result);
+    }
+
     [Fact]
     public void Text_that_cannot_be_located_still_keeps_the_document_name()
     {

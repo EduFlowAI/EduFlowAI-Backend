@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -56,8 +57,11 @@ public class GeminiEmbeddingService : IEmbeddingService
             outputDimensionality = _options.EmbeddingDimensions
         };
 
-        // One network blip shouldn't fail a whole multi-chunk document.
-        const int maxAttempts = 3;
+        // One network blip shouldn't fail a whole multi-chunk document. Rate limiting is different from
+        // a blip: re-indexing the knowledge base fires hundreds of embeddings in a row and will exhaust a
+        // per-minute quota, so a 429 waits long enough for that window to roll over instead of burning
+        // its retries in a few seconds and failing the document.
+        const int maxAttempts = 5;
         Exception? lastException = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
@@ -65,6 +69,19 @@ public class GeminiEmbeddingService : IEmbeddingService
             try
             {
                 var response = await _httpClient.PostAsJsonAsync(requestUrl, payload, cancellationToken);
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < maxAttempts)
+                {
+                    var wait = RetryAfter(response) ?? TimeSpan.FromSeconds(Math.Pow(3, attempt));
+
+                    _logger.LogWarning(
+                        "Embedding rate-limited (attempt {Attempt}); waiting {DelaySeconds}s before retrying.",
+                        attempt, (int)wait.TotalSeconds);
+
+                    await Task.Delay(wait, cancellationToken);
+                    continue;
+                }
+
                 response.EnsureSuccessStatusCode();
 
                 var result = await response.Content.ReadFromJsonAsync<GeminiResponseContract>(cancellationToken: cancellationToken);
@@ -88,6 +105,24 @@ public class GeminiEmbeddingService : IEmbeddingService
 
         throw new InvalidOperationException(
             $"Failed to generate embedding after {maxAttempts} attempts due to a network error.", lastException);
+    }
+
+    // Gemini tells us how long the quota window has left; obeying it beats guessing.
+    private static TimeSpan? RetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+
+        if (retryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+            return delta;
+
+        if (retryAfter?.Date is { } date)
+        {
+            var wait = date - DateTimeOffset.UtcNow;
+            if (wait > TimeSpan.Zero)
+                return wait;
+        }
+
+        return null;
     }
 
     #region Internal JSON Contract Classes
