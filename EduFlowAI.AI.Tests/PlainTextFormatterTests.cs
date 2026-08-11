@@ -14,15 +14,37 @@ public class PlainTextFormatterTests
     }
 
     [Fact]
-    public void Markdown_bullets_become_a_real_bullet_character()
+    public void Markdown_bullets_become_a_numbered_list()
     {
         var raw = "We offer 2 tracks:\n*   **AI and Machine Learning** (Cognitive)\n-  Systems Administration";
 
         var result = PlainTextFormatter.Clean(raw);
 
         Assert.DoesNotContain("*", result);
-        Assert.Contains("• AI and Machine Learning (Cognitive)", result);
-        Assert.Contains("• Systems Administration", result);
+        Assert.Contains("1. AI and Machine Learning (Cognitive)", result);
+        Assert.Contains("2. Systems Administration", result);
+    }
+
+    // A blank line can sit between items, so the numbering keeps counting across it.
+    [Fact]
+    public void A_blank_line_inside_a_list_does_not_restart_the_numbering()
+    {
+        var result = PlainTextFormatter.Clean("- First\n\n- Second\n- Third");
+
+        Assert.Contains("1. First", result);
+        Assert.Contains("2. Second", result);
+        Assert.Contains("3. Third", result);
+    }
+
+    // Prose between two lists means they are separate lists, so the count starts again.
+    [Fact]
+    public void A_paragraph_between_lists_restarts_the_numbering()
+    {
+        var result = PlainTextFormatter.Clean("- Alpha\n- Beta\nThen some prose.\n- Gamma");
+
+        Assert.Contains("1. Alpha", result);
+        Assert.Contains("2. Beta", result);
+        Assert.Contains("1. Gamma", result);
     }
 
     // The exact shape the assistant produced for "which tracks are offered at Alexandria".
@@ -35,7 +57,18 @@ public class PlainTextFormatterTests
 
         Assert.DoesNotContain("*", result);
         Assert.Contains("نقدم في فرع الإسكندرية 6 مسارات:", result);
-        Assert.Contains("• AI and Machine Learning (الذكاء الاصطناعي)", result);
+        Assert.Contains("1. AI and Machine Learning (الذكاء الاصطناعي)", result);
+    }
+
+    // A list the model already numbered is left exactly as it is.
+    [Fact]
+    public void An_already_numbered_list_is_untouched()
+    {
+        var raw = "Steps:\n1. Apply online\n2. Upload your documents";
+
+        var result = PlainTextFormatter.Clean(raw);
+
+        Assert.Equal("Steps:\n1. Apply online\n2. Upload your documents", result);
     }
 
     [Fact]

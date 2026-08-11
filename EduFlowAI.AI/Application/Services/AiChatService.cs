@@ -132,8 +132,8 @@ Never use phrasing such as "based on the available documents", "in the current m
 
 # FORMAT
 Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols, and
-never bold or italicise anything. To list items, put each on its own line starting with "- ". Separate
-paragraphs with a single blank line.
+never bold or italicise anything. When you list several items, number them: put each on its own line
+starting with "1. ", "2. ", "3. " and so on. Separate paragraphs with a single blank line.
 {conversationSection}{knowledgeSection}
 """;
 

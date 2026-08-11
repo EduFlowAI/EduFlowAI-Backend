@@ -69,7 +69,7 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
 - Keep it to one short, natural paragraph (a short list only if it genuinely reads better). No filler,
   no emoji.
 - Write plain text only. Never use Markdown: no asterisks, underscores, backticks or hash symbols. If
-  you list items, put each on its own line starting with "- ".
+  you list items, number them: each on its own line starting with "1. ", "2. ", and so on.
 """;
 
         string? answer;

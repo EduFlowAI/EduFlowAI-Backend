@@ -20,7 +20,7 @@ public static partial class PlainTextFormatter
         cleaned = Emphasis().Replace(cleaned, "$1");
 
         cleaned = Heading().Replace(cleaned, string.Empty);
-        cleaned = Bullet().Replace(cleaned, "• ");
+        cleaned = NumberBullets(cleaned);
         cleaned = TrailingSpace().Replace(cleaned, string.Empty);
         cleaned = ExtraBlankLines().Replace(cleaned, "\n\n");
 
@@ -46,9 +46,33 @@ public static partial class PlainTextFormatter
     [GeneratedRegex(@"^[ \t]{0,3}#{1,6}[ \t]*", RegexOptions.Multiline)]
     private static partial Regex Heading();
 
-    // Markdown bullets become a real bullet character, which reads correctly as plain text.
-    [GeneratedRegex(@"^[ \t]*[-*+•][ \t]+", RegexOptions.Multiline)]
-    private static partial Regex Bullet();
+    // Markdown bullets become "1.", "2.", ... so a list needs no symbols at all.
+    private static string NumberBullets(string text)
+    {
+        var lines = text.Split('\n');
+        var position = 0;
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var bullet = BulletMarker().Match(lines[i]);
+
+            if (bullet.Success)
+            {
+                position++;
+                lines[i] = $"{position}. {lines[i][bullet.Length..]}";
+            }
+            // A blank line can sit inside a list, so only real text ends one and restarts the count.
+            else if (!string.IsNullOrWhiteSpace(lines[i]))
+            {
+                position = 0;
+            }
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    [GeneratedRegex(@"^[ \t]*[-*+\u2022][ \t]+")]
+    private static partial Regex BulletMarker();
 
     [GeneratedRegex(@"[ \t]+$", RegexOptions.Multiline)]
     private static partial Regex TrailingSpace();
