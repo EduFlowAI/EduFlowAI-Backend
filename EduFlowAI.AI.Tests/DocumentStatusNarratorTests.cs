@@ -93,6 +93,31 @@ public class DocumentStatusNarratorTests
         Assert.Contains("National ID: Under manual review", result);
     }
 
+    // Switching intent mid-conversation reached this narrator with its own prompt, so it welcomed the
+    // applicant all over again. It now only opens warmly when the conversation is actually new.
+    [Fact]
+    public async Task Mid_conversation_the_prompt_forbids_greeting_again()
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), "en", isContinuingConversation: true);
+
+        Assert.Contains("do NOT greet", chat.LastSystemPrompt);
+    }
+
+    [Fact]
+    public async Task A_new_conversation_may_still_open_warmly()
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), "en", isContinuingConversation: false);
+
+        Assert.DoesNotContain("do NOT greet", chat.LastSystemPrompt);
+        Assert.Contains("warm opening", chat.LastSystemPrompt);
+    }
+
     private static List<ApplicantDocumentDto> Docs() => new()
     {
         new(Guid.NewGuid(), DocumentType.GraduationCertificate, "grad.pdf", DocumentStatus.Approved, DateTimeOffset.UtcNow),

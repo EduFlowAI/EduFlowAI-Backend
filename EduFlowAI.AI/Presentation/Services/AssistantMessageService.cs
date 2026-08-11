@@ -1,10 +1,11 @@
-﻿using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
 using EduFlowAI.AI.Presentation.DTOs;
 using EduFlowAI.AI.Presentation.Interfaces;
 using EduFlowAI.Documents.Application.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace EduFlowAI.AI.Presentation.Services;
 
@@ -23,6 +24,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _documentStatusNarrator;
     private readonly IRecommendationUserContextService
         _recommendationUserContextService;
+    private readonly ILogger<AssistantMessageService>? _logger;
 
     public AssistantMessageService(
         IIntentRouter intentRouter,
@@ -32,7 +34,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         IApplicationStatusQueryService applicationStatusQueryService,
         IApplicantDocumentService applicantDocumentService,
         IDocumentStatusNarrator documentStatusNarrator,
-        IRecommendationUserContextService recommendationUserContextService)
+        IRecommendationUserContextService recommendationUserContextService,
+        ILogger<AssistantMessageService>? logger = null)
     {
         _intentRouter = intentRouter;
         _ragAnswerService = ragAnswerService;
@@ -44,6 +47,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _documentStatusNarrator = documentStatusNarrator;
         _recommendationUserContextService =
             recommendationUserContextService;
+        _logger = logger;
     }
 
     public async Task<AssistantResponse> HandleAsync(
@@ -90,18 +94,31 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
         foreach (var detectedIntent in detectedIntents)
         {
-            var result = await DispatchAsync(
-                detectedIntent.Intent,
-                request.Message,
-                request.Recommendation,
-                request.RecommendWithAvailableData,
-                history,
-                language,
-                userId,
-                isAuthenticated,
-                cancellationToken);
+            // One failing subsystem must not cost the applicant the whole reply. A multi-intent message
+            // keeps the parts that worked, and a single failure becomes a sentence instead of a 500.
+            try
+            {
+                results.Add(await DispatchAsync(
+                    detectedIntent.Intent,
+                    request.Message,
+                    classification.SearchQuery,
+                    request.Recommendation,
+                    request.RecommendWithAvailableData,
+                    history,
+                    language,
+                    userId,
+                    isAuthenticated,
+                    cancellationToken));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogError(
+                    ex,
+                    "Intent '{Intent}' failed; returning a graceful result for it.",
+                    detectedIntent.Intent);
 
-            results.Add(result);
+                results.Add(CreateFailedResult(detectedIntent.Intent, language));
+            }
         }
 
         var combinedAnswer = string.Join(
@@ -130,6 +147,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
     private async Task<AssistantResultDto> DispatchAsync(
         string intent,
         string message,
+        string? searchQuery,
         RecommendationQuestionnaireProgressDto?
             recommendationProgress,
         bool recommendWithAvailableData,
@@ -143,6 +161,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         {
             "knowledge" => await HandleKnowledgeAsync(
                 message,
+                searchQuery,
                 history,
                 language,
                 cancellationToken),
@@ -166,6 +185,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 userId,
                 isAuthenticated,
                 language,
+                history.Count > 0,
                 cancellationToken),
 
             _ => CreateUnknownResult(language)
@@ -174,6 +194,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
 
     private async Task<AssistantResultDto> HandleKnowledgeAsync(
         string message,
+        string? searchQuery,
         IReadOnlyList<ConversationTurnDto> history,
         string language,
         CancellationToken cancellationToken)
@@ -182,6 +203,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             message,
             history,
             language,
+            searchQuery,
             cancellationToken);
 
         return new AssistantResultDto(
@@ -386,6 +408,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         Guid userId,
         bool isAuthenticated,
         string language,
+        bool isContinuingConversation,
         CancellationToken cancellationToken)
     {
         if (!isAuthenticated)
@@ -417,6 +440,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         var content = await _documentStatusNarrator.NarrateAsync(
             documents.Data,
             language,
+            isContinuingConversation,
             cancellationToken);
 
         return DocumentStatusResult(
@@ -679,6 +703,24 @@ public sealed class AssistantMessageService : IAssistantMessageService
         }
 
         return missingContext;
+    }
+
+    // Shown when one intent's subsystem threw. Deliberately plain and non-technical - the applicant
+    // should see an apology, never a stack trace or a dead conversation.
+    private static AssistantResultDto CreateFailedResult(
+        string intent,
+        string language)
+    {
+        return new AssistantResultDto(
+            Intent: intent,
+            Title: language == "ar"
+                ? "تعذّر إتمام الطلب"
+                : "Something Went Wrong",
+            Content: language == "ar"
+                ? "عذراً، حدث خطأ أثناء معالجة هذا الجزء من سؤالك. برجاء المحاولة مرة أخرى بعد قليل."
+                : "Sorry, something went wrong while handling that part of your question. Please try again in a moment.",
+            Sources: [],
+            Metadata: new Dictionary<string, object?> { ["failed"] = true });
     }
 
     private static AssistantResultDto CreateUnknownResult(

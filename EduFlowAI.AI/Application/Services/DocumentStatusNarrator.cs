@@ -26,6 +26,7 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
     public async Task<string> NarrateAsync(
         IEnumerable<ApplicantDocumentDto> documents,
         string language,
+        bool isContinuingConversation = false,
         CancellationToken cancellationToken = default)
     {
         var docs = documents?.ToList() ?? new List<ApplicantDocumentDto>();
@@ -39,6 +40,12 @@ public sealed class DocumentStatusNarrator : IDocumentStatusNarrator
                 .Select(d => $"- {TypeLabel(d.DocumentType)}: {StatusLabel(d.Status)}"));
 
         var languageName = language == "ar" ? "Arabic" : "English";
+
+        // This narrator has its own prompt, so without this it always opened cold - which is why simply
+        // switching intent mid-chat produced a fresh "welcome to ITI".
+        var greetingRule = isContinuingConversation
+            ? "- You are mid-conversation: do NOT greet or introduce the institute again. Answer directly."
+            : "- A brief warm opening is fine before the answer.";
 
         var systemPrompt = $"""
 # ROLE
@@ -55,6 +62,7 @@ Write your ENTIRE reply in {languageName}. The facts below are in English, but y
 # RULES
 - Speak as the institute, first person plural ("we"), in a warm, human, professional tone. Never sound
   like a template or a form; vary your wording naturally.
+{greetingRule}
 - Report exactly these facts. Never add, change, soften, upgrade or downgrade a status, and never
   invent documents, dates, timelines or next steps.
 - If nothing has been uploaded yet, say so kindly and mention they can upload from their account.

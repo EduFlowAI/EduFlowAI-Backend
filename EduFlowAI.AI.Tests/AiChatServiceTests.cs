@@ -104,6 +104,83 @@ public class AiChatServiceTests
         Assert.Contains($"Write your ENTIRE reply in {expected}", chat.LastSystemPrompt);
     }
 
+    // A self-contained query from the router replaces the history-joined one, so a greeting earlier in
+    // the conversation can no longer dominate the search vector.
+    [Fact]
+    public async Task Router_search_query_is_what_gets_retrieved_on()
+    {
+        var (service, retrieval, _) = Build();
+
+        await service.AnswerWithContextAsync(
+            "ايه التراكات المتاحة في الإسكندرية",
+            DotNetHistory,
+            "ar",
+            "tracks offered at Alexandria branch");
+
+        Assert.Equal("tracks offered at Alexandria branch", retrieval.LastQuery);
+        Assert.DoesNotContain(".NET Enterprise", retrieval.LastQuery);
+    }
+
+    [Fact]
+    public async Task Without_a_router_query_history_still_drives_retrieval()
+    {
+        var (service, retrieval, _) = Build();
+
+        await service.AnswerWithContextAsync("What about its prerequisites?", DotNetHistory, "en");
+
+        Assert.Contains(".NET Enterprise", retrieval.LastQuery);
+    }
+
+    // Five chunks could not cover an answer spread across a long reference document.
+    [Fact]
+    public async Task Retrieval_asks_for_the_configured_number_of_chunks()
+    {
+        var (service, retrieval, _) = Build();
+
+        await service.AnswerWithContextAsync("What tracks are available?", NoHistory, "en");
+
+        Assert.Equal(10, retrieval.LastLimit);
+    }
+
+    // The first turn may welcome the applicant; later turns must not re-introduce the institute.
+    [Fact]
+    public async Task First_turn_is_allowed_to_greet()
+    {
+        var (service, _, chat) = Build();
+
+        await service.AnswerWithContextAsync("hi", NoHistory, "en");
+
+        Assert.Contains("Greet the applicant", chat.LastSystemPrompt);
+    }
+
+    [Fact]
+    public async Task Later_turns_are_told_not_to_greet_again()
+    {
+        var (service, _, chat) = Build();
+
+        await service.AnswerWithContextAsync("What about its prerequisites?", DotNetHistory, "en");
+
+        Assert.DoesNotContain("Greet the applicant", chat.LastSystemPrompt);
+        Assert.Contains("Do NOT greet", chat.LastSystemPrompt);
+    }
+
+    // An exhausted quota must not turn into a failed request the applicant sees as a red error.
+    [Theory]
+    [InlineData("en", "Sorry")]
+    [InlineData("ar", "عذراً")]
+    public async Task Model_failure_returns_a_friendly_answer_instead_of_throwing(
+        string language,
+        string expected)
+    {
+        var retrieval = new FakeRetrieval();
+        var chat = new StubChat { Throw = true };
+        var service = new AiChatService(retrieval, chat);
+
+        var result = await service.AnswerWithContextAsync("question", NoHistory, language);
+
+        Assert.Contains(expected, result.Answer);
+    }
+
     private static (AiChatService, FakeRetrieval, StubChat) Build()
     {
         var retrieval = new FakeRetrieval();
@@ -115,6 +192,8 @@ public class AiChatServiceTests
     {
         public string? LastQuery { get; private set; }
 
+        public int LastLimit { get; private set; }
+
         public List<RetrievedChunkDto> Chunks { get; set; } = new()
         {
             new() { Content = "The .NET Enterprise track runs for nine months.", SourceTitle = "dotnet.md" }
@@ -123,6 +202,7 @@ public class AiChatServiceTests
         public Task<List<RetrievedChunkDto>> RetrieveContextAsync(string query, int limit = 5, CancellationToken cancellationToken = default)
         {
             LastQuery = query;
+            LastLimit = limit;
             return Task.FromResult(Chunks);
         }
     }
@@ -131,11 +211,16 @@ public class AiChatServiceTests
     {
         public string? LastSystemPrompt { get; private set; }
         public string? LastUserMessage { get; private set; }
+        public bool Throw { get; set; }
 
         public Task<string> GenerateAsync(string systemPrompt, string userMessage, CancellationToken ct = default)
         {
             LastSystemPrompt = systemPrompt;
             LastUserMessage = userMessage;
+
+            if (Throw)
+                throw new System.Net.Http.HttpRequestException("model unavailable");
+
             return Task.FromResult("an answer");
         }
 

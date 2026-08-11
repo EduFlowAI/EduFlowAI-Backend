@@ -1,21 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Infrastructure.Options;
+using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
+// Hybrid retrieval: nearest neighbours by embedding, plus a literal keyword pass. A dense vector alone
+// can rank a proper noun (a branch or track name) outside the top results when the rest of the question
+// is generic, which left questions like "which tracks are offered at Alexandria" unanswered.
 public class KnowledgeBaseRetrievalService : IKnowledgeRetrievalService
 {
     private readonly IEmbeddingService _embeddingService;
     private readonly IKnowledgeRepository _repository;
+    private readonly RetrievalOptions _options;
 
-    public KnowledgeBaseRetrievalService(IEmbeddingService embeddingService, IKnowledgeRepository repository)
+    public KnowledgeBaseRetrievalService(
+        IEmbeddingService embeddingService,
+        IKnowledgeRepository repository,
+        IOptions<RetrievalOptions>? options = null)
     {
         _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _options = options?.Value ?? new RetrievalOptions();
     }
 
     public async Task<List<RetrievedChunkDto>> RetrieveContextAsync(
@@ -29,6 +40,51 @@ public class KnowledgeBaseRetrievalService : IKnowledgeRetrievalService
         var queryVectorArray = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
         var queryVector = new Pgvector.Vector(queryVectorArray);
 
-        return await _repository.SearchChunksByEmbeddingAsync(queryVector, limit, cancellationToken);
+        var vectorHits = await _repository.SearchChunksByEmbeddingAsync(
+            queryVector, limit, cancellationToken);
+
+        var terms = SearchTermExtractor.Extract(query);
+        if (terms.Count == 0)
+            return vectorHits;
+
+        var keywordBudget = Math.Min(_options.MaxKeywordChunks, limit);
+        if (keywordBudget <= 0)
+            return vectorHits;
+
+        var keywordHits = await _repository.SearchChunksByKeywordAsync(
+            terms, keywordBudget, cancellationToken);
+
+        return Merge(vectorHits, keywordHits, limit, keywordBudget);
+    }
+
+    // Semantic hits lead, but a few slots are RESERVED for literal matches - otherwise the nearest
+    // neighbours fill the whole budget and the exact-name chunk this pass exists to rescue is crowded
+    // out again. Any reserved slot the keyword pass does not use falls back to the next semantic hit,
+    // and the same chunk never appears twice.
+    private static List<RetrievedChunkDto> Merge(
+        List<RetrievedChunkDto> vectorHits,
+        List<RetrievedChunkDto> keywordHits,
+        int limit,
+        int reservedForKeywords)
+    {
+        var merged = new List<RetrievedChunkDto>();
+        var seen = new HashSet<Guid>();
+
+        void TryAdd(RetrievedChunkDto hit)
+        {
+            if (merged.Count < limit && seen.Add(hit.ChunkId))
+                merged.Add(hit);
+        }
+
+        foreach (var hit in vectorHits.Take(Math.Max(0, limit - reservedForKeywords)))
+            TryAdd(hit);
+
+        foreach (var hit in keywordHits)
+            TryAdd(hit);
+
+        foreach (var hit in vectorHits)
+            TryAdd(hit);
+
+        return merged;
     }
 }

@@ -21,6 +21,11 @@ public class IntentClassificationDto
     [JsonPropertyName("language")]
     public string? Language { get; set; }
 
+    // A self-contained English query the router wrote for the knowledge lookup, or null when it supplied
+    // nothing usable - retrieval then falls back to the raw message joined with the recent turns.
+    [JsonPropertyName("searchQuery")]
+    public string? SearchQuery { get; set; }
+
     // Derived from PrimaryIntent by the classifier; never read from the model's JSON.
     [JsonIgnore]
     public string RoutedTo { get; set; } = string.Empty;

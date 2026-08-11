@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,5 +25,12 @@ public interface IKnowledgeRepository
     Task<List<RetrievedChunkDto>> SearchChunksByEmbeddingAsync(
         Pgvector.Vector embedding,
         int limit = 5,
+        CancellationToken cancellationToken = default);
+
+    // Literal term match, so a proper noun (a branch or track name) always has a route to its chunk
+    // even when the embedding ranks it outside the nearest neighbours.
+    Task<List<RetrievedChunkDto>> SearchChunksByKeywordAsync(
+        IReadOnlyList<string> terms,
+        int limit,
         CancellationToken cancellationToken = default);
 }

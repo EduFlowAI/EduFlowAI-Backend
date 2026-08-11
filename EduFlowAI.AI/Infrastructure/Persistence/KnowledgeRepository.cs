@@ -14,6 +14,9 @@ namespace EduFlowAI.AI.Infrastructure.Persistence;
 
 public class KnowledgeRepository : IKnowledgeRepository
 {
+    // Upper bound on rows pulled back for in-memory keyword ranking.
+    private const int MaxKeywordCandidates = 200;
+
     private readonly IAIDbContext _context;
 
     public KnowledgeRepository(IAIDbContext context)
@@ -78,10 +81,44 @@ public class KnowledgeRepository : IKnowledgeRepository
             .Take(limit)
             .Select(c => new RetrievedChunkDto
             {
+                ChunkId = c.Id,
                 Content = c.Content,
                 DocumentId = c.KnowledgeBaseDocumentId,
                 SourceTitle = c.Document.FileName
             })
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<RetrievedChunkDto>> SearchChunksByKeywordAsync(
+        IReadOnlyList<string> terms,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (terms is null || terms.Count == 0 || limit <= 0)
+            return new List<RetrievedChunkDto>();
+
+        var patterns = terms.Select(term => $"%{term}%").ToList();
+
+        // Matching ANY term keeps the SQL simple; the ranking below then prefers the chunks that hit the
+        // most terms. The candidate cap keeps this bounded as the knowledge base grows.
+        var candidates = await _context.KnowledgeBaseChunks
+            .Where(c => patterns.Any(pattern => EF.Functions.ILike(c.Content, pattern)))
+            .Take(MaxKeywordCandidates)
+            .Select(c => new RetrievedChunkDto
+            {
+                ChunkId = c.Id,
+                Content = c.Content,
+                DocumentId = c.KnowledgeBaseDocumentId,
+                SourceTitle = c.Document.FileName
+            })
+            .ToListAsync(cancellationToken);
+
+        // A chunk naming several of the query's terms is a better hit than one that merely repeats a
+        // common word, so rank by how many distinct terms it actually contains.
+        return candidates
+            .OrderByDescending(c => terms.Count(term =>
+                c.Content.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            .Take(limit)
+            .ToList();
     }
 }

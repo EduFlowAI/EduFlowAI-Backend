@@ -5,6 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using EduFlowAI.AI.Application.DTOs;
 using EduFlowAI.AI.Application.Interfaces;
+using EduFlowAI.AI.Infrastructure.Options;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EduFlowAI.AI.Application.Services;
 
@@ -12,25 +15,40 @@ public class AiChatService : IRagAnswerService
 {
     private readonly IKnowledgeRetrievalService _retrievalService;
     private readonly IGeminiChatClient _chatClient;
+    private readonly RetrievalOptions _options;
+    private readonly ILogger<AiChatService>? _logger;
 
-    public AiChatService(IKnowledgeRetrievalService retrievalService, IGeminiChatClient chatClient)
+    public AiChatService(
+        IKnowledgeRetrievalService retrievalService,
+        IGeminiChatClient chatClient,
+        IOptions<RetrievalOptions>? options = null,
+        ILogger<AiChatService>? logger = null)
     {
         _retrievalService = retrievalService ?? throw new ArgumentNullException(nameof(retrievalService));
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        _options = options?.Value ?? new RetrievalOptions();
+        _logger = logger;
     }
 
     public async Task<RagAnswerDto> AnswerWithContextAsync(
         string userQuestion,
         IReadOnlyList<ConversationTurnDto> context,
         string language,
+        string? searchQuery = null,
         CancellationToken cancellationToken = default)
     {
         // Mask national IDs and other long digit runs before any user text reaches the model.
         userQuestion = InputSanitizerService.MaskSensitiveNumbers(userQuestion);
 
-        // A bare follow-up embeds poorly, so retrieval runs on recent turns joined with the question.
-        var retrievalQuery = BuildRetrievalQuery(userQuestion, context);
-        var chunks = await _retrievalService.RetrieveContextAsync(retrievalQuery, limit: 5, cancellationToken);
+        // The router's query is preferred: it is self-contained, already in the documents' language, and
+        // carries none of the greeting text that used to dominate the search vector. Without it, fall
+        // back to the old behaviour so a bare follow-up still embeds with its topic.
+        var retrievalQuery = string.IsNullOrWhiteSpace(searchQuery)
+            ? BuildRetrievalQuery(userQuestion, context)
+            : InputSanitizerService.MaskSensitiveNumbers(searchQuery);
+
+        var chunks = await _retrievalService.RetrieveContextAsync(
+            retrievalQuery, _options.MaxContextChunks, cancellationToken);
 
         var sources = chunks
             .Select(c => c.SourceTitle)
@@ -40,14 +58,27 @@ public class AiChatService : IRagAnswerService
 
         var languageName = language == "ar" ? "Arabic" : "English";
 
+        // Only the FIRST turn should open with a welcome. Re-introducing the institute on every reply is
+        // what made a running conversation read like a series of unrelated first contacts.
+        var greetingGuidance = context.Count == 0
+            ? """
+- Greet the applicant, answer a thank-you and make brief small talk naturally - then gently guide them
+  to how you can help. Never make a simple hello feel like a rejection.
+"""
+            : """
+- You are in the MIDDLE of an ongoing conversation. Do NOT greet, welcome or introduce the institute
+  again, and do not repeat what you already said - just continue naturally and answer what was asked.
+""";
+
         // Prior turns let the model resolve references ("its", "that track"), framed as dialogue not documents so the guardrail holds.
         var conversationSection = context.Count == 0
             ? string.Empty
             : $"""
 
 # CONVERSATION SO FAR
-This is the dialogue with the applicant up to now. Use it only to understand what the current
-question refers to (for example, what "it" or "that track" means). Do not repeat it back.
+This is the dialogue with the applicant up to now. Use it to understand what the current question
+refers to (for example, what "it" or "that track" means) and to carry on the conversation naturally.
+Do not repeat it back or restate answers you have already given.
 
 {RenderTurns(context)}
 """;
@@ -79,8 +110,7 @@ you MUST answer only in {languageName}, translating any facts you use. Never swi
 # VOICE
 - Speak AS the institute, in the first person plural: "we offer", "our program", "you can apply".
 - Warm, human and concise, like a helpful admissions receptionist. No sales language, no filler, no emoji.
-- Greet the applicant, answer a thank-you and make brief small talk naturally - then gently guide them
-  to how you can help. Never make a simple hello feel like a rejection.
+{greetingGuidance}
 
 # NEVER REVEAL HOW YOU WORK
 The applicant is talking to ITI, not to a document search system. Never refer to documents, files,
@@ -105,7 +135,18 @@ Never use phrasing such as "based on the available documents", "in the current m
 {conversationSection}{knowledgeSection}
 """;
 
-        var answer = await _chatClient.GenerateAsync(systemPrompt, userQuestion, cancellationToken);
+        string? answer;
+        try
+        {
+            answer = await _chatClient.GenerateAsync(systemPrompt, userQuestion, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The model being unavailable (quota, transport) is our problem: answer with an apology in
+            // the applicant's language instead of failing the whole request.
+            _logger?.LogWarning(ex, "Knowledge answer generation failed; returning the fallback message.");
+            answer = null;
+        }
 
         return new RagAnswerDto
         {

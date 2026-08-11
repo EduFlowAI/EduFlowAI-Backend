@@ -53,6 +53,9 @@ public static class AIModule
         services.AddOptions<IngestionOptions>()
             .BindConfiguration(IngestionOptions.SectionName);
 
+        services.AddOptions<RetrievalOptions>()
+            .BindConfiguration(RetrievalOptions.SectionName);
+
         services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 
         // Injected so session expiry can be tested with a fake clock.

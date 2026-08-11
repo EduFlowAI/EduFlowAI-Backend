@@ -231,17 +231,26 @@ public class KnowledgeIndexingServiceTests
         Assert.Equal(firstPass, ctx.Repository.Chunks.Count);
     }
 
+    // A resync wipes every chunk before rebuilding, so it is only safe while the source files are all
+    // present. A database restored without its file storage would otherwise be emptied of embeddings that
+    // cannot be regenerated - so the wipe is refused and the existing chunks survive untouched.
     [Fact]
-    public async Task Resync_marks_a_document_failed_when_its_file_is_gone()
+    public async Task Resync_refuses_and_deletes_nothing_when_a_source_file_is_gone()
     {
         var ctx = Build();
-        await ctx.Service.AddDocumentAsync(new MemoryStream(PdfBytes), "track.pdf", PdfBytes.Length);
+        var documentId = await ctx.Service.AddDocumentAsync(new MemoryStream(PdfBytes), "track.pdf", PdfBytes.Length);
+        await ctx.Service.IngestDocumentAsync(documentId);
+        var indexedChunks = ctx.Repository.Chunks.Count;
+        Assert.True(indexedChunks > 0);
+
         ctx.Storage.Files.Clear();
 
-        var result = await ctx.Service.ResyncAllAsync();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ctx.Service.ResyncAllAsync());
 
-        Assert.Equal(1, result.Failed);
-        Assert.Equal(KnowledgeBaseStatus.Failed, ctx.Repository.Documents.Single().Status);
+        Assert.Contains("Nothing was deleted", ex.Message);
+        Assert.Contains("track.pdf", ex.Message);
+        Assert.Equal(indexedChunks, ctx.Repository.Chunks.Count);
     }
 
     [Fact]
