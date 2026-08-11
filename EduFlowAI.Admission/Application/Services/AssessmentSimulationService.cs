@@ -1,4 +1,5 @@
 ﻿using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Extensions;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
@@ -67,10 +68,14 @@ namespace EduFlowAI.Admission.Application.Services
             await _stageRepository.SaveChangesAsync();
 
             // 6. Map to DTO and return
+            var displayInfo = newStageResult.Stage.GetDisplayInfo();
+
             var stageResultDto = new SimulatedStageDto
             {
                 StageId = newStageResult.Id,
                 StageType = newStageResult.Stage.ToString(),
+                Title = displayInfo.Name,
+                Description = displayInfo.Description,
                 Score = newStageResult.Score,
                 MaxScore = newStageResult.MaxScore,
                 Result = newStageResult.Result.ToString(),
@@ -88,14 +93,22 @@ namespace EduFlowAI.Admission.Application.Services
                 return Enumerable.Empty<SimulatedStageDto>();
             }
 
-            return stages.Select(s => new SimulatedStageDto
+            // Map and Order by the Stage Enum value to maintain proper timeline flow
+            return stages.OrderBy(s => s.Stage).Select(s =>
             {
-                StageId = s.Id,
-                StageType = s.Stage.ToString(),
-                Score = s.Score,
-                MaxScore = s.MaxScore,
-                Result = s.Result.ToString(),
-                UpdatedAt = s.UpdatedAt ?? s.CreatedAt
+                var displayInfo = s.Stage.GetDisplayInfo(); // Extract UI text
+
+                return new SimulatedStageDto
+                {
+                    StageId = s.Id,
+                    StageType = s.Stage.ToString(),
+                    Title = displayInfo.Name,              // Map Title
+                    Description = displayInfo.Description, // Map Description
+                    Score = s.Score,
+                    MaxScore = s.MaxScore,
+                    Result = s.Result.ToString(),
+                    UpdatedAt = s.UpdatedAt ?? s.CreatedAt
+                };
             }).ToList();
         }
 
