@@ -22,6 +22,8 @@ public sealed class AssistantMessageService : IAssistantMessageService
         _applicantDocumentService;
     private readonly IDocumentStatusNarrator
         _documentStatusNarrator;
+    private readonly IApplicationStatusNarrator
+        _applicationStatusNarrator;
     private readonly IRecommendationUserContextService
         _recommendationUserContextService;
     private readonly ILogger<AssistantMessageService>? _logger;
@@ -34,6 +36,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
         IApplicationStatusQueryService applicationStatusQueryService,
         IApplicantDocumentService applicantDocumentService,
         IDocumentStatusNarrator documentStatusNarrator,
+        IApplicationStatusNarrator applicationStatusNarrator,
         IRecommendationUserContextService recommendationUserContextService,
         ILogger<AssistantMessageService>? logger = null)
     {
@@ -45,6 +48,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             applicationStatusQueryService;
         _applicantDocumentService = applicantDocumentService;
         _documentStatusNarrator = documentStatusNarrator;
+        _applicationStatusNarrator = applicationStatusNarrator;
         _recommendationUserContextService =
             recommendationUserContextService;
         _logger = logger;
@@ -179,6 +183,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 userId,
                 isAuthenticated,
                 language,
+                history.Count > 0,
                 cancellationToken),
 
             "document_status" => await HandleDocumentStatusAsync(
@@ -333,6 +338,7 @@ public sealed class AssistantMessageService : IAssistantMessageService
             Guid userId,
             bool isAuthenticated,
             string language,
+            bool isContinuingConversation,
             CancellationToken cancellationToken)
     {
         if (!isAuthenticated)
@@ -375,13 +381,15 @@ public sealed class AssistantMessageService : IAssistantMessageService
                 });
         }
 
-        var content =
-            !string.IsNullOrWhiteSpace(
-                applicationStatus.StatusMessage)
-                ? applicationStatus.StatusMessage
-                : language == "ar"
-                    ? $"حالة طلبك الحالية هي: {applicationStatus.CurrentStatus}."
-                    : $"Your current application status is: {applicationStatus.CurrentStatus}.";
+        // StatusMessage is the Admission module's internal wording ("Status retrieved successfully.")
+        // and is English-only, so the status itself is narrated instead. It stays in the metadata for
+        // clients that want the raw value.
+        var content = await _applicationStatusNarrator.NarrateAsync(
+            applicationStatus.CurrentStatus,
+            applicationStatus.LastUpdatedAt,
+            language,
+            isContinuingConversation,
+            cancellationToken);
 
         return new AssistantResultDto(
             Intent: "application_status",

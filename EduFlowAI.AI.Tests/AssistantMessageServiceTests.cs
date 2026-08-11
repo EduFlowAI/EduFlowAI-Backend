@@ -439,6 +439,7 @@ public class AssistantMessageServiceTests
             new FakeApplicationStatusQueryService(),
             new FakeApplicantDocumentService(),
             narrator ?? new FakeDocumentStatusNarrator(),
+            new FakeApplicationStatusNarrator(),
             new FakeRecommendationUserContextService(
                 userContext ??
                 new RecommendationUserContextDto()));
@@ -707,6 +708,20 @@ public class AssistantMessageServiceTests
             LastIsContinuingConversation = isContinuingConversation;
 
             return Task.FromResult("Test document status");
+        }
+    }
+
+    private sealed class FakeApplicationStatusNarrator
+        : IApplicationStatusNarrator
+    {
+        public Task<string> NarrateAsync(
+            string currentStatus,
+            DateTimeOffset lastUpdatedAt,
+            string language,
+            bool isContinuingConversation = false,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult($"Narrated: {currentStatus}");
         }
     }
 
