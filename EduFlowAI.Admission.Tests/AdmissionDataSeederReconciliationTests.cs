@@ -229,6 +229,50 @@ public sealed class AdmissionDataSeederReconciliationTests
         Assert.Equal(12, context.Branches.Count());
     }
 
+    [Fact]
+    public async Task Explicit_reconciliation_rerun_preserves_intentionally_empty_requirement_set()
+    {
+        var options = new DbContextOptionsBuilder<TestAdmissionDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var context = new TestAdmissionDbContext(options);
+
+        var firstRunAt = new DateTimeOffset(
+            2026,
+            8,
+            12,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+
+        await AdmissionDataSeeder.ReconcileAsync(
+            context,
+            firstRunAt,
+            CancellationToken.None);
+        await context.SaveChangesAsync();
+
+        Assert.Equal(4, context.ProgramDocumentRequirements.Count());
+
+        context.ProgramDocumentRequirements.RemoveRange(
+            context.ProgramDocumentRequirements);
+        await context.SaveChangesAsync();
+
+        Assert.Empty(context.ProgramDocumentRequirements);
+        Assert.Single(context.Programs);
+
+        await AdmissionDataSeeder.ReconcileAsync(
+            context,
+            firstRunAt.AddDays(1),
+            CancellationToken.None);
+        await context.SaveChangesAsync();
+
+        Assert.Empty(context.ProgramDocumentRequirements);
+        Assert.Single(context.Programs);
+        Assert.Equal(31, context.Tracks.Count());
+        Assert.Equal(12, context.Branches.Count());
+    }
+
     private sealed class TestAdmissionDbContext : DbContext, IAdmissionDbContext
     {
         public TestAdmissionDbContext(

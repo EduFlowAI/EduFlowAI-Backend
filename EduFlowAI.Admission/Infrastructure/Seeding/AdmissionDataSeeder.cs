@@ -87,19 +87,26 @@ internal static class AdmissionDataSeeder
             context,
             now,
             cancellationToken);
-        var program = await ResolveProgramAsync(
+        var programResolution = await ResolveProgramAsync(
             context,
             institution.Id,
             now,
             cancellationToken);
 
-        await SeedProgramDocumentRequirementsAsync(
+        if (programResolution.WasCreated)
+        {
+            await SeedProgramDocumentRequirementsAsync(
+                context,
+                programResolution.Program.Id,
+                now,
+                cancellationToken);
+        }
+
+        await SeedTracksAsync(
             context,
-            program.Id,
+            programResolution.Program.Id,
             now,
             cancellationToken);
-
-        await SeedTracksAsync(context, program.Id, now, cancellationToken);
         await SeedBranchesAsync(context, now, cancellationToken);
     }
 
@@ -151,7 +158,7 @@ internal static class AdmissionDataSeeder
         return seed;
     }
 
-    private static async Task<Program> ResolveProgramAsync(
+    private static async Task<ProgramResolution> ResolveProgramAsync(
         IAdmissionDbContext context,
         Guid institutionId,
         DateTimeOffset now,
@@ -203,54 +210,33 @@ internal static class AdmissionDataSeeder
             }
 
             // Stable ID wins. Name/code/duration may be administrator configuration.
-            return idMatch;
+            return new ProgramResolution(idMatch, WasCreated: false);
         }
 
         if (codeMatch is not null)
         {
-            return codeMatch;
+            return new ProgramResolution(codeMatch, WasCreated: false);
         }
 
         context.Programs.Add(seed);
-        return seed;
+        return new ProgramResolution(seed, WasCreated: true);
     }
 
-    internal static async Task SeedProgramDocumentRequirementsAsync(
+    internal static Task SeedProgramDocumentRequirementsAsync(
         IAdmissionDbContext context,
         Guid programId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var seeds = CreateProgramDocumentRequirements(programId, now);
-        var seedIds = seeds.Select(seed => seed.Id).ToArray();
-        var candidates = await context.ProgramDocumentRequirements
-            .Where(requirement =>
-                requirement.ProgramId == programId ||
-                seedIds.Contains(requirement.Id))
-            .ToListAsync(cancellationToken);
+        ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Requirements are bootstrap defaults. Once the program has any stored
-        // requirements, the complete set is Super Admin-managed configuration.
-        // Do not interpret a missing seed row as something that should be
-        // recreated: it may have been intentionally removed through Replace.
-        if (candidates.Any(candidate => candidate.ProgramId == programId))
+        foreach (var seed in CreateProgramDocumentRequirements(programId, now))
         {
-            return;
-        }
-
-        foreach (var seed in seeds)
-        {
-            var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-            if (idMatch is not null)
-            {
-                throw SeedCollision(
-                    nameof(ProgramDocumentRequirement),
-                    seed.Id,
-                    "the stable seed ID already belongs to a different program");
-            }
-
             context.ProgramDocumentRequirements.Add(seed);
         }
+
+        return Task.CompletedTask;
     }
 
     private static async Task SeedTracksAsync(
@@ -593,4 +579,8 @@ internal static class AdmissionDataSeeder
             })
             .ToArray();
     }
+
+    private readonly record struct ProgramResolution(
+        Program Program,
+        bool WasCreated);
 }
