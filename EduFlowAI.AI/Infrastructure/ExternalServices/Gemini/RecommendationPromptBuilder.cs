@@ -49,12 +49,6 @@ internal static class RecommendationPromptBuilder
               or eligibilitySummary.
             - Do not use generic reasons such as "this track is currently offered".
             - Do not invent tracks, IDs, prerequisites, scores, or percentages.
-            - minimumGrade, eligibilitySummary, and graduationYearLimitYears are
-              official ITI track reference metadata only. They are not the active
-              admission cycle's eligibility rule.
-            - Do not infer, approve, or reject applicant eligibility from that track
-              reference metadata. The active cycle's common eligibility rule is
-              enforced elsewhere by the admission system.
             - Recommendations are advisory and do not determine eligibility or admission.
             - Return JSON matching the requested schema exactly.
 

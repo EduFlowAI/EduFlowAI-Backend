@@ -8,6 +8,18 @@ namespace EduFlowAI.Admission.Tests;
 public sealed class AdmissionSeedingGuardTests
 {
     [Fact]
+    public void AddAdmissionDataSeeding_does_not_register_startup_hosted_service()
+    {
+        var services = new ServiceCollection();
+
+        services.AddAdmissionDataSeeding();
+
+        Assert.DoesNotContain(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IHostedService));
+    }
+
+    [Fact]
     public async Task Worker_host_cannot_run_admission_seeding()
     {
         var services = new ServiceCollection();

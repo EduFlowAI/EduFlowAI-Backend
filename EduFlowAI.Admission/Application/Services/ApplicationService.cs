@@ -242,7 +242,6 @@ namespace EduFlowAI.Admission.Application.Services
                 OfferingService.IsAllowedByOfficialCatalog(
                     offering.Track,
                     offering.Branch,
-                    offering.Cycle.ProgramId,
                     offering.Cycle.Program.Code);
         }
 

@@ -348,6 +348,22 @@ internal sealed class OfferingService : IOfferingService
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
 
+    // Backward-compatible integration overload for application-owned code.
+    // The Admission module still owns the catalog rule; callers that only know
+    // the program code can delegate using the track's stable ProgramId.
+    internal static bool IsAllowedByOfficialCatalog(
+        Track track,
+        Branch branch,
+        string? programCode)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        return IsAllowedByOfficialCatalog(
+            track,
+            branch,
+            track.ProgramId,
+            programCode);
+    }
+
     internal static bool IsAllowedByOfficialCatalog(
         Track track,
         Branch branch,

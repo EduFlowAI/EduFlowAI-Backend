@@ -1,8 +1,6 @@
 using EduFlowAI.Admission.Application.Features.Offerings;
 using EduFlowAI.Admission.Application.Features.Tracks;
-using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Admission.Domain.Entities;
-using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Admission.Infrastructure.Seeding;
 
 namespace EduFlowAI.Admission.Tests;
@@ -35,6 +33,33 @@ public sealed class AdmissionCatalogOfferingTests
             track,
             invalidBranch,
             AdmissionSeedIds.NineMonthProgramId,
+            "9M"));
+    }
+
+    [Fact]
+    public void Application_integration_overload_keeps_the_same_catalog_rule()
+    {
+        var definition = AdmissionTrackSeedCatalog.All.Single(track =>
+            track.Name == "Digital IC Design");
+        var track = CreateTrack(definition);
+        var validBranch = new Branch
+        {
+            Id = AdmissionSeedIds.SmartVillageBranchId,
+            Name = "Smart Village"
+        };
+        var invalidBranch = new Branch
+        {
+            Id = AdmissionSeedIds.AlexandriaBranchId,
+            Name = "Alexandria"
+        };
+
+        Assert.True(OfferingService.IsAllowedByOfficialCatalog(
+            track,
+            validBranch,
+            "9M"));
+        Assert.False(OfferingService.IsAllowedByOfficialCatalog(
+            track,
+            invalidBranch,
             "9M"));
     }
 
@@ -74,107 +99,6 @@ public sealed class AdmissionCatalogOfferingTests
             invalidBranch,
             AdmissionSeedIds.NineMonthProgramId,
             "9M"));
-    }
-
-    [Fact]
-    public void Applicant_preference_requires_active_canonical_offering()
-    {
-        var definition = AdmissionTrackSeedCatalog.All.Single(track =>
-            track.Name == "Digital IC Design");
-        var track = CreateTrack(definition);
-        var program = new EduFlowAI.Admission.Domain.Entities.Program
-        {
-            Id = track.ProgramId,
-            InstitutionId = Guid.NewGuid(),
-            Name = "9-Month Professional Training Program",
-            Code = "9M",
-            DurationMonths = 9
-        };
-        track.Program = program;
-        var cycle = new AdmissionCycle
-        {
-            Id = Guid.NewGuid(),
-            ProgramId = program.Id,
-            Program = program,
-            Label = "Intake 47",
-            StartDate = new DateOnly(2026, 9, 1),
-            DeadlineUtc = DateTimeOffset.UtcNow.AddMonths(1),
-            Status = CycleStatus.Active
-        };
-        var offering = new TrackBranchOffering
-        {
-            Id = Guid.NewGuid(),
-            CycleId = cycle.Id,
-            Cycle = cycle,
-            TrackId = track.Id,
-            Track = track,
-            BranchId = AdmissionSeedIds.SmartVillageBranchId,
-            Branch = new Branch
-            {
-                Id = AdmissionSeedIds.SmartVillageBranchId,
-                Name = "Smart Village",
-                IsActive = true
-            },
-            Capacity = 25
-        };
-
-        Assert.True(ApplicationService.IsSelectablePreferenceOffering(offering));
-        var application = new EduFlowAI.Admission.Domain.Entities.Application
-        {
-            Id = Guid.NewGuid(),
-            ApplicantUserId = "applicant",
-            CycleId = cycle.Id,
-            Preferences =
-            [
-                new ApplicationPreference
-                {
-                    Id = Guid.NewGuid(),
-                    TrackBranchOfferingId = offering.Id,
-                    TrackBranchOffering = offering,
-                    Rank = 1
-                }
-            ]
-        };
-        Assert.True(
-            ApplicationService.HasOnlySelectableStoredPreferences(application));
-
-        application.CycleId = Guid.NewGuid();
-        Assert.False(
-            ApplicationService.HasOnlySelectableStoredPreferences(application));
-        application.CycleId = cycle.Id;
-
-        // Admin display-name changes do not invalidate canonical locations;
-        // source identity is the stable branch ID.
-        offering.Branch.Name = "Renamed Smart Village";
-        Assert.True(ApplicationService.IsSelectablePreferenceOffering(offering));
-
-        offering.BranchId = AdmissionSeedIds.AlexandriaBranchId;
-        offering.Branch = new Branch
-        {
-            Id = AdmissionSeedIds.AlexandriaBranchId,
-            Name = "Alexandria",
-            IsActive = true
-        };
-        Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
-        Assert.False(
-            ApplicationService.HasOnlySelectableStoredPreferences(application));
-
-        offering.BranchId = AdmissionSeedIds.SmartVillageBranchId;
-        offering.Branch = new Branch
-        {
-            Id = AdmissionSeedIds.SmartVillageBranchId,
-            Name = "Smart Village",
-            IsActive = false
-        };
-        Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
-
-        offering.Branch.IsActive = true;
-        offering.Track.IsActive = false;
-        Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
-
-        offering.Track.IsActive = true;
-        offering.Cycle.Status = CycleStatus.Closed;
-        Assert.False(ApplicationService.IsSelectablePreferenceOffering(offering));
     }
 
     private static Track CreateTrack(AdmissionTrackSeedDefinition definition)

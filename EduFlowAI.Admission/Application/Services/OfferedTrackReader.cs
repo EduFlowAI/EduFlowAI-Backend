@@ -56,19 +56,15 @@ internal static class OfferedTrackRecommendationProjection
         var tracks = offerings
             .Where(IsAllowedOffering)
             .GroupBy(offering => offering.TrackId)
-            .Select(group => group.First().Track)
-            .OrderBy(track => track.Name)
-            .ThenBy(track => track.Id)
-            .Select(track =>
+            .Select(group =>
             {
-                bool isNineMonthProgram =
-                    track.ProgramId == AdmissionSeedIds.NineMonthProgramId ||
-                    StringComparer.OrdinalIgnoreCase.Equals(
-                        track.Program?.Code,
-                        "9M");
-                var definition = isNineMonthProgram
-                    ? AdmissionTrackSeedCatalog.Find(track.Id, track.Name)
-                    : null;
+                var track = group.First().Track;
+                var locations = group
+                    .Select(offering => offering.Branch.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
                 return new OfferedTrackForRecommendationDto
                 {
@@ -77,17 +73,11 @@ internal static class OfferedTrackRecommendationProjection
                     Description = track.Description,
                     PrerequisiteTopics = Array.AsReadOnly(
                         track.PrerequisiteTopics.ToArray()),
-                    Category = definition?.Category,
-                    MinimumGrade = definition?.MinimumGrade,
-                    EligibilitySummary = definition?.EligibilitySummary,
-                    TotalHours = definition?.TotalHours,
-                    GraduationYearLimitYears =
-                        definition?.MaxYearsSinceGraduation,
-                    Locations = Array.AsReadOnly(
-                        (definition?.Locations ?? Array.Empty<string>())
-                        .ToArray())
+                    Locations = Array.AsReadOnly(locations)
                 };
             })
+            .OrderBy(track => track.Name)
+            .ThenBy(track => track.TrackId)
             .ToArray();
 
         return Array.AsReadOnly(tracks);
