@@ -18,7 +18,8 @@ public sealed class AdmissionSeedingGuardTests
         services.AddAdmissionDataSeeding();
 
         var descriptor = Assert.Single(
-            services.Where(service => service.ServiceType == typeof(IHostedService)));
+            services,
+            service => service.ServiceType == typeof(IHostedService));
         Assert.Equal(
             typeof(AdmissionDataSeedHostedService),
             descriptor.ImplementationType);
