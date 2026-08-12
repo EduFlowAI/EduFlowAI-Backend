@@ -222,21 +222,33 @@ internal static class AdmissionDataSeeder
         return new ProgramResolution(seed, WasCreated: true);
     }
 
-    internal static Task SeedProgramDocumentRequirementsAsync(
+    internal static async Task SeedProgramDocumentRequirementsAsync(
         IAdmissionDbContext context,
         Guid programId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var seed in CreateProgramDocumentRequirements(programId, now))
+        var seeds = CreateProgramDocumentRequirements(programId, now);
+        var seedIds = seeds.Select(seed => seed.Id).ToArray();
+        var conflictingSeedIds = await context.ProgramDocumentRequirements
+            .Where(requirement => seedIds.Contains(requirement.Id))
+            .Select(requirement => requirement.Id)
+            .ToListAsync(cancellationToken);
+
+        if (conflictingSeedIds.Count > 0)
+        {
+            throw SeedCollision(
+                nameof(ProgramDocumentRequirement),
+                conflictingSeedIds[0],
+                "the stable seed ID already belongs to an existing requirement");
+        }
+
+        foreach (var seed in seeds)
         {
             context.ProgramDocumentRequirements.Add(seed);
         }
-
-        return Task.CompletedTask;
     }
 
     private static async Task SeedTracksAsync(
