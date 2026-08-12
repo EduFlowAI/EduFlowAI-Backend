@@ -2,7 +2,6 @@ using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Application.Features.Configuration.Common;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
-using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -16,7 +15,6 @@ public sealed class InstitutionDto
     public string Name { get; init; } = string.Empty;
     public string Code { get; init; } = string.Empty;
     public int ProgramCount { get; init; }
-    public bool IsSourceManaged { get; init; }
 }
 
 public sealed class ProgramDto
@@ -29,7 +27,6 @@ public sealed class ProgramDto
     public int DurationMonths { get; init; }
     public int TrackCount { get; init; }
     public int CycleCount { get; init; }
-    public bool IsSourceManaged { get; init; }
 }
 
 public sealed class CreateInstitutionRequest
@@ -145,9 +142,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 Name = x.Name,
                 Code = x.Code,
                 ProgramCount = x.Programs.Count,
-                IsSourceManaged =
-                    x.Id == AdmissionSeedIds.ItiInstitutionId ||
-                    x.Code.ToUpper() == "ITI"
             })
             .ToListAsync(cancellationToken);
     }
@@ -244,13 +238,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                         "Institution was not found.");
                 }
 
-                if (IsSourceManagedInstitution(institution))
-                {
-                    return Result<InstitutionDto>.Failure(
-                        400,
-                        "The ITI institution is fully seed-managed and cannot be edited.");
-                }
-
                 if (await _applicationReader.IsInstitutionConfigurationLockedAsync(
                         institutionId,
                         ct))
@@ -301,7 +288,7 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             .Select(program => MapProgram(
                 program,
                 program.Institution.Name,
-                CountVisibleTracks(program, program.Tracks),
+                program.Tracks.Count,
                 program.AdmissionCycles.Count))
             .ToList();
     }
@@ -422,13 +409,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                         "Program was not found.");
                 }
 
-                if (IsSourceManagedProgram(program))
-                {
-                    return Result<ProgramDto>.Failure(
-                        400,
-                        "The ITI 9-Month program is fully seed-managed and cannot be edited.");
-                }
-
                 if (await _applicationReader.IsProgramConfigurationLockedAsync(
                         programId,
                         ct))
@@ -457,7 +437,7 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 var tracks = await _dbContext.Tracks
                     .Where(x => x.ProgramId == programId)
                     .ToListAsync(ct);
-                int trackCount = CountVisibleTracks(program, tracks);
+                int trackCount = tracks.Count;
                 int cycleCount = await _dbContext.AdmissionCycles.CountAsync(
                     x => x.ProgramId == programId,
                     ct);
@@ -496,13 +476,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                     return Result<bool>.Failure(
                         404,
                         "Program was not found.");
-                }
-
-                if (IsSourceManagedProgram(program))
-                {
-                    return Result<bool>.Failure(
-                        400,
-                        "The ITI 9-Month program is fully seed-managed and cannot be deleted.");
                 }
 
                 if (await _applicationReader.IsProgramConfigurationLockedAsync(
@@ -555,29 +528,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
 
-    private static bool IsSourceManagedInstitution(Institution institution) =>
-        institution.Id == AdmissionSeedIds.ItiInstitutionId ||
-        StringComparer.OrdinalIgnoreCase.Equals(institution.Code, "ITI");
-
-    private static bool IsSourceManagedProgram(AdmissionProgram program) =>
-        program.Id == AdmissionSeedIds.NineMonthProgramId ||
-        StringComparer.OrdinalIgnoreCase.Equals(program.Code, "9M");
-
-    private static int CountVisibleTracks(
-        AdmissionProgram program,
-        IEnumerable<Track> tracks)
-    {
-        if (program.Id != AdmissionSeedIds.NineMonthProgramId &&
-            !StringComparer.OrdinalIgnoreCase.Equals(program.Code, "9M"))
-        {
-            return tracks.Count();
-        }
-
-        return tracks.Count(track =>
-            track.IsActive &&
-            AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is not null);
-    }
-
     private static InstitutionDto MapInstitution(
         Institution institution,
         int programCount)
@@ -588,7 +538,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             Name = institution.Name,
             Code = institution.Code,
             ProgramCount = programCount,
-            IsSourceManaged = IsSourceManagedInstitution(institution)
         };
     }
 
@@ -608,7 +557,6 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             DurationMonths = program.DurationMonths,
             TrackCount = trackCount,
             CycleCount = cycleCount,
-            IsSourceManaged = IsSourceManagedProgram(program)
         };
     }
 }

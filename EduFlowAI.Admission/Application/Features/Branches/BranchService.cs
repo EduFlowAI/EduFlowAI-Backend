@@ -15,7 +15,6 @@ public sealed class BranchDto
     public string Name { get; init; } = string.Empty;
     public string? Governorate { get; init; }
     public bool IsActive { get; init; }
-    public bool IsSourceManaged { get; init; }
     public bool IsOfficialIntake47Location { get; init; }
 }
 
@@ -191,15 +190,6 @@ internal sealed class BranchService : IBranchService
                         "Branch was not found.");
                 }
 
-                if (AdmissionBranchSeedCatalog.Find(
-                        branch.Id,
-                        branch.Name) is not null)
-                {
-                    return Result<BranchDto>.Failure(
-                        400,
-                        "Official Intake-47 branches are fully seed-managed and cannot be edited.");
-                }
-
                 if (await _applicationReader.IsBranchConfigurationLockedAsync(
                         branchId,
                         ct))
@@ -245,9 +235,6 @@ internal sealed class BranchService : IBranchService
             Governorate = branch.Governorate,
             IsActive = branch.IsActive,
             IsOfficialIntake47Location = AdmissionBranchSeedCatalog.Find(
-                branch.Id,
-                branch.Name) is not null,
-            IsSourceManaged = AdmissionBranchSeedCatalog.Find(
                 branch.Id,
                 branch.Name) is not null
         };

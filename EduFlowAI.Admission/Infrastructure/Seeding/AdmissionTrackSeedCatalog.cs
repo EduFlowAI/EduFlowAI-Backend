@@ -376,6 +376,19 @@ internal static class AdmissionTrackSeedCatalog
             branchName,
             StringComparer.OrdinalIgnoreCase);
     }
+
+    internal static bool IsCanonicalLocation(
+        AdmissionTrackSeedDefinition definition,
+        Guid branchId)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
+        var branch = AdmissionBranchSeedCatalog.All
+            .SingleOrDefault(candidate => candidate.Id == branchId);
+
+        return branch is not null &&
+            IsCanonicalLocation(definition, branch.Name);
+    }
 }
 
 internal static class AdmissionLegacyTrackCatalog

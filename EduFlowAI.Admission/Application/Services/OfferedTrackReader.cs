@@ -56,39 +56,28 @@ internal static class OfferedTrackRecommendationProjection
         var tracks = offerings
             .Where(IsAllowedOffering)
             .GroupBy(offering => offering.TrackId)
-            .Select(group => group.First().Track)
-            .OrderBy(track => track.Name)
-            .ThenBy(track => track.Id)
-            .Select(track =>
+            .Select(group =>
             {
-                bool isNineMonthProgram = StringComparer.OrdinalIgnoreCase.Equals(
-                    track.Program?.Code,
-                    "9M");
-                var definition = isNineMonthProgram
-                    ? AdmissionTrackSeedCatalog.Find(track.Id, track.Name)
-                    : null;
+                var track = group.First().Track;
+                var locations = group
+                    .Select(offering => offering.Branch.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
                 return new OfferedTrackForRecommendationDto
                 {
                     TrackId = track.Id,
-                    Name = definition?.Name ?? track.Name,
-                    Description = definition is null
-                        ? track.Description
-                        : definition.Description,
+                    Name = track.Name,
+                    Description = track.Description,
                     PrerequisiteTopics = Array.AsReadOnly(
-                        (definition?.PrerequisiteTopics ?? track.PrerequisiteTopics)
-                        .ToArray()),
-                    Category = definition?.Category,
-                    MinimumGrade = definition?.MinimumGrade,
-                    EligibilitySummary = definition?.EligibilitySummary,
-                    TotalHours = definition?.TotalHours,
-                    GraduationYearLimitYears =
-                        definition?.MaxYearsSinceGraduation,
-                    Locations = Array.AsReadOnly(
-                        (definition?.Locations ?? Array.Empty<string>())
-                        .ToArray())
+                        track.PrerequisiteTopics.ToArray()),
+                    Locations = Array.AsReadOnly(locations)
                 };
             })
+            .OrderBy(track => track.Name)
+            .ThenBy(track => track.TrackId)
             .ToArray();
 
         return Array.AsReadOnly(tracks);
@@ -96,19 +85,31 @@ internal static class OfferedTrackRecommendationProjection
 
     internal static bool IsAllowedOffering(TrackBranchOffering offering)
     {
-        string? programCode = offering.Track.Program?.Code;
-        if (!StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M"))
+        bool isNineMonthProgram =
+            offering.Track.ProgramId == AdmissionSeedIds.NineMonthProgramId ||
+            StringComparer.OrdinalIgnoreCase.Equals(
+                offering.Track.Program?.Code,
+                "9M");
+
+        if (!isNineMonthProgram)
         {
             return true;
+        }
+
+        if (AdmissionLegacyTrackCatalog.IsHistorical(
+                offering.Track.Id,
+                offering.Track.Name))
+        {
+            return false;
         }
 
         var definition = AdmissionTrackSeedCatalog.Find(
             offering.Track.Id,
             offering.Track.Name);
 
-        return definition is not null &&
+        return definition is null ||
             AdmissionTrackSeedCatalog.IsCanonicalLocation(
                 definition,
-                offering.Branch.Name);
+                offering.Branch.Id);
     }
 }

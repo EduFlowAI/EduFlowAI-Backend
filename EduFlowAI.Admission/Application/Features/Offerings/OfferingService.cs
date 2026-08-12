@@ -173,6 +173,7 @@ internal sealed class OfferingService : IOfferingService
                 if (!IsAllowedByOfficialCatalog(
                         track,
                         branch,
+                        cycle.ProgramId,
                         cycle.Program.Code))
                 {
                     return Result<OfferingDto>.Failure(
@@ -347,25 +348,51 @@ internal sealed class OfferingService : IOfferingService
 
     private DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
 
+    // Backward-compatible integration overload for application-owned code.
+    // The Admission module still owns the catalog rule; callers that only know
+    // the program code can delegate using the track's stable ProgramId.
     internal static bool IsAllowedByOfficialCatalog(
         Track track,
         Branch branch,
-        string programCode)
+        string? programCode)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        return IsAllowedByOfficialCatalog(
+            track,
+            branch,
+            track.ProgramId,
+            programCode);
+    }
+
+    internal static bool IsAllowedByOfficialCatalog(
+        Track track,
+        Branch branch,
+        Guid programId,
+        string? programCode)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(branch);
 
-        if (!StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M"))
+        bool isNineMonthProgram =
+            programId == AdmissionSeedIds.NineMonthProgramId ||
+            StringComparer.OrdinalIgnoreCase.Equals(programCode, "9M");
+
+        if (!isNineMonthProgram)
         {
             return true;
         }
 
+        if (AdmissionLegacyTrackCatalog.IsHistorical(track.Id, track.Name))
+        {
+            return false;
+        }
+
         var definition = AdmissionTrackSeedCatalog.Find(track.Id, track.Name);
 
-        return definition is not null &&
+        return definition is null ||
             AdmissionTrackSeedCatalog.IsCanonicalLocation(
                 definition,
-                branch.Name);
+                branch.Id);
     }
 }
 

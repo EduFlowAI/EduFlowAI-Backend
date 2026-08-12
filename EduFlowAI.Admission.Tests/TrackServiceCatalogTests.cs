@@ -16,41 +16,26 @@ namespace EduFlowAI.Admission.Tests;
 public sealed class TrackServiceCatalogTests
 {
     [Fact]
-    public async Task Public_catalog_combines_all_official_tracks_with_offered_non_9m_tracks()
+    public async Task Public_catalog_returns_only_active_offerings_and_enriches_official_metadata()
     {
         await using var scenario = await CreateScenarioAsync();
         var service = CreateService(scenario.Context);
 
         var tracks = await service.GetPublicTracksAsync();
 
-        Assert.Equal(AdmissionTrackSeedCatalog.All.Count + 1, tracks.Count);
-        Assert.Equal(
-            AdmissionTrackSeedCatalog.All.Count,
-            tracks.Count(track => track.IsOfficialIntake47));
+        Assert.Equal(2, tracks.Count);
         Assert.DoesNotContain(
             tracks,
-            track => track.Id == AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId ||
-                track.Id == AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId ||
-                track.Id == scenario.UnknownNineMonthTrackId);
-
-        var industrial = Assert.Single(
-            tracks,
             track => track.Name == "Industrial Automation");
-        Assert.Null(industrial.TotalHours);
-        Assert.Equal(5, industrial.GraduationYearLimitYears);
-        var industrialLocation = Assert.Single(industrial.Locations);
-        Assert.Equal(AdmissionSeedIds.SmartVillageBranchId, industrialLocation.BranchId);
-        Assert.Equal("Smart Village", industrialLocation.BranchName);
-        Assert.Equal("Giza", industrialLocation.Governorate);
-
-        Assert.Null(tracks.Single(track =>
-            track.Name == "3D Generalist").Description);
 
         var digital = Assert.Single(
             tracks,
             track => track.Name == "Digital IC Design");
+        Assert.True(digital.IsOfficialIntake47);
+        Assert.Equal("Industrial Systems", digital.Category);
+        Assert.Equal("Good", digital.MinimumGrade);
         var validOffering = Assert.Single(digital.Offerings);
-        Assert.Equal("Smart Village", validOffering.BranchName);
+        Assert.Equal(AdmissionSeedIds.SmartVillageBranchId, validOffering.BranchId);
 
         var custom = Assert.Single(
             tracks,
@@ -60,8 +45,6 @@ public sealed class TrackServiceCatalogTests
         var customOffering = Assert.Single(custom.Offerings);
         var customLocation = Assert.Single(custom.Locations);
         Assert.Equal(customOffering.BranchId, customLocation.BranchId);
-        Assert.Equal(customOffering.BranchName, customLocation.BranchName);
-        Assert.Equal(customOffering.Governorate, customLocation.Governorate);
     }
 
     [Fact]
@@ -89,7 +72,7 @@ public sealed class TrackServiceCatalogTests
     }
 
     [Fact]
-    public async Task Cycle_and_detail_queries_filter_invalid_9m_edges_but_preserve_non_9m()
+    public async Task Cycle_and_detail_queries_filter_invalid_official_edges_and_require_active_offerings()
     {
         await using var scenario = await CreateScenarioAsync();
         var service = CreateService(scenario.Context);
@@ -108,10 +91,7 @@ public sealed class TrackServiceCatalogTests
 
         var industrialDefinition = AdmissionTrackSeedCatalog.All.Single(
             definition => definition.Name == "Industrial Automation");
-        var industrialDetail = await service.GetPublicTrackAsync(
-            industrialDefinition.Id);
-        Assert.NotNull(industrialDetail);
-        Assert.Empty(industrialDetail.Offerings);
+        Assert.Null(await service.GetPublicTrackAsync(industrialDefinition.Id));
 
         var customDetail = await service.GetPublicTrackAsync(
             scenario.CustomTrackId);
@@ -119,19 +99,19 @@ public sealed class TrackServiceCatalogTests
         Assert.False(customDetail.IsOfficialIntake47);
 
         var adminTracks = await service.GetAdminTracksAsync();
-        Assert.DoesNotContain(
-            adminTracks,
-            track => track.Id == AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId ||
-                track.Id == AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId ||
-                track.Id == scenario.UnknownNineMonthTrackId);
         Assert.Contains(
             adminTracks,
-            track => track.Id == scenario.CustomTrackId &&
-                track.Name == AdmissionLegacyTrackCatalog.ProfessionalDevelopmentCrmName);
+            track => track.Id == AdmissionSeedIds.ProfessionalDevelopmentCrmTrackId);
+        Assert.Contains(
+            adminTracks,
+            track => track.Id == AdmissionSeedIds.IntegratedSoftwareArchitectureTrackId);
+        Assert.Contains(
+            adminTracks,
+            track => track.Id == scenario.UnknownNineMonthTrackId);
     }
 
     [Fact]
-    public async Task Update_rejects_official_9m_edits_but_preserves_custom_behavior()
+    public async Task Official_9m_tracks_remain_admin_editable_and_keep_reference_metadata()
     {
         await using var scenario = await CreateScenarioAsync();
         var service = CreateService(scenario.Context);
@@ -143,75 +123,34 @@ public sealed class TrackServiceCatalogTests
             new UpdateTrackRequest
             {
                 Name = "Renamed official track",
-                Description = "Attempted edit",
+                Description = "Administrator description",
                 PrerequisiteTopics = ["Logic"],
                 IsActive = true
             });
 
-        Assert.False(officialResult.IsSuccess);
-        Assert.Equal(400, officialResult.StatusCode);
-        Assert.Equal(
-            "Official Intake-47 tracks are fully seed-managed and cannot be edited.",
-            officialResult.Message);
-        Assert.Equal(
-            digital.Name,
-            (await scenario.Context.Tracks.FindAsync(digital.Id))!.Name);
-
-        var activationOnlyResult = await service.UpdateTrackAsync(
-            digital.Id,
-            new UpdateTrackRequest
-            {
-                Name = digital.Name,
-                Description = digital.Description,
-                PrerequisiteTopics = [.. digital.PrerequisiteTopics],
-                IsActive = false
-            });
-
-        Assert.False(activationOnlyResult.IsSuccess);
-        Assert.Equal(400, activationOnlyResult.StatusCode);
-
-        var customResult = await service.UpdateTrackAsync(
-            scenario.CustomTrackId,
-            new UpdateTrackRequest
-            {
-                Name = "Renamed custom track",
-                Description = "Custom description",
-                PrerequisiteTopics = ["Custom topic"],
-                IsActive = true
-            });
-
-        Assert.True(customResult.IsSuccess);
-        Assert.Equal("Renamed custom track", customResult.Data.Name);
+        Assert.True(officialResult.IsSuccess);
+        Assert.Equal("Renamed official track", officialResult.Data.Name);
+        Assert.Equal("Administrator description", officialResult.Data.Description);
+        Assert.Equal(new[] { "Logic" }, officialResult.Data.PrerequisiteTopics);
+        Assert.True(officialResult.Data.IsOfficialIntake47);
+        Assert.Equal(digital.OfficialTrackId, officialResult.Data.OfficialTrackId);
 
         var createNineMonthResult = await service.CreateTrackAsync(
             new CreateTrackRequest
             {
                 ProgramId = AdmissionSeedIds.NineMonthProgramId,
-                Name = "Arbitrary 9M track",
-                Description = "Must be rejected.",
+                Name = "Admin configured 9M track",
+                Description = "Custom track in the same program.",
                 PrerequisiteTopics = [],
                 IsActive = true
             });
 
-        Assert.False(createNineMonthResult.IsSuccess);
-        Assert.Equal(400, createNineMonthResult.StatusCode);
-
-        var casingCollision = await service.CreateTrackAsync(
-            new CreateTrackRequest
-            {
-                ProgramId = scenario.CustomProgramId,
-                Name = "RENAMED CUSTOM TRACK",
-                Description = "Duplicate casing.",
-                PrerequisiteTopics = [],
-                IsActive = true
-            });
-
-        Assert.False(casingCollision.IsSuccess);
-        Assert.Equal(409, casingCollision.StatusCode);
+        Assert.True(createNineMonthResult.IsSuccess);
+        Assert.False(createNineMonthResult.Data.IsOfficialIntake47);
     }
 
     [Fact]
-    public async Task Official_branch_is_immutable_but_custom_branch_remains_editable()
+    public async Task Official_branch_identity_is_reference_metadata_not_an_edit_lock()
     {
         await using var scenario = await CreateScenarioAsync();
         var service = new BranchService(
@@ -224,16 +163,15 @@ public sealed class TrackServiceCatalogTests
             AdmissionSeedIds.SmartVillageBranchId,
             new UpdateBranchRequest
             {
-                Name = "Renamed official branch",
+                Name = "Renamed Smart Village",
                 Governorate = "Changed",
                 IsActive = false
             });
 
-        Assert.False(officialResult.IsSuccess);
-        Assert.Equal(400, officialResult.StatusCode);
-        Assert.Equal(
-            "Official Intake-47 branches are fully seed-managed and cannot be edited.",
-            officialResult.Message);
+        Assert.True(officialResult.IsSuccess);
+        Assert.Equal("Renamed Smart Village", officialResult.Data.Name);
+        Assert.False(officialResult.Data.IsActive);
+        Assert.True(officialResult.Data.IsOfficialIntake47Location);
 
         var customResult = await service.UpdateBranchAsync(
             scenario.CustomBranchId,
@@ -245,32 +183,11 @@ public sealed class TrackServiceCatalogTests
             });
 
         Assert.True(customResult.IsSuccess);
-        Assert.Equal("Renamed custom branch", customResult.Data.Name);
-        Assert.False(customResult.Data.IsActive);
-
-        var casingCollision = await service.UpdateBranchAsync(
-            scenario.CustomBranchId,
-            new UpdateBranchRequest
-            {
-                Name = "smart village",
-                Governorate = "Custom governorate",
-                IsActive = true
-            });
-
-        Assert.False(casingCollision.IsSuccess);
-        Assert.Equal(409, casingCollision.StatusCode);
-
-        var branches = await service.GetBranchesAsync();
-        Assert.True(branches.Single(branch =>
-            branch.Id == AdmissionSeedIds.SmartVillageBranchId)
-            .IsOfficialIntake47Location);
-        Assert.False(branches.Single(branch =>
-            branch.Id == scenario.CustomBranchId)
-            .IsOfficialIntake47Location);
+        Assert.False(customResult.Data.IsOfficialIntake47Location);
     }
 
     [Fact]
-    public async Task Program_counts_and_source_managed_parent_contract_ignore_legacy_9m_rows()
+    public async Task Seeded_parent_rows_follow_normal_admin_configuration_rules()
     {
         await using var scenario = await CreateScenarioAsync();
         var service = new ProgramConfigurationService(
@@ -282,54 +199,29 @@ public sealed class TrackServiceCatalogTests
         var programs = await service.GetProgramsAsync();
         var nineMonth = programs.Single(program =>
             program.Id == AdmissionSeedIds.NineMonthProgramId);
-        Assert.Equal(31, nineMonth.TrackCount);
-        Assert.True(nineMonth.IsSourceManaged);
-
-        var custom = programs.Single(program =>
-            program.Id == scenario.CustomProgramId);
-        Assert.Equal(1, custom.TrackCount);
-        Assert.False(custom.IsSourceManaged);
+        Assert.Equal(34, nineMonth.TrackCount);
 
         var officialUpdate = await service.UpdateProgramAsync(
             nineMonth.Id,
             new UpdateProgramRequest
             {
-                Name = nineMonth.Name,
-                Code = nineMonth.Code,
-                DurationMonths = nineMonth.DurationMonths
+                Name = "Updated 9-Month Program",
+                Code = "9M-UPDATED",
+                DurationMonths = 9
             });
-        Assert.False(officialUpdate.IsSuccess);
-        Assert.Equal(400, officialUpdate.StatusCode);
-
-        var customUpdate = await service.UpdateProgramAsync(
-            custom.Id,
-            new UpdateProgramRequest
-            {
-                Name = "Updated Custom Program",
-                Code = "custom",
-                DurationMonths = 5
-            });
-        Assert.True(customUpdate.IsSuccess);
-        Assert.Equal(1, customUpdate.Data.TrackCount);
-        Assert.False(customUpdate.Data.IsSourceManaged);
+        Assert.True(officialUpdate.IsSuccess);
 
         var institutions = await service.GetInstitutionsAsync();
         var iti = Assert.Single(institutions);
-        Assert.True(iti.IsSourceManaged);
 
         var institutionUpdate = await service.UpdateInstitutionAsync(
             iti.Id,
             new UpdateInstitutionRequest
             {
-                Name = iti.Name,
-                Code = iti.Code
+                Name = "Updated ITI",
+                Code = "ITI-UPDATED"
             });
-        Assert.False(institutionUpdate.IsSuccess);
-        Assert.Equal(400, institutionUpdate.StatusCode);
-
-        var officialDelete = await service.DeleteProgramAsync(nineMonth.Id);
-        Assert.False(officialDelete.IsSuccess);
-        Assert.Equal(400, officialDelete.StatusCode);
+        Assert.True(institutionUpdate.IsSuccess);
     }
 
     private static TrackService CreateService(IAdmissionDbContext context) =>

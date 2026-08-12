@@ -3,6 +3,7 @@ using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace EduFlowAI.Admission.Infrastructure.Seeding;
 
@@ -18,23 +19,9 @@ internal static class AdmissionDataSeeder
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        if (!string.Equals(
-                context.Database.ProviderName,
-                "Npgsql.EntityFrameworkCore.PostgreSQL",
-                StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Admission seed data requires the PostgreSQL EF Core provider.");
-        }
-
-        var compiledMigrations = context.Database.GetMigrations().ToArray();
-        if (compiledMigrations.Length > 0 &&
-            (await context.Database.GetPendingMigrationsAsync(
-                cancellationToken)).Any())
-        {
-            throw new InvalidOperationException(
-                "Apply all pending database migrations before running Admission seed data.");
-        }
+        await ValidateDatabasePreconditionsAsync(
+            context.Database,
+            cancellationToken);
 
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted,
@@ -45,25 +32,82 @@ internal static class AdmissionDataSeeder
             new object[] { AdmissionSeedLockKey },
             cancellationToken);
 
-        var now = timeProvider.GetUtcNow();
-        var institution = await ResolveInstitutionAsync(context, now, cancellationToken);
-        var program = await ResolveProgramAsync(
+        await ReconcileAsync(
+            context,
+            timeProvider.GetUtcNow(),
+            cancellationToken);
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    internal static async Task ValidateDatabasePreconditionsAsync(
+        DatabaseFacade database,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        if (!string.Equals(
+                database.ProviderName,
+                "Npgsql.EntityFrameworkCore.PostgreSQL",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Admission seed data requires the PostgreSQL EF Core provider.");
+        }
+
+        // The repository currently does not commit EF migration classes. When no
+        // migrations are compiled into the shared DbContext assembly, there is no
+        // EF migration state for Admission to validate. If the platform later
+        // starts shipping migrations, keep protecting explicit seeding from an
+        // out-of-date schema by rejecting pending migrations.
+        var compiledMigrations = database.GetMigrations().ToArray();
+        if (compiledMigrations.Length == 0)
+        {
+            return;
+        }
+
+        var pendingMigrations = await database
+            .GetPendingMigrationsAsync(cancellationToken);
+        if (pendingMigrations.Any())
+        {
+            throw new InvalidOperationException(
+                "Apply all pending database migrations before running Admission seed data.");
+        }
+    }
+
+    internal static async Task ReconcileAsync(
+        IAdmissionDbContext context,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var institution = await ResolveInstitutionAsync(
+            context,
+            now,
+            cancellationToken);
+        var programResolution = await ResolveProgramAsync(
             context,
             institution.Id,
             now,
             cancellationToken);
 
-        await SeedProgramDocumentRequirementsAsync(
+        if (programResolution.WasCreated)
+        {
+            await SeedProgramDocumentRequirementsAsync(
+                context,
+                programResolution.Program.Id,
+                now,
+                cancellationToken);
+        }
+
+        await SeedTracksAsync(
             context,
-            program.Id,
+            programResolution.Program.Id,
             now,
             cancellationToken);
-
-        await SeedTracksAsync(context, program.Id, now, cancellationToken);
         await SeedBranchesAsync(context, now, cancellationToken);
-
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task<Institution> ResolveInstitutionAsync(
@@ -72,22 +116,14 @@ internal static class AdmissionDataSeeder
         CancellationToken cancellationToken)
     {
         var seed = CreateInstitution(now);
+        var normalizedCode = seed.Code.ToUpperInvariant();
         var candidates = await context.Institutions
             .Where(institution =>
                 institution.Id == seed.Id ||
-                EF.Functions.ILike(institution.Code, seed.Code))
+                institution.Code.ToUpper() == normalizedCode)
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-        if (idMatch is not null &&
-            !StringComparer.OrdinalIgnoreCase.Equals(idMatch.Code, seed.Code))
-        {
-            throw SeedCollision(
-                nameof(Institution),
-                seed.Id,
-                $"the existing row has code '{idMatch.Code}' instead of '{seed.Code}'");
-        }
-
         var codeMatches = candidates
             .Where(candidate =>
                 StringComparer.OrdinalIgnoreCase.Equals(candidate.Code, seed.Code))
@@ -98,10 +134,10 @@ internal static class AdmissionDataSeeder
             $"code '{seed.Code}'",
             codeMatches.Count);
 
-        var existing = codeMatches.SingleOrDefault();
-        if (existing is not null)
+        var codeMatch = codeMatches.SingleOrDefault();
+        if (idMatch is not null)
         {
-            if (idMatch is not null && idMatch.Id != existing.Id)
+            if (codeMatch is not null && codeMatch.Id != idMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Institution),
@@ -109,35 +145,40 @@ internal static class AdmissionDataSeeder
                     $"the stable ID and code '{seed.Code}' identify different rows");
             }
 
-            return existing;
+            // Stable ID wins. Name/code may have been changed by an administrator.
+            return idMatch;
+        }
+
+        if (codeMatch is not null)
+        {
+            return codeMatch;
         }
 
         context.Institutions.Add(seed);
         return seed;
     }
 
-    private static async Task<Program> ResolveProgramAsync(
+    private static async Task<ProgramResolution> ResolveProgramAsync(
         IAdmissionDbContext context,
         Guid institutionId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var seed = CreateNineMonthProgram(institutionId, now);
+        var normalizedCode = seed.Code.ToUpperInvariant();
         var candidates = await context.Programs
             .Where(program =>
                 program.Id == seed.Id ||
-                EF.Functions.ILike(program.Code, seed.Code))
+                program.Code.ToUpper() == normalizedCode)
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-        if (idMatch is not null &&
-            (!StringComparer.OrdinalIgnoreCase.Equals(idMatch.Code, seed.Code) ||
-             idMatch.InstitutionId != institutionId))
+        if (idMatch is not null && idMatch.InstitutionId != institutionId)
         {
             throw SeedCollision(
                 nameof(Program),
                 seed.Id,
-                "the existing row has a different code or parent institution");
+                "the existing row belongs to a different institution");
         }
 
         var codeMatches = candidates
@@ -150,17 +191,17 @@ internal static class AdmissionDataSeeder
             $"code '{seed.Code}'",
             codeMatches.Count);
 
-        var existing = codeMatches.SingleOrDefault();
-        if (existing is not null)
+        var codeMatch = codeMatches.SingleOrDefault();
+        if (codeMatch is not null && codeMatch.InstitutionId != institutionId)
         {
-            if (existing.InstitutionId != institutionId)
-            {
-                throw new InvalidOperationException(
-                    $"Admission seed conflict: program code '{seed.Code}' already belongs " +
-                    "to a different institution.");
-            }
+            throw new InvalidOperationException(
+                $"Admission seed conflict: program code '{seed.Code}' already belongs " +
+                "to a different institution.");
+        }
 
-            if (idMatch is not null && idMatch.Id != existing.Id)
+        if (idMatch is not null)
+        {
+            if (codeMatch is not null && codeMatch.Id != idMatch.Id)
             {
                 throw SeedCollision(
                     nameof(Program),
@@ -168,66 +209,45 @@ internal static class AdmissionDataSeeder
                     $"the stable ID and code '{seed.Code}' identify different rows");
             }
 
-            return existing;
+            // Stable ID wins. Name/code/duration may be administrator configuration.
+            return new ProgramResolution(idMatch, WasCreated: false);
+        }
+
+        if (codeMatch is not null)
+        {
+            return new ProgramResolution(codeMatch, WasCreated: false);
         }
 
         context.Programs.Add(seed);
-        return seed;
+        return new ProgramResolution(seed, WasCreated: true);
     }
 
-    private static async Task SeedProgramDocumentRequirementsAsync(
+    internal static async Task SeedProgramDocumentRequirementsAsync(
         IAdmissionDbContext context,
         Guid programId,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         var seeds = CreateProgramDocumentRequirements(programId, now);
         var seedIds = seeds.Select(seed => seed.Id).ToArray();
-        var candidates = await context.ProgramDocumentRequirements
-            .Where(requirement =>
-                requirement.ProgramId == programId ||
-                seedIds.Contains(requirement.Id))
+        var conflictingSeedIds = await context.ProgramDocumentRequirements
+            .Where(requirement => seedIds.Contains(requirement.Id))
+            .Select(requirement => requirement.Id)
             .ToListAsync(cancellationToken);
+
+        if (conflictingSeedIds.Count > 0)
+        {
+            throw SeedCollision(
+                nameof(ProgramDocumentRequirement),
+                conflictingSeedIds[0],
+                "the stable seed ID already belongs to an existing requirement");
+        }
 
         foreach (var seed in seeds)
         {
-            var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-            if (idMatch is not null &&
-                (idMatch.ProgramId != seed.ProgramId ||
-                 idMatch.DocumentType != seed.DocumentType ||
-                 idMatch.RequiredForGender != seed.RequiredForGender))
-            {
-                throw SeedCollision(
-                    nameof(ProgramDocumentRequirement),
-                    seed.Id,
-                    "the existing row has a different program, document type, or gender");
-            }
-
-            var naturalKeyMatches = candidates
-                .Where(candidate =>
-                    candidate.ProgramId == seed.ProgramId &&
-                    candidate.DocumentType == seed.DocumentType &&
-                    candidate.RequiredForGender == seed.RequiredForGender)
-                .ToList();
-
-            EnsureAtMostOneBusinessKeyMatch(
-                nameof(ProgramDocumentRequirement),
-                $"{seed.ProgramId}/{seed.DocumentType}/{seed.RequiredForGender?.ToString() ?? "All"}",
-                naturalKeyMatches.Count);
-
-            var existing = naturalKeyMatches.SingleOrDefault();
-            if (idMatch is not null && existing is not null && idMatch.Id != existing.Id)
-            {
-                throw SeedCollision(
-                    nameof(ProgramDocumentRequirement),
-                    seed.Id,
-                    "the stable ID and natural key identify different rows");
-            }
-
-            if (existing is null)
-            {
-                context.ProgramDocumentRequirements.Add(seed);
-            }
+            context.ProgramDocumentRequirements.Add(seed);
         }
     }
 
@@ -293,13 +313,13 @@ internal static class AdmissionDataSeeder
             ReconcileOfficialTrack(existing, programId, definition, now);
         }
 
-        foreach (var nonOfficial in candidates.Where(candidate =>
+        foreach (var historical in candidates.Where(candidate =>
                      candidate.ProgramId == programId &&
-                     AdmissionTrackSeedCatalog.Find(
+                     AdmissionLegacyTrackCatalog.IsHistorical(
                          candidate.Id,
-                         candidate.Name) is null))
+                         candidate.Name)))
         {
-            DeactivateNonOfficialTrack(nonOfficial, programId, now);
+            DeactivateNonOfficialTrack(historical, programId, now);
         }
     }
 
@@ -311,7 +331,7 @@ internal static class AdmissionDataSeeder
         ArgumentNullException.ThrowIfNull(track);
 
         if (track.ProgramId != programId ||
-            AdmissionTrackSeedCatalog.Find(track.Id, track.Name) is not null ||
+            !AdmissionLegacyTrackCatalog.IsHistorical(track.Id, track.Name) ||
             !track.IsActive)
         {
             return false;
@@ -339,6 +359,7 @@ internal static class AdmissionDataSeeder
                 "the existing row belongs to a different program");
         }
 
+        bool stableIdMatch = track.Id == definition.Id;
         bool hasOfficialName = StringComparer.OrdinalIgnoreCase.Equals(
             track.Name,
             definition.Name);
@@ -346,7 +367,7 @@ internal static class AdmissionDataSeeder
             track.Name,
             StringComparer.OrdinalIgnoreCase);
 
-        if (!hasOfficialName && !hasSupportedLegacyName)
+        if (!stableIdMatch && !hasOfficialName && !hasSupportedLegacyName)
         {
             throw SeedCollision(
                 nameof(Track),
@@ -354,42 +375,17 @@ internal static class AdmissionDataSeeder
                 $"the existing row has unsupported name '{track.Name}'");
         }
 
-        bool changed = false;
-
-        if (!hasOfficialName)
+        // Existing persisted track fields are Super Admin-owned configuration.
+        // The only automatic update retained here is the narrow, known taxonomy
+        // rename from a supported legacy source name to the Intake-47 name.
+        if (hasSupportedLegacyName && !hasOfficialName)
         {
             track.Name = definition.Name;
-            changed = true;
-        }
-
-        if (!track.IsActive)
-        {
-            track.IsActive = true;
-            changed = true;
-        }
-
-        if (!StringComparer.Ordinal.Equals(
-                track.Description,
-                definition.Description))
-        {
-            track.Description = definition.Description;
-            changed = true;
-        }
-
-        if (!track.PrerequisiteTopics.SequenceEqual(
-                definition.PrerequisiteTopics,
-                StringComparer.Ordinal))
-        {
-            track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
-            changed = true;
-        }
-
-        if (changed)
-        {
             track.UpdatedAt = now;
+            return true;
         }
 
-        return changed;
+        return false;
     }
 
     private static async Task SeedBranchesAsync(
@@ -458,28 +454,9 @@ internal static class AdmissionDataSeeder
                 $"the existing row has unsupported name '{branch.Name}'");
         }
 
-        bool changed = false;
-
-        if (!StringComparer.Ordinal.Equals(branch.Name, definition.Name))
-        {
-            branch.Name = definition.Name;
-            changed = true;
-        }
-
-        if (!branch.IsActive)
-        {
-            branch.IsActive = true;
-            changed = true;
-        }
-
-        if (string.IsNullOrWhiteSpace(branch.Governorate) &&
-            !string.IsNullOrWhiteSpace(definition.Governorate))
-        {
-            branch.Governorate = definition.Governorate;
-            changed = true;
-        }
-
-        return changed;
+        // Name, governorate and active state are all editable after bootstrap.
+        // Do not treat null/blank values as missing seed metadata on a rerun.
+        return false;
     }
 
     private static void EnsureAtMostOneBusinessKeyMatch(
@@ -614,4 +591,8 @@ internal static class AdmissionDataSeeder
             })
             .ToArray();
     }
+
+    private readonly record struct ProgramResolution(
+        Program Program,
+        bool WasCreated);
 }
