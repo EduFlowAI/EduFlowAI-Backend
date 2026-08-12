@@ -9,22 +9,24 @@ public static class AdmissionSeedingExtensions
     private const string ApiApplicationName = "EduFlowAI.Api";
 
     /// <summary>
-    /// Compatibility hook for the API composition root. Automatic startup
-    /// seeding is intentionally disabled so normal API restarts cannot recreate
-    /// or overwrite Super Admin-managed Admission configuration. Explicit
-    /// seeding remains available through <see cref="SeedAdmissionDataAsync"/>.
+    /// Registers the Admission startup seeder. API startup waits for the
+    /// Admission bootstrap/reconciliation operation so hosted environments
+    /// receive the current canonical Admission data automatically.
     /// </summary>
     public static IServiceCollection AddAdmissionDataSeeding(
         this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        services.AddHostedService<AdmissionDataSeedHostedService>();
         return services;
     }
 
     /// <summary>
-    /// Runs the explicit Admission bootstrap/reconciliation operation against an
-    /// already provisioned shared PostgreSQL schema. If EF migrations are
-    /// compiled into the shared DbContext assembly, pending migrations block the
+    /// Runs the Admission bootstrap/reconciliation operation against an already
+    /// provisioned shared PostgreSQL schema. The startup hosted service and any
+    /// explicit invocation share this same path. If EF migrations are compiled
+    /// into the shared DbContext assembly, pending migrations block the
     /// operation. The method rejects non-API hosts and coordinates concurrent API
     /// replicas with a transaction-scoped PostgreSQL advisory lock.
     /// </summary>
