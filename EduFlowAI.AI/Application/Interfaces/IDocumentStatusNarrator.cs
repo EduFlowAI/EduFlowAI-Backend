@@ -9,8 +9,10 @@ namespace EduFlowAI.AI.Application.Interfaces;
 // facts the model phrases - it never decides, changes or invents them.
 public interface IDocumentStatusNarrator
 {
+    // isContinuingConversation suppresses the greeting when the applicant is already mid-chat.
     Task<string> NarrateAsync(
         IEnumerable<ApplicantDocumentDto> documents,
         string language,
+        bool isContinuingConversation = false,
         CancellationToken cancellationToken = default);
 }

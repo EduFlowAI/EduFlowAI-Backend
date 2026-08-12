@@ -132,6 +132,20 @@ internal sealed class FakeRepository : IKnowledgeRepository
         return Task.CompletedTask;
     }
 
+    public List<RetrievedChunkDto> KeywordHits { get; set; } = new();
+
+    public IReadOnlyList<string>? LastKeywordTerms { get; private set; }
+
+    public Task<List<RetrievedChunkDto>> SearchChunksByKeywordAsync(
+        IReadOnlyList<string> terms,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        LastKeywordTerms = terms;
+
+        return Task.FromResult(KeywordHits.Take(limit).ToList());
+    }
+
     public Task<List<RetrievedChunkDto>> SearchChunksByEmbeddingAsync(
         Pgvector.Vector embedding,
         int limit = 5,
