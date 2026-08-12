@@ -3,6 +3,7 @@ using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace EduFlowAI.Admission.Infrastructure.Seeding;
 
@@ -18,28 +19,9 @@ internal static class AdmissionDataSeeder
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        if (!string.Equals(
-                context.Database.ProviderName,
-                "Npgsql.EntityFrameworkCore.PostgreSQL",
-                StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Admission seed data requires the PostgreSQL EF Core provider.");
-        }
-
-        if (!context.Database.GetMigrations().Any())
-        {
-            throw new InvalidOperationException(
-                "Admission seed data requires an EF Core migration for the shared database schema.");
-        }
-
-        var pendingMigrations = await context.Database
-            .GetPendingMigrationsAsync(cancellationToken);
-        if (pendingMigrations.Any())
-        {
-            throw new InvalidOperationException(
-                "Apply all pending database migrations before running Admission seed data.");
-        }
+        await ValidateDatabasePreconditionsAsync(
+            context.Database,
+            cancellationToken);
 
         await using var transaction = await context.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted,
@@ -50,8 +32,61 @@ internal static class AdmissionDataSeeder
             new object[] { AdmissionSeedLockKey },
             cancellationToken);
 
-        var now = timeProvider.GetUtcNow();
-        var institution = await ResolveInstitutionAsync(context, now, cancellationToken);
+        await ReconcileAsync(
+            context,
+            timeProvider.GetUtcNow(),
+            cancellationToken);
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    internal static async Task ValidateDatabasePreconditionsAsync(
+        DatabaseFacade database,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        if (!string.Equals(
+                database.ProviderName,
+                "Npgsql.EntityFrameworkCore.PostgreSQL",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Admission seed data requires the PostgreSQL EF Core provider.");
+        }
+
+        // The repository currently does not commit EF migration classes. When no
+        // migrations are compiled into the shared DbContext assembly, there is no
+        // EF migration state for Admission to validate. If the platform later
+        // starts shipping migrations, keep protecting explicit seeding from an
+        // out-of-date schema by rejecting pending migrations.
+        var compiledMigrations = database.GetMigrations().ToArray();
+        if (compiledMigrations.Length == 0)
+        {
+            return;
+        }
+
+        var pendingMigrations = await database
+            .GetPendingMigrationsAsync(cancellationToken);
+        if (pendingMigrations.Any())
+        {
+            throw new InvalidOperationException(
+                "Apply all pending database migrations before running Admission seed data.");
+        }
+    }
+
+    internal static async Task ReconcileAsync(
+        IAdmissionDbContext context,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var institution = await ResolveInstitutionAsync(
+            context,
+            now,
+            cancellationToken);
         var program = await ResolveProgramAsync(
             context,
             institution.Id,
@@ -66,9 +101,6 @@ internal static class AdmissionDataSeeder
 
         await SeedTracksAsync(context, program.Id, now, cancellationToken);
         await SeedBranchesAsync(context, now, cancellationToken);
-
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
     }
 
     private static async Task<Institution> ResolveInstitutionAsync(
@@ -77,10 +109,11 @@ internal static class AdmissionDataSeeder
         CancellationToken cancellationToken)
     {
         var seed = CreateInstitution(now);
+        var normalizedCode = seed.Code.ToUpperInvariant();
         var candidates = await context.Institutions
             .Where(institution =>
                 institution.Id == seed.Id ||
-                EF.Functions.ILike(institution.Code, seed.Code))
+                institution.Code.ToUpper() == normalizedCode)
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
@@ -125,10 +158,11 @@ internal static class AdmissionDataSeeder
         CancellationToken cancellationToken)
     {
         var seed = CreateNineMonthProgram(institutionId, now);
+        var normalizedCode = seed.Code.ToUpperInvariant();
         var candidates = await context.Programs
             .Where(program =>
                 program.Id == seed.Id ||
-                EF.Functions.ILike(program.Code, seed.Code))
+                program.Code.ToUpper() == normalizedCode)
             .ToListAsync(cancellationToken);
 
         var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
@@ -181,7 +215,7 @@ internal static class AdmissionDataSeeder
         return seed;
     }
 
-    private static async Task SeedProgramDocumentRequirementsAsync(
+    internal static async Task SeedProgramDocumentRequirementsAsync(
         IAdmissionDbContext context,
         Guid programId,
         DateTimeOffset now,
@@ -195,45 +229,27 @@ internal static class AdmissionDataSeeder
                 seedIds.Contains(requirement.Id))
             .ToListAsync(cancellationToken);
 
+        // Requirements are bootstrap defaults. Once the program has any stored
+        // requirements, the complete set is Super Admin-managed configuration.
+        // Do not interpret a missing seed row as something that should be
+        // recreated: it may have been intentionally removed through Replace.
+        if (candidates.Any(candidate => candidate.ProgramId == programId))
+        {
+            return;
+        }
+
         foreach (var seed in seeds)
         {
             var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
-            if (idMatch is not null &&
-                (idMatch.ProgramId != seed.ProgramId ||
-                 idMatch.DocumentType != seed.DocumentType ||
-                 idMatch.RequiredForGender != seed.RequiredForGender))
+            if (idMatch is not null)
             {
                 throw SeedCollision(
                     nameof(ProgramDocumentRequirement),
                     seed.Id,
-                    "the existing row has a different program, document type, or gender");
+                    "the stable seed ID already belongs to a different program");
             }
 
-            var naturalKeyMatches = candidates
-                .Where(candidate =>
-                    candidate.ProgramId == seed.ProgramId &&
-                    candidate.DocumentType == seed.DocumentType &&
-                    candidate.RequiredForGender == seed.RequiredForGender)
-                .ToList();
-
-            EnsureAtMostOneBusinessKeyMatch(
-                nameof(ProgramDocumentRequirement),
-                $"{seed.ProgramId}/{seed.DocumentType}/{seed.RequiredForGender?.ToString() ?? "All"}",
-                naturalKeyMatches.Count);
-
-            var existing = naturalKeyMatches.SingleOrDefault();
-            if (idMatch is not null && existing is not null && idMatch.Id != existing.Id)
-            {
-                throw SeedCollision(
-                    nameof(ProgramDocumentRequirement),
-                    seed.Id,
-                    "the stable ID and natural key identify different rows");
-            }
-
-            if (existing is null)
-            {
-                context.ProgramDocumentRequirements.Add(seed);
-            }
+            context.ProgramDocumentRequirements.Add(seed);
         }
     }
 
@@ -361,37 +377,17 @@ internal static class AdmissionDataSeeder
                 $"the existing row has unsupported name '{track.Name}'");
         }
 
-        bool changed = false;
-
-        // Safe one-time taxonomy migration: only known legacy names are renamed.
-        // Later administrator edits are preserved because the stable internal ID
-        // still identifies the official Intake-47 track.
+        // Existing persisted track fields are Super Admin-owned configuration.
+        // The only automatic update retained here is the narrow, known taxonomy
+        // rename from a supported legacy source name to the Intake-47 name.
         if (hasSupportedLegacyName && !hasOfficialName)
         {
             track.Name = definition.Name;
-            changed = true;
-        }
-
-        if (string.IsNullOrWhiteSpace(track.Description) &&
-            !string.IsNullOrWhiteSpace(definition.Description))
-        {
-            track.Description = definition.Description;
-            changed = true;
-        }
-
-        if (track.PrerequisiteTopics.Count == 0 &&
-            definition.PrerequisiteTopics.Count > 0)
-        {
-            track.PrerequisiteTopics = [.. definition.PrerequisiteTopics];
-            changed = true;
-        }
-
-        if (changed)
-        {
             track.UpdatedAt = now;
+            return true;
         }
 
-        return changed;
+        return false;
     }
 
     private static async Task SeedBranchesAsync(
@@ -460,15 +456,8 @@ internal static class AdmissionDataSeeder
                 $"the existing row has unsupported name '{branch.Name}'");
         }
 
-        // Existing branch name/active state are administrator configuration.
-        // Only backfill missing reference metadata.
-        if (string.IsNullOrWhiteSpace(branch.Governorate) &&
-            !string.IsNullOrWhiteSpace(definition.Governorate))
-        {
-            branch.Governorate = definition.Governorate;
-            return true;
-        }
-
+        // Name, governorate and active state are all editable after bootstrap.
+        // Do not treat null/blank values as missing seed metadata on a rerun.
         return false;
     }
 
