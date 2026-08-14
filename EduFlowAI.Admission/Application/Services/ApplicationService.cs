@@ -9,7 +9,6 @@ using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
-using Wolverine.Persistence;
 
 namespace EduFlowAI.Admission.Application.Services
 {
@@ -19,24 +18,27 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<ApplicationPreference> _preferenceRepository;
         private readonly IGenericRepository<ApplicantProfile> _profileRepository;
-        private readonly IGenericRepository<EligibilityResult> _eligibilityResultRepository;
+        //private readonly IGenericRepository<EligibilityResult> _eligibilityResultRepository;
         private readonly IAdmissionEligibilityService _eligibilityService;
+        private readonly IGenericRepository<AdmissionCycle> _cycleRepository;
         private readonly IMapper _mapper;
 
         public ApplicationService(IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
             IGenericRepository<ApplicationPreference> preferenceRepository,
             IGenericRepository<ApplicantProfile> profileRepository,
-            IGenericRepository<EligibilityResult> eligibilityResultRepository,
+            //IGenericRepository<EligibilityResult> eligibilityResultRepository,
             IAdmissionEligibilityService eligibilityService,
+            IGenericRepository<AdmissionCycle> cycleRepository,
             IMapper mapper)
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _preferenceRepository = preferenceRepository;
             _profileRepository = profileRepository;
-            _eligibilityResultRepository = eligibilityResultRepository;
+            //_eligibilityResultRepository = eligibilityResultRepository;
             _eligibilityService = eligibilityService;
+            _cycleRepository = cycleRepository;
             _mapper = mapper;
         }
 
@@ -48,19 +50,53 @@ namespace EduFlowAI.Admission.Application.Services
             if(string.IsNullOrWhiteSpace(applicantUserId))
                 return Result<ApplicationDto>.Failure(400, "Applicant user ID cannot be null or empty");
 
-            // 1. Business Rule Validation: One active application per applicant and cycle
-            // Check if there is any application for this cycle that is NOT Withdrawn.
-            var activeApplication = await _applicationRepository.GetFirstOrDefaultAsync(
+            // 1. Validate Cycle Existence, Status, and Deadline FIRST
+            var cycle = await _cycleRepository.GetFirstOrDefaultAsync(c => c.Id == request.CycleId);
+
+            if (cycle == null)
+            {
+                return Result<ApplicationDto>.Failure(404, "The requested admission cycle was not found.");
+            }
+
+            if (cycle.Status != CycleStatus.Active)
+            {
+                return Result<ApplicationDto>.Failure(400, $"The admission cycle '{cycle.Label}' is not currently active.");
+            }
+
+            if (DateTimeOffset.UtcNow > cycle.DeadlineUtc)
+            {
+                // This completely prevents withdrawn applicants (or new ones) from applying after exams theoretically start
+                return Result<ApplicationDto>.Failure(400, $"The application deadline for '{cycle.Label}' has passed. New applications are no longer accepted.");
+            }
+
+            // 2. Business Rule Validation: One active OR concluded application per applicant and cycle.
+            var existingApplication = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: a => a.ApplicantUserId == applicantUserId
                              && a.CycleId == request.CycleId
                              && a.Status != ApplicationStatus.Withdrawn
             );
-            if (activeApplication != null)
-                return Result<ApplicationDto>.Failure(400, "You already have an active application for this admission cycle.");
+            if (existingApplication != null)
+            {
+                bool isTerminalRejectedState = existingApplication.Status == ApplicationStatus.EligibilityFailed ||
+                                               existingApplication.Status == ApplicationStatus.DocumentRejected ||
+                                               existingApplication.Status == ApplicationStatus.NotSelected ||
+                                               existingApplication.Status == ApplicationStatus.Expired;
 
-            // 2. Map and set Business Rules/Domain logic
+                if (isTerminalRejectedState)
+                {
+                    return Result<ApplicationDto>.Failure(400,
+                        $"You have already applied to this admission cycle and your application was concluded with status '{existingApplication.Status}'. You cannot create a new application for the same cycle.");
+                }
+                else
+                {
+                    return Result<ApplicationDto>.Failure(400,
+                        "You already have an active application for this admission cycle. Please manage it from your dashboard.");
+                }
+            }
+
+            // 3. Map and set Business Rules/Domain logic
             var application = _mapper.Map<Domain.Entities.Application>(request);
-            application.Id = Guid.NewGuid();
+            //application.Id = Guid.NewGuid();
             application.ApplicantUserId = applicantUserId;
             application.Status = ApplicationStatus.Draft;
             application.CreatedAt = DateTime.UtcNow;
