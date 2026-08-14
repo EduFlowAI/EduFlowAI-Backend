@@ -142,7 +142,7 @@ public sealed class AdmissionCycleDeletionTests
             Id = applicationId,
             ApplicantUserId = "historical-applicant",
             CycleId = otherCycleId,
-            Status = ApplicationStatus.Accepted,
+            Status = ApplicationStatus.Admitted,
             AcceptedTrackBranchOfferingId = target.OfferingIds.Single(),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
