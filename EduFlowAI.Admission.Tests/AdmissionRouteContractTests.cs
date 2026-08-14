@@ -58,6 +58,7 @@ public sealed class AdmissionRouteContractTests
 
             { typeof(AdminCyclesController), nameof(AdminCyclesController.GetCycles), typeof(HttpGetAttribute), null, false },
             { typeof(AdminCyclesController), nameof(AdminCyclesController.CreateCycle), typeof(HttpPostAttribute), null, false },
+            { typeof(AdminCyclesController), nameof(AdminCyclesController.DeleteCycle), typeof(HttpDeleteAttribute), "{cycleId:guid}", false },
             { typeof(AdminCyclesController), nameof(AdminCyclesController.UpdateEligibilityRule), typeof(HttpPutAttribute), "{cycleId:guid}/eligibility-rule", false },
             { typeof(AdminCyclesController), nameof(AdminCyclesController.CreateOffering), typeof(HttpPostAttribute), "{cycleId:guid}/offerings", false },
             { typeof(AdminCyclesController), nameof(AdminCyclesController.UpdateOffering), typeof(HttpPutAttribute), "{cycleId:guid}/offerings/{offeringId:guid}", false },
