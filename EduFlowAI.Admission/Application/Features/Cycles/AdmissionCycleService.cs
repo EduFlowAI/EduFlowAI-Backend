@@ -48,7 +48,7 @@ public sealed class CreateAdmissionCycleRequest
 public sealed class UpdateCycleEligibilityRuleRequest
 {
     [Required, MaxLength(5)]
-    public string RequiredNationality { get; init; } = "EG";
+    public string RequiredNationality { get; init; } = "EGY";
 
     [Required, MaxLength(30)]
     public string RequiredDegreeLevel { get; init; } = "Bachelor";

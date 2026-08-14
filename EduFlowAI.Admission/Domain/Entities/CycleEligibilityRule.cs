@@ -10,7 +10,7 @@ namespace EduFlowAI.Admission.Domain.Entities
 
         public Guid CycleId { get; set; }
 
-        public string RequiredNationality { get; set; } = "Egypt";
+        public string RequiredNationality { get; set; } = "EGY";
 
         public string RequiredDegreeLevel { get; set; } = "Bachelor";
 
