@@ -68,6 +68,10 @@ public interface IAdmissionCycleService
         CreateAdmissionCycleRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<Result<bool>> DeleteCycleAsync(
+        Guid cycleId,
+        CancellationToken cancellationToken = default);
+
     Task<Result<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(
         Guid cycleId,
         UpdateCycleEligibilityRuleRequest request,
@@ -226,6 +230,92 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
             (
                 "UX_AdmissionCycles_Program_Label",
                 "A cycle with the same label already exists for this program."));
+    }
+
+    public async Task<Result<bool>> DeleteCycleAsync(
+        Guid cycleId,
+        CancellationToken cancellationToken = default)
+    {
+        if (cycleId == Guid.Empty)
+        {
+            return Result<bool>.Failure(
+                400,
+                "A valid cycle ID is required.");
+        }
+
+        return await _writeExecutor.ExecuteSerializableAsync(
+            cancellationToken,
+            async ct =>
+            {
+                var cycle = await _dbContext.AdmissionCycles
+                    .SingleOrDefaultAsync(x => x.Id == cycleId, ct);
+
+                if (cycle is null)
+                {
+                    return Result<bool>.Failure(
+                        404,
+                        "Admission cycle was not found.");
+                }
+
+                if (cycle.Status != CycleStatus.Draft)
+                {
+                    return Result<bool>.Failure(
+                        409,
+                        "Only Draft admission cycles may be deleted. Active and Closed cycles are retained as history.");
+                }
+
+                if (await _dbContext.Applications
+                        .AsNoTracking()
+                        .AnyAsync(x => x.CycleId == cycleId, ct))
+                {
+                    return Result<bool>.Failure(
+                        409,
+                        "Admission cycle cannot be deleted because admission activity already exists for this cycle.");
+                }
+
+                var offerings = await _dbContext.TrackBranchOfferings
+                    .Where(x => x.CycleId == cycleId)
+                    .ToListAsync(ct);
+                Guid[] offeringIds = offerings.Select(x => x.Id).ToArray();
+
+                if (offeringIds.Length > 0)
+                {
+                    bool hasPreferenceReferences = await _dbContext.ApplicationPreferences
+                        .AsNoTracking()
+                        .AnyAsync(
+                            x => offeringIds.Contains(x.TrackBranchOfferingId),
+                            ct);
+
+                    bool hasAcceptedOfferingReferences = await _dbContext.Applications
+                        .AsNoTracking()
+                        .AnyAsync(
+                            x =>
+                                x.AcceptedTrackBranchOfferingId.HasValue &&
+                                offeringIds.Contains(x.AcceptedTrackBranchOfferingId.Value),
+                            ct);
+
+                    if (hasPreferenceReferences || hasAcceptedOfferingReferences)
+                    {
+                        return Result<bool>.Failure(
+                            409,
+                            "Admission cycle cannot be deleted because admission activity already references one of its track/branch offerings.");
+                    }
+                }
+
+                var eligibilityRules = await _dbContext.CycleEligibilityRules
+                    .Where(x => x.CycleId == cycleId)
+                    .ToListAsync(ct);
+
+                _dbContext.TrackBranchOfferings.RemoveRange(offerings);
+                _dbContext.CycleEligibilityRules.RemoveRange(eligibilityRules);
+                _dbContext.AdmissionCycles.Remove(cycle);
+
+                await _dbContext.SaveChangesAsync(ct);
+
+                return Result<bool>.Success(
+                    true,
+                    message: "Draft admission cycle and its configuration were deleted successfully.");
+            });
     }
 
     public async Task<Result<CycleEligibilityRuleDto>> UpsertEligibilityRuleAsync(
