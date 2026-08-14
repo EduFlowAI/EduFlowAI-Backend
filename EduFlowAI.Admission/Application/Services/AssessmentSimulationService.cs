@@ -32,10 +32,14 @@ namespace EduFlowAI.Admission.Application.Services
             }
 
             // 2. Check if the stage has already been simulated for this application to avoid duplicates
-            var existingStage = await _stageRepository.GetFirstOrDefaultAsync(s => s.ApplicationId == applicationId && s.Stage == stage);
+            var existingStage = await _stageRepository.GetFirstOrDefaultAsync(
+                s => s.ApplicationId == applicationId 
+                && s.Stage == stage
+                && s.TrackId == trackId
+            );
             if(existingStage != null)
             {
-                return(false, $"Stage '{stage}' has already been simulated for this application.", null);
+                return (false, $"Stage '{stage}' for track '{trackId}' has already been simulated for this application.", null);
             }
 
             /*
@@ -87,7 +91,10 @@ namespace EduFlowAI.Admission.Application.Services
 
         public async Task<IEnumerable<SimulatedStageDto>> GetApplicantStagesAsync(Guid applicationId)
         {
-            var stages = await _stageRepository.GetAllAsync(s => s.ApplicationId == applicationId);
+            var stages = await _stageRepository.GetAllAsync(
+                predicate: s => s.ApplicationId == applicationId,
+                include: query => query.Include(s => s.Track)
+            );
             if(stages == null)
             {
                 return Enumerable.Empty<SimulatedStageDto>();
@@ -98,15 +105,20 @@ namespace EduFlowAI.Admission.Application.Services
             {
                 var displayInfo = s.Stage.GetDisplayInfo(); // Extract UI text
 
+                // 2. Dynamically construct the Title based on whether a Track exists
+                string finalTitle = s.Track != null ? $"{displayInfo.Name} - {s.Track.Name}"
+                                                    : displayInfo.Name;
+
                 return new SimulatedStageDto
                 {
                     StageId = s.Id,
                     StageType = s.Stage.ToString(),
-                    Title = displayInfo.Name,              // Map Title
+                    Title = finalTitle,              // Map Title
                     Description = displayInfo.Description, // Map Description
                     Score = s.Score,
                     MaxScore = s.MaxScore,
                     Result = s.Result.ToString(),
+                    TrackName = s.Track?.Name,
                     UpdatedAt = s.UpdatedAt ?? s.CreatedAt
                 };
             }).ToList();

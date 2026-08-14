@@ -22,5 +22,6 @@ namespace EduFlowAI.Admission.Domain.Entities
 
         // Navigation Properties
         public Application Application { get; set; } = null!;
+        public Track? Track { get; set; }
     }
 }
