@@ -45,6 +45,18 @@ public sealed class AdminCyclesController : ControllerBase
         return this.ToActionResult(result);
     }
 
+    [HttpDelete("{cycleId:guid}")]
+    public async Task<ActionResult<Result<bool>>> DeleteCycle(
+        Guid cycleId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _cycleService.DeleteCycleAsync(
+            cycleId,
+            cancellationToken);
+
+        return this.ToActionResult(result);
+    }
+
     [HttpPut("{cycleId:guid}/eligibility-rule")]
     public async Task<ActionResult<Result<CycleEligibilityRuleDto>>> UpdateEligibilityRule(
         Guid cycleId,
