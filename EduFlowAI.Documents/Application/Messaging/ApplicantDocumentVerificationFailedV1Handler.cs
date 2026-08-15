@@ -77,6 +77,8 @@ public sealed class ApplicantDocumentVerificationFailedV1Handler
             DocumentStatus.NeedsHumanReview,
             cancellationToken);
 
+        await _dbContext.SaveChangesAsync(cancellationToken);    
+
         if (reviewResult is not null)
         {
             var transition = await _statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
