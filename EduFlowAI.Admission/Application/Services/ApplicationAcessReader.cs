@@ -1,5 +1,6 @@
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Identity.Domain.Constants;
 using EduFlowAI.Identity.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -69,7 +70,16 @@ namespace EduFlowAI.Admission.Application.Services
         }
         public async Task<Guid> GetApplicationIdForUserAsync(string applicantUserId, CancellationToken cancellationToken)
         {
-            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.ApplicantUserId == applicantUserId);
+            // Newest live application, so documents are not read against a withdrawn one.
+            var application =
+                await _applicationRepository.GetFirstOrDefaultAsync(
+                    predicate: app => app.ApplicantUserId == applicantUserId
+                                   && app.Status != ApplicationStatus.Withdrawn,
+                    include: query => query.OrderByDescending(app => app.CreatedAt))
+                ?? await _applicationRepository.GetFirstOrDefaultAsync(
+                    predicate: app => app.ApplicantUserId == applicantUserId,
+                    include: query => query.OrderByDescending(app => app.CreatedAt));
+
             if (application == null)
             {
                 return Guid.Empty; // Return an empty GUID if no application is found for the user
