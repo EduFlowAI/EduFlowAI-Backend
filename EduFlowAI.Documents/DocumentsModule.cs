@@ -7,7 +7,6 @@ using EduFlowAI.Documents.Application.Interfaces;
 using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Application.Validators;
 using EduFlowAI.Documents.Infrastructure.Auth;
-using EduFlowAI.Documents.Infrastructure.Fakes;
 using EduFlowAI.Documents.Infrastructure.Storage;
 using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Application.Services;
@@ -26,13 +25,11 @@ namespace EduFlowAI.Documents
             // Application + Infrastructure services registrations go here later
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
-
+            services.AddScoped<IDocumentSubmissionService, DocumentSubmissionService>();
             services.AddScoped<IDocumentHumanReviewService, DocumentHumanReviewService>();
             services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
             services.AddScoped<IApplicantDocumentService, ApplicantDocumentService>();
             services.AddScoped<IValidator<UploadDocumentDto>, UploadDocumentDtoValidator>();
-            services.AddScoped<IDocumentSubmissionService, DocumentSubmissionService>();
-            // fake
             services.AddScoped<IProgramRequirementReader, ProgramRequirementReader>();
             services.AddScoped<IApplicationAcessReader, ApplicationAcessReader>();
 

@@ -19,11 +19,13 @@ namespace EduFlowAI.Documents.Domain.Entities
         public string OriginalFileName { get; set; } = default!;
         public DocumentStatus Status { get; set; } = DocumentStatus.Uploaded;
         public string? VerificationDetailsJson { get; set; }
+        public string? RejectionReason { get; set; }
         public DateTimeOffset? VerifiedAt { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         // Navigation Properties
         public ICollection<DocumentReplacementRequest> ReplacementRequests { get; set; } = new List<DocumentReplacementRequest>();
+        public ICollection<ApplicantDocumentVersion> Versions { get; set; } = new List<ApplicantDocumentVersion>();
     }
 }

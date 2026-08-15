@@ -50,12 +50,12 @@ public class IntentConfidenceThresholdTests
     [Fact]
     public async Task LowConfidence_AsksForClarification()
     {
-        var svc = Build("""{"primaryIntent":"status","confidence":0.3}""");
+        var svc = Build("""{"primaryIntent":"application_status","confidence":0.3}""");
 
         var result = await Classify(svc);
 
         Assert.True(result.RequiresClarification); // ambiguous -> ask instead of guessing
-        Assert.Equal("status", result.PrimaryIntent);
+        Assert.Equal("application_status", result.PrimaryIntent);
     }
 
     [Fact]

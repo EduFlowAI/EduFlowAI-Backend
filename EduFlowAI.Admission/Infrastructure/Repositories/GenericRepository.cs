@@ -30,6 +30,28 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
             return await query.FirstOrDefaultAsync(predicate);
         }
 
+        public async Task<T?> GetFirstOrDefaultWithIncludeAsync(Expression<Func<T, bool>> predicate,
+            bool asNoTracking = false,
+            CancellationToken cancellationToken = default,
+            params Expression<Func<T, object>>[] includes)
+        {
+            IQueryable<T> query = _dbSet;
+
+            if (asNoTracking)
+            {
+                query = query.AsNoTracking();
+            }
+
+            foreach (var include in includes)
+            {
+                query = query.Include(include);
+            }
+
+            return await query.FirstOrDefaultAsync(
+                predicate,
+                cancellationToken);
+        }
+
         public async Task<List<T>?> GetAllAsync(Expression<Func<T, bool>> predicate,
             Func<IQueryable<T>, IQueryable<T>>? include = null)
         {
@@ -52,6 +74,11 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
         public void Update(T entity)
         {
             _dbSet.Update(entity);
+        }
+
+        public void Delete(T entity)
+        {
+            _dbSet.Remove(entity);
         }
 
         public async Task SaveChangesAsync()

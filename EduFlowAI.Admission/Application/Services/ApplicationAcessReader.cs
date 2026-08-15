@@ -49,7 +49,8 @@ namespace EduFlowAI.Admission.Application.Services
 
         public async Task<Guid> GetProgramIdAsync(Guid applicationId, CancellationToken cancellationToken)
         {
-            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
+            var application = await _applicationRepository.GetFirstOrDefaultWithIncludeAsync(app => app.Id == applicationId, 
+                true, cancellationToken, app => app.Cycle);
             if (application == null)
             {
                 return Guid.Empty; // Return an empty GUID if no application is found

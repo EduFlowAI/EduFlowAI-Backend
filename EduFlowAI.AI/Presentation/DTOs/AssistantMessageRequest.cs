@@ -4,4 +4,5 @@ public sealed record AssistantMessageRequest(
     string Message,
     string? SessionId,
     string? Language,
-    RecommendationQuestionnaireProgressDto? Recommendation = null);
+    RecommendationQuestionnaireProgressDto? Recommendation = null,
+    bool RecommendWithAvailableData = false);

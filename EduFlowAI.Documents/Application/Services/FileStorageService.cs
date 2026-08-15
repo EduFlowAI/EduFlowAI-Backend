@@ -14,6 +14,8 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
         // Define the storage path and the 10 MB size limit
         private readonly string _storageDirectory;
         private const int MaxFileSizeBytes = 10 * 1024 * 1024;
+        private const string StoragePath = @"D:\EduFlowAI\SecureStorage";
+
 
         // Map allowed extensions to their true binary signatures (magic bytes)
         private static readonly Dictionary<string, byte[][]> AllowedMagicBytes = new()
@@ -27,7 +29,7 @@ namespace EduFlowAI.Documents.Infrastructure.Storage
         public FileStorageService()
         {
             // Set path outside wwwroot, directly in the app's base directory
-            _storageDirectory = Path.Combine(AppContext.BaseDirectory, "SecureStorage");
+            _storageDirectory = StoragePath;
 
             // Ensure the folder exists on startup
             if (!Directory.Exists(_storageDirectory))

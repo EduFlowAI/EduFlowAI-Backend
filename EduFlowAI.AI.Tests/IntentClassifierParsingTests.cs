@@ -7,13 +7,13 @@ public class IntentClassifierParsingTests
     [Fact]
     public void PlainCamelCaseJson_ParsesStatusIntent()
     {
-        var raw = "{\"primaryIntent\":\"status\",\"confidence\":0.9,\"requiresClarification\":false}";
+        var raw = "{\"primaryIntent\":\"application_status\",\"confidence\":0.9,\"requiresClarification\":false}";
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
-        Assert.Equal("status", dto.PrimaryIntent);
-        Assert.Equal("status_service", dto.RoutedTo);
+        Assert.Equal("application_status", dto.PrimaryIntent);
+        Assert.Equal("application_status_service", dto.RoutedTo);
         Assert.Equal(0.9m, dto.Confidence);
     }
 
@@ -43,12 +43,12 @@ public class IntentClassifierParsingTests
     [Fact]
     public void FencedBlockWithoutLanguage_IsParsed()
     {
-        var raw = "```\n{\"primaryIntent\":\"status\",\"confidence\":0.7}\n```";
+        var raw = "```\n{\"primaryIntent\":\"application_status\",\"confidence\":0.7}\n```";
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
-        Assert.Equal("status", dto.PrimaryIntent);
+        Assert.Equal("application_status", dto.PrimaryIntent);
     }
 
     [Fact]
@@ -65,13 +65,13 @@ public class IntentClassifierParsingTests
     [Fact]
     public void UppercaseIntent_IsNormalized()
     {
-        var raw = "{\"primaryIntent\":\"STATUS\",\"confidence\":0.9}";
+        var raw = "{\"primaryIntent\":\"APPLICATION_STATUS\",\"confidence\":0.9}";
 
         var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
 
         Assert.True(ok);
-        Assert.Equal("status", dto.PrimaryIntent);
-        Assert.Equal("status_service", dto.RoutedTo);
+        Assert.Equal("application_status", dto.PrimaryIntent);
+        Assert.Equal("application_status_service", dto.RoutedTo);
     }
 
     [Fact]

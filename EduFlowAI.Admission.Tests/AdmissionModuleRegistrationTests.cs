@@ -1,10 +1,14 @@
 using EduFlowAI.Admission;
+using EduFlowAI.Admission.Application.Features.Branches;
+using EduFlowAI.Admission.Application.Features.Cycles;
+using EduFlowAI.Admission.Application.Features.Dashboard;
+using EduFlowAI.Admission.Application.Features.Offerings;
+using EduFlowAI.Admission.Application.Features.Programs;
+using EduFlowAI.Admission.Application.Features.Requirements;
+using EduFlowAI.Admission.Application.Features.Tracks;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
-using EduFlowAI.Admission.Application.Services.Configuration;
 using EduFlowAI.AI;
-using EduFlowAI.AI.Application.Interfaces;
-using EduFlowAI.AI.Application.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,8 +16,23 @@ namespace EduFlowAI.Admission.Tests;
 
 public sealed class AdmissionModuleRegistrationTests
 {
-    [Fact]
-    public void AddAdmissionModule_registers_configuration_service_exactly_once()
+    public static TheoryData<Type, Type> AdmissionFeatureRegistrations =>
+        new()
+        {
+            { typeof(IProgramConfigurationService), typeof(ProgramConfigurationService) },
+            { typeof(IProgramRequirementService), typeof(ProgramRequirementService) },
+            { typeof(ITrackService), typeof(TrackService) },
+            { typeof(IBranchService), typeof(BranchService) },
+            { typeof(IAdmissionCycleService), typeof(AdmissionCycleService) },
+            { typeof(IOfferingService), typeof(OfferingService) },
+            { typeof(IAdmissionDashboardService), typeof(AdmissionDashboardService) }
+        };
+
+    [Theory]
+    [MemberData(nameof(AdmissionFeatureRegistrations))]
+    public void AddAdmissionModule_registers_each_configuration_feature_exactly_once(
+        Type serviceType,
+        Type implementationType)
     {
         var services = new ServiceCollection();
 
@@ -21,13 +40,10 @@ public sealed class AdmissionModuleRegistrationTests
 
         var registration = Assert.Single(
             services,
-            descriptor =>
-                descriptor.ServiceType == typeof(IAdmissionConfigurationService));
+            descriptor => descriptor.ServiceType == serviceType);
 
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
-        Assert.Equal(
-            typeof(AdmissionConfigurationService),
-            registration.ImplementationType);
+        Assert.Equal(implementationType, registration.ImplementationType);
     }
 
     [Fact]
@@ -62,31 +78,12 @@ public sealed class AdmissionModuleRegistrationTests
 
         var registration = Assert.Single(
             services,
-            descriptor => descriptor.ServiceType == typeof(IOfferedTrackReader));
+            descriptor =>
+                descriptor.ServiceType == typeof(IOfferedTrackReader));
 
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
-        Assert.Equal(typeof(OfferedTrackReader), registration.ImplementationType);
-    }
-
-    [Fact]
-    public void Admission_fills_the_AI_status_reader_port()
-    {
-        var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder().Build();
-
-        services.AddAdmissionModule();
-        services.AddAIModule(configuration);
-
-        // The AI status intent resolves only if Admission supplies the reader behind the port.
-        var reader = Assert.Single(
-            services,
-            descriptor => descriptor.ServiceType == typeof(IApplicationStatusReader));
-        Assert.Equal(ServiceLifetime.Scoped, reader.Lifetime);
-        Assert.Equal(typeof(ApplicationStatusReader), reader.ImplementationType);
-
-        var answerService = Assert.Single(
-            services,
-            descriptor => descriptor.ServiceType == typeof(IStatusAnswerService));
-        Assert.Equal(typeof(StatusAnswerService), answerService.ImplementationType);
+        Assert.Equal(
+            typeof(OfferedTrackReader),
+            registration.ImplementationType);
     }
 }

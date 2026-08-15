@@ -52,7 +52,7 @@ public sealed class ApplicantDocumentsController : ControllerBase
             });
         }
 
-        // Returns the exact failure code (400, 403, 404, 500) and the error message
+        // Returns the exact failure code and the error message
         return StatusCode(result.StatusCode, new
         {
             error = result.Message
@@ -128,6 +128,30 @@ public sealed class ApplicantDocumentsController : ControllerBase
         {
             Message = result.Message,
             SubmittedCount = result.Data
+        });
+    }
+
+
+
+
+    [HttpGet("required")]
+    public async Task<IActionResult> GetRequiredDocuments(
+    [FromRoute] Guid applicationId,
+    CancellationToken cancellationToken)
+    {
+        var result = await _documentService.GetRequiredDocumentTypesAsync(applicationId, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            return StatusCode(result.StatusCode, new
+            {
+                documentTypes = result.Data.DocumentTypes
+            });
+        }
+
+        return StatusCode(result.StatusCode, new
+        {
+            error = result.Message
         });
     }
 }

@@ -60,18 +60,20 @@ public class AiChatServiceTests
         Assert.DoesNotContain("CONVERSATION SO FAR", chat.LastSystemPrompt);
     }
 
+    // A greeting or an off-book message matches no chunks - the model still answers conversationally,
+    // but with no reference material attached (so it chats warmly instead of inventing ITI facts).
     [Fact]
-    public async Task No_chunks_returns_the_fallback_without_calling_the_model()
+    public async Task No_chunks_still_answers_conversationally_without_reference_material()
     {
         var (service, retrieval, chat) = Build();
-        retrieval.Chunks = new List<RetrievedChunkDto>();   // nothing indexed matches
+        retrieval.Chunks = new List<RetrievedChunkDto>();   // a greeting matches nothing
 
-        var en = await service.AnswerWithContextAsync("anything", NoHistory, "en");
-        var ar = await service.AnswerWithContextAsync("أي شيء", NoHistory, "ar");
+        var result = await service.AnswerWithContextAsync("hi", NoHistory, "en");
 
-        Assert.Contains("don't have that", en.Answer);
-        Assert.Contains("لا تتوفر", ar.Answer);
-        Assert.Null(chat.LastSystemPrompt);   // never reached the model
+        Assert.Equal("an answer", result.Answer);                          // the model was consulted
+        Assert.NotNull(chat.LastSystemPrompt);
+        Assert.DoesNotContain("OFFICIAL ITI INFORMATION", chat.LastSystemPrompt);
+        Assert.Empty(result.Sources);
     }
 
     // A national ID typed into chat must not reach the embedding or the model.

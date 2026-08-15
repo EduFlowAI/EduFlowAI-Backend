@@ -13,7 +13,6 @@ namespace EduFlowAI.AI.Domain.Entities
 
         public string Content { get; set; } = default!;
 
-        // package Pgvector
         public Pgvector.Vector Embedding { get; set; } = default!;
 
         public KnowledgeBaseDocument Document { get; set; } = null!;

@@ -32,6 +32,10 @@ namespace EduFlowAI.Shared.Messaging.Contracts.Configuration
                     options.Policies.UseDurableOutboxOnAllSendingEndpoints();
                     options.Policies.UseDurableInboxOnAllListeners();
 
+                    options.PublishFaultEvents(
+                        includeExceptionMessage: false,
+                        includeStackTrace: false);
+
                     var rmq = options.UseRabbitMq(rabbitConnection!)
                         .EnableEnhancedDeadLettering();
 

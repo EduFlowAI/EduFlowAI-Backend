@@ -2,14 +2,12 @@
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
+using EduFlowAI.Documents.Application.Services;
 using EduFlowAI.Documents.Domain.Enums;
 using EduFlowAI.Shared.Messaging.Contracts.Documents.V1;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Wolverine.Attributes;
-// Ensure you have using statements for Halim's namespace here:
- //using EduFlowAI.Admission.Application.Services;
-// using EduFlowAI.Admission.Application.DTOs;
 
 namespace EduFlowAI.Documents.Application.Messaging;
 
@@ -19,7 +17,7 @@ public sealed class ApplicantDocumentVerificationCompletedV1Handler
     public static async Task Handle(
         ApplicantDocumentVerificationCompletedV1 message,
         IDocumentDbContext dbContext,
-        IStatusTransitionCoordinator statusCoordinator, // <-- Injected Halim's Coordinator
+        IStatusTransitionCoordinator statusCoordinator,
         CancellationToken cancellationToken)
     {
         var document = await dbContext.ApplicantDocuments
@@ -62,14 +60,19 @@ public sealed class ApplicantDocumentVerificationCompletedV1Handler
             ? DocumentStatus.Approved
             : DocumentStatus.NeedsHumanReview;
 
-        // 4. Notify Halim's Application State Machine
-        var reviewResult = new DocumentReviewResultDto
-        {
-            ReviewerType = ReviewerType.AI,
-            IsAccepted = isExactMatch,
-            IsAgentUncertain = !isExactMatch
-        };
+        var reviewResult = await DocumentPackageReviewResolver.ResolveAsync(
+            dbContext, document.ApplicationId,
+            document.Id, document.Status,
+            cancellationToken);
 
-        await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
+        if(reviewResult is not null)
+        {
+            var transition= await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
+            if (!transition.IsSuccess)
+            {
+                throw new InvalidOperationException(transition.ErrorMessage);
+            }
+        }
+
     }
 }

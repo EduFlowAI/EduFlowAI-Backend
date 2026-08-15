@@ -154,8 +154,7 @@ public class KnowledgeBaseService : IKnowledgeIndexingService
 
         await _repository.AddDocumentAsync(document, cancellationToken);
 
-        // Indexing a PDF takes ~20 seconds, so the caller gets the id and a Pending status now
-        // and polls GetDocumentStatusAsync until it reaches Indexed or Failed.
+        // Indexing takes ~20s, so return the id as Pending now; the caller polls until Indexed/Failed.
         await _indexingQueue.EnqueueAsync(documentId, cancellationToken);
 
         return documentId;

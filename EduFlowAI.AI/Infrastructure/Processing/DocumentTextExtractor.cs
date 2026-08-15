@@ -49,8 +49,7 @@ Rules:
         if (IsPlainText(fileName))
             return DecodeText(content);
 
-        // iText loses ligatures and interleaves multi-column layouts, so transcribe with the model
-        // when possible and keep local extraction as the fallback.
+        // iText loses ligatures and interleaves multi-column layouts, so prefer model transcription with local extraction as fallback.
         if (_options.UseAiExtraction && content.Length <= _options.MaxInlineBytesForAi)
         {
             try
