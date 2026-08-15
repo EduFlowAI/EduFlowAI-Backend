@@ -14,7 +14,7 @@ namespace EduFlowAI.Admission.Application.EligibilityRuleStrategy
                 return new EligibilityFailureReason
                 {
                     Code = "NationalityNotAllowed",
-                    Message = "The applicant's nationality does not meet the required nationality",
+                    Message = $"The applicant's nationality ({profile.Nationality}) does not meet the required nationality ({cycleRule.RequiredNationality})",
                     ActualValue = profile.Nationality,
                     AllowedValue = cycleRule.RequiredNationality
                 };

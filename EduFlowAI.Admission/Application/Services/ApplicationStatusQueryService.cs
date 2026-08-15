@@ -2,6 +2,7 @@
 using EduFlowAI.Admission.Application.Extensions;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Application.Models;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
@@ -268,7 +269,13 @@ namespace EduFlowAI.Admission.Application.Services
             {
                 try
                 {
-                    failureReasons = System.Text.Json.JsonSerializer.Deserialize<List<string>>(eligibility.FailureReasonsJson) ?? new List<string>();
+                    var reasonsObjects = System.Text.Json.JsonSerializer.Deserialize<List<EligibilityFailureReason>>(eligibility.FailureReasonsJson);
+
+                    if (reasonsObjects != null)
+                    {
+                        // Map the object properties to a list of strings (Messages) for the DTO
+                        failureReasons = reasonsObjects.Select(r => r.Message).ToList();
+                    }
                 }
                 catch
                 {       // Fallback to an empty list in case of JSON parsing errors

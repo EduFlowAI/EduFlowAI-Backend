@@ -9,6 +9,7 @@
         public decimal? Score { get; set; }
         public decimal MaxScore { get; set; }
         public required string Result { get; set; }
+        public string? TrackName { get; set; }
 
         // Date when the score was recorded
         public DateTimeOffset UpdatedAt { get; set; }
