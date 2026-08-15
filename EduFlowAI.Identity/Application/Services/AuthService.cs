@@ -60,8 +60,7 @@ internal sealed class AuthService(
                 user.Id,
                 email,
                 RequiresEmailConfirmation: true,
-                DevelopmentConfirmationToken:
-                    environment.IsDevelopment() ? token : null));
+                DevelopmentConfirmationToken:token));
     }
 
     public async Task<IdentityOperationResult<LoginResponse>> LoginAsync(
