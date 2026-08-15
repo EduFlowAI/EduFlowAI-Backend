@@ -1,8 +1,10 @@
 using EduFlowAI.Admission;
 using EduFlowAI.Admission.Application.Messages;
 using EduFlowAI.AI;
+using EduFlowAI.AI.Application.DocumentVerification.Messaging;
 using EduFlowAI.Communication;
 using EduFlowAI.Documents;
+using EduFlowAI.Documents.Application.Messaging;
 using EduFlowAI.Identity;
 using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Application.Services;
@@ -52,6 +54,12 @@ namespace EduFlowAI.Worker
             builder.Services.ConfigureWolverine(options =>
             {
                 options.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
+
+                options.Discovery.IncludeAssembly(
+                    typeof(VerifyApplicantDocumentV1Handler).Assembly);
+                options.Discovery.IncludeAssembly(
+                    typeof(ApplicantDocumentVerificationCompletedV1Handler).Assembly);
+
                 MessagingConfiguration.ConfigureWorkerListeners(options);
 
                 options.ListenToRabbitQueue(AdmissionQueueNames.AdmissionStatusEmails);
