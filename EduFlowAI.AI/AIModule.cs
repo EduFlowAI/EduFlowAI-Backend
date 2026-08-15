@@ -1,3 +1,4 @@
+using Amazon.S3;
 using EduFlowAI.AI.Application.DocumentVerification;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Application.Services;
@@ -14,6 +15,7 @@ using EduFlowAI.AI.Infrastructure.Services;
 using EduFlowAI.AI.Infrastructure.Storage;
 using EduFlowAI.AI.Presentation.Interfaces;
 using EduFlowAI.AI.Presentation.Services;
+using EduFlowAI.Documents.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,8 +43,8 @@ public static class AIModule
         services.AddOptions<GeminiOptions>()
             .BindConfiguration(GeminiOptions.SectionName);
 
-        services.AddOptions<FileStorageOptions>()
-            .BindConfiguration(FileStorageOptions.SectionName);
+        services.AddOptions<DocumentStorageOptions>()
+            .BindConfiguration(DocumentStorageOptions.SectionName);
 
         services.AddOptions<ChatSessionOptions>()
             .BindConfiguration(ChatSessionOptions.SectionName);
@@ -61,7 +63,9 @@ public static class AIModule
         // Injected so session expiry can be tested with a fake clock.
         services.TryAddSingleton(TimeProvider.System);
 
-        services.AddSingleton<IFileStorageService, LocalFileStorageService>();
+        services.AddAWSService<IAmazonS3>();
+
+        services.AddSingleton<IFileStorageService, S3FileStorageService>();
 
         services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>();
         services.AddHttpClient<IGeminiChatClient, GeminiChatClient>();
