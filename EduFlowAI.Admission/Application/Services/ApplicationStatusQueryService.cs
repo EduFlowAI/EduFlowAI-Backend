@@ -44,7 +44,16 @@ namespace EduFlowAI.Admission.Application.Services
 
         public async Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default)
         {
-            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.ApplicantUserId == applicantUserId);
+            // Newest live application; a withdrawn one only when there is nothing else.
+            var application =
+                await _applicationRepository.GetFirstOrDefaultAsync(
+                    predicate: app => app.ApplicantUserId == applicantUserId
+                                   && app.Status != ApplicationStatus.Withdrawn,
+                    include: query => query.OrderByDescending(app => app.CreatedAt))
+                ?? await _applicationRepository.GetFirstOrDefaultAsync(
+                    predicate: app => app.ApplicantUserId == applicantUserId,
+                    include: query => query.OrderByDescending(app => app.CreatedAt));
+
             if(application == null)
             {
                 return null;
