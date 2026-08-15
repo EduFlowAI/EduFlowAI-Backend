@@ -1,3 +1,4 @@
+using Amazon.S3;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Application.Services;
 using EduFlowAI.Communication.Application.Interfaces.Emails;
@@ -26,6 +27,8 @@ namespace EduFlowAI.Documents
             services.AddOptions<DocumentStorageOptions>()
                 .BindConfiguration(DocumentStorageOptions.SectionName);
 
+            services.AddAWSService<IAmazonS3>();
+
             // Application + Infrastructure services registrations go here later
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
@@ -49,6 +52,8 @@ namespace EduFlowAI.Documents
             // Bind DocumentStorage options from appsettings.json
             services.AddOptions<DocumentStorageOptions>()
                 .BindConfiguration(DocumentStorageOptions.SectionName);
+
+            services.AddAWSService<IAmazonS3>();
 
             services.AddScoped<IEmailTemplate, DocumentReplacementRequestEmailTemplate>();
 
