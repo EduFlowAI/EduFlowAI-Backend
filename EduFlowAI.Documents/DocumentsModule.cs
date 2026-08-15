@@ -22,6 +22,10 @@ namespace EduFlowAI.Documents
     {
         public static IServiceCollection AddDocumentsModule(this IServiceCollection services)
         {
+            // Bind DocumentStorage options from appsettings.json
+            services.AddOptions<DocumentStorageOptions>()
+                .BindConfiguration(DocumentStorageOptions.SectionName);
+
             // Application + Infrastructure services registrations go here later
             services.AddScoped<IFileStorageService, FileStorageService>();
             services.AddScoped<IReplacementRequestService, ReplacementRequestService>();
@@ -42,6 +46,10 @@ namespace EduFlowAI.Documents
 
         public static IServiceCollection AddDocumentsWorkerModule(this IServiceCollection services)
         {
+            // Bind DocumentStorage options from appsettings.json
+            services.AddOptions<DocumentStorageOptions>()
+                .BindConfiguration(DocumentStorageOptions.SectionName);
+
             services.AddScoped<IEmailTemplate, DocumentReplacementRequestEmailTemplate>();
 
             // Needed by AI's document verification handler (file reader + expected-field lookup).
@@ -55,3 +63,4 @@ namespace EduFlowAI.Documents
         // public static IEndpointRouteBuilder MapDocumentsPresentation(this IEndpointRouteBuilder app) { ... }
     }
 }
+

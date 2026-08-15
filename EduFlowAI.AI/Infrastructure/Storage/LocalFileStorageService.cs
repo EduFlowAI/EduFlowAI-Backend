@@ -14,12 +14,24 @@ public class LocalFileStorageService : IFileStorageService
     public LocalFileStorageService(IOptions<FileStorageOptions> options)
     {
         var configured = options?.Value?.Root;
-        if (string.IsNullOrWhiteSpace(configured))
-            configured = "protected-files";
 
-        _root = Path.IsPathRooted(configured)
-            ? Path.GetFullPath(configured)
-            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
+        // Nothing configured: keep uploads out of the build output, which a rebuild deletes.
+        _root = string.IsNullOrWhiteSpace(configured)
+            ? DefaultRoot()
+            : Path.IsPathRooted(configured)
+                ? Path.GetFullPath(configured)
+                : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configured));
+    }
+
+    // Per-user data, outside the repo and bin, so uploads survive a rebuild with no configuration.
+    private static string DefaultRoot()
+    {
+        var localAppData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+
+        return string.IsNullOrWhiteSpace(localAppData)
+            ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "protected-files"))
+            : Path.Combine(localAppData, "EduFlowAI", "protected-files");
     }
 
     public async Task<string> SaveAsync(Stream content, string relativeKey, CancellationToken cancellationToken = default)

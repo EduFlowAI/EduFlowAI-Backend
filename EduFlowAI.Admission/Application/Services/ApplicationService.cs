@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Features.Offerings;
 using EduFlowAI.Admission.Application.Interfaces;
 using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
@@ -8,7 +9,6 @@ using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
-using Wolverine.Persistence;
 
 namespace EduFlowAI.Admission.Application.Services
 {
@@ -18,21 +18,27 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<ApplicationPreference> _preferenceRepository;
         private readonly IGenericRepository<ApplicantProfile> _profileRepository;
+        //private readonly IGenericRepository<EligibilityResult> _eligibilityResultRepository;
         private readonly IAdmissionEligibilityService _eligibilityService;
+        private readonly IGenericRepository<AdmissionCycle> _cycleRepository;
         private readonly IMapper _mapper;
 
         public ApplicationService(IApplicationRepository applicationRepository,
             IGenericRepository<TrackBranchOffering> offeringRepository,
             IGenericRepository<ApplicationPreference> preferenceRepository,
             IGenericRepository<ApplicantProfile> profileRepository,
+            //IGenericRepository<EligibilityResult> eligibilityResultRepository,
             IAdmissionEligibilityService eligibilityService,
+            IGenericRepository<AdmissionCycle> cycleRepository,
             IMapper mapper)
         {
             _applicationRepository = applicationRepository;
             _offeringRepository = offeringRepository;
             _preferenceRepository = preferenceRepository;
             _profileRepository = profileRepository;
+            //_eligibilityResultRepository = eligibilityResultRepository;
             _eligibilityService = eligibilityService;
+            _cycleRepository = cycleRepository;
             _mapper = mapper;
         }
 
@@ -44,19 +50,53 @@ namespace EduFlowAI.Admission.Application.Services
             if(string.IsNullOrWhiteSpace(applicantUserId))
                 return Result<ApplicationDto>.Failure(400, "Applicant user ID cannot be null or empty");
 
-            // 1. Business Rule Validation: One active application per applicant and cycle
-            // Check if there is any application for this cycle that is NOT Withdrawn.
-            var activeApplication = await _applicationRepository.GetFirstOrDefaultAsync(
+            // 1. Validate Cycle Existence, Status, and Deadline FIRST
+            var cycle = await _cycleRepository.GetFirstOrDefaultAsync(c => c.Id == request.CycleId);
+
+            if (cycle == null)
+            {
+                return Result<ApplicationDto>.Failure(404, "The requested admission cycle was not found.");
+            }
+
+            if (cycle.Status != CycleStatus.Active)
+            {
+                return Result<ApplicationDto>.Failure(400, $"The admission cycle '{cycle.Label}' is not currently active.");
+            }
+
+            if (DateTimeOffset.UtcNow > cycle.DeadlineUtc)
+            {
+                // This completely prevents withdrawn applicants (or new ones) from applying after exams theoretically start
+                return Result<ApplicationDto>.Failure(400, $"The application deadline for '{cycle.Label}' has passed. New applications are no longer accepted.");
+            }
+
+            // 2. Business Rule Validation: One active OR concluded application per applicant and cycle.
+            var existingApplication = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: a => a.ApplicantUserId == applicantUserId
                              && a.CycleId == request.CycleId
                              && a.Status != ApplicationStatus.Withdrawn
             );
-            if (activeApplication != null)
-                return Result<ApplicationDto>.Failure(400, "You already have an active application for this admission cycle.");
+            if (existingApplication != null)
+            {
+                bool isTerminalRejectedState = existingApplication.Status == ApplicationStatus.EligibilityFailed ||
+                                               existingApplication.Status == ApplicationStatus.DocumentRejected ||
+                                               existingApplication.Status == ApplicationStatus.NotSelected ||
+                                               existingApplication.Status == ApplicationStatus.Expired;
 
-            // 2. Map and set Business Rules/Domain logic
+                if (isTerminalRejectedState)
+                {
+                    return Result<ApplicationDto>.Failure(400,
+                        $"You have already applied to this admission cycle and your application was concluded with status '{existingApplication.Status}'. You cannot create a new application for the same cycle.");
+                }
+                else
+                {
+                    return Result<ApplicationDto>.Failure(400,
+                        "You already have an active application for this admission cycle. Please manage it from your dashboard.");
+                }
+            }
+
+            // 3. Map and set Business Rules/Domain logic
             var application = _mapper.Map<Domain.Entities.Application>(request);
-            application.Id = Guid.NewGuid();
+            //application.Id = Guid.NewGuid();
             application.ApplicantUserId = applicantUserId;
             application.Status = ApplicationStatus.Draft;
             application.CreatedAt = DateTime.UtcNow;
@@ -115,10 +155,16 @@ namespace EduFlowAI.Admission.Application.Services
             var requestedBranchIds = request.Preferences.Select(p => p.BranchId).Distinct().ToList();
 
             // 4. Fetch matching offerings for the current Cycle in a SINGLE query (Performance optimization - Avoids N+1)
-            var availableOfferings = await _offeringRepository.GetAllAsync(o =>
-                o.CycleId == application.CycleId &&
-                requestedTrackIds.Contains(o.TrackId) &&
-                requestedBranchIds.Contains(o.BranchId));
+            var availableOfferings = await _offeringRepository.GetAllAsync(
+                o =>
+                    o.CycleId == application.CycleId &&
+                    requestedTrackIds.Contains(o.TrackId) &&
+                    requestedBranchIds.Contains(o.BranchId),
+                query => query
+                    .Include(o => o.Cycle)
+                        .ThenInclude(cycle => cycle.Program)
+                    .Include(o => o.Track)
+                    .Include(o => o.Branch));
 
 
             // 5. Robustly sync existing preferences instead of using .Clear()
@@ -131,7 +177,8 @@ namespace EduFlowAI.Admission.Application.Services
                     o.TrackId == prefDto.TrackId &&
                     o.BranchId == prefDto.BranchId);
 
-                if (matchedOffering == null)
+                if (matchedOffering == null ||
+                    !IsSelectablePreferenceOffering(matchedOffering))
                 {
                     return Result<ApplicationDetailsDto>.Failure(400, "The selected Track and Branch combination is not available for this admission cycle.");
                 }
@@ -220,6 +267,20 @@ namespace EduFlowAI.Admission.Application.Services
             return Result<ApplicationDetailsDto>.Success(resultDto, 200, "Preferences updated successfully.");
         }
 
+        internal static bool IsSelectablePreferenceOffering(
+            TrackBranchOffering offering)
+        {
+            ArgumentNullException.ThrowIfNull(offering);
+
+            return offering.Cycle.Status == CycleStatus.Active &&
+                offering.Track.IsActive &&
+                offering.Branch.IsActive &&
+                OfferingService.IsAllowedByOfficialCatalog(
+                    offering.Track,
+                    offering.Branch,
+                    offering.Cycle.Program.Code);
+        }
+
         public async Task<Result<ApplicationDetailsDto>> SubmitApplicationAsync(Guid applicationId,
             string applicantUserId, CancellationToken cancellationToken = default)
         {
@@ -227,9 +288,20 @@ namespace EduFlowAI.Admission.Application.Services
             // 1. Fetch the application along with required related data (Cycle and Preferences)
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
-                include: query => query.Include(a => a.Cycle)
-                                       .Include(a => a.Preferences)
-                                            .ThenInclude(p => p.TrackBranchOffering)
+                include: query => query
+                    .Include(a => a.Cycle)
+                        .ThenInclude(cycle => cycle.Program)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Track)
+                                .ThenInclude(track => track.Program)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Branch)
+                    .Include(a => a.Preferences)
+                        .ThenInclude(p => p.TrackBranchOffering)
+                            .ThenInclude(offering => offering.Cycle)
+                                .ThenInclude(cycle => cycle.Program)
             );
             if(application == null)
             {
@@ -260,10 +332,16 @@ namespace EduFlowAI.Admission.Application.Services
             );
 
             // STEP 3: Atomic State Mutation
-            // 3.1 Attach the evaluation result to the application
+            // CRITICAL FIX: The eligibility service likely assigned a Guid.NewGuid() to the result.
+            // When attached to the EF Core graph, a non-empty Guid makes EF Core assume it is an existing entity (UPDATE).
+            // 3.1 We MUST reset the Id to Guid.Empty so EF Core treats it as a completely new entity and generates an INSERT.
+            eligibilityResult.Id = Guid.Empty;
+
+            // 3.2 Explicitly link the new result to the application ID
+            eligibilityResult.ApplicationId = application.Id;
             application.EligibilityResult = eligibilityResult;
 
-            // 3.2 Update the status based on the evaluation result
+            // 3.4 Update the status based on the evaluation result
             if (eligibilityResult.Passed)
             {
                 application.Status = ApplicationStatus.DocumentsRequired;
@@ -273,11 +351,10 @@ namespace EduFlowAI.Admission.Application.Services
                 application.Status = ApplicationStatus.EligibilityFailed;
             }
 
-            // 3.3 Set submission and update timestamps
+            // 3.5 Set submission and update timestamps
             application.SubmittedAt = DateTimeOffset.UtcNow;
             application.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _applicationRepository.Update(application);
             await _applicationRepository.SaveChangesAsync();
 
             var applicationDetailsDto = new ApplicationDetailsDto(
@@ -339,8 +416,30 @@ namespace EduFlowAI.Admission.Application.Services
                 return $"The deadline for '{application.Cycle.Label}' has passed. Submissions are no longer accepted.";
             }
 
+            // Rule F: Stored draft preferences may predate the current catalog.
+            // Revalidate them at submission so stale or crafted offerings cannot
+            // bypass the current active/canonical selection policy.
+            if (!HasOnlySelectableStoredPreferences(application))
+            {
+                return "One or more selected Track and Branch combinations are no longer available for this admission cycle.";
+            }
+
             // Return null if all validations pass successfully
             return null;
+        }
+
+        internal static bool HasOnlySelectableStoredPreferences(
+            Domain.Entities.Application application)
+        {
+            ArgumentNullException.ThrowIfNull(application);
+
+            return application.Preferences is { Count: > 0 } &&
+                application.Preferences.All(preference =>
+                    preference.TrackBranchOffering is not null &&
+                    preference.TrackBranchOffering.CycleId ==
+                        application.CycleId &&
+                    IsSelectablePreferenceOffering(
+                        preference.TrackBranchOffering));
         }
     }
 }

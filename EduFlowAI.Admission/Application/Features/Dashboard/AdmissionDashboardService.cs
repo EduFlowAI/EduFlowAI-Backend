@@ -1,6 +1,7 @@
 using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Application.Features.Cycles;
 using EduFlowAI.Admission.Application.Interfaces.Services;
+using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,7 @@ public sealed class AdminAdmissionDashboardDto
 public interface IAdmissionDashboardService
 {
     Task<AdminAdmissionDashboardDto> GetDashboardAsync(
+        Guid? programId = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -43,19 +45,27 @@ internal sealed class AdmissionDashboardService : IAdmissionDashboardService
     }
 
     public async Task<AdminAdmissionDashboardDto> GetDashboardAsync(
+        Guid? programId = null,
         CancellationToken cancellationToken = default)
     {
-        var activeCycle = await _dbContext.AdmissionCycles
-            .AsNoTracking()
-            .Include(x => x.Program)
-            .Include(x => x.EligibilityRule)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Track)
-            .Include(x => x.Offerings)
-                .ThenInclude(x => x.Branch)
-            .SingleOrDefaultAsync(
-                x => x.Status == CycleStatus.Active,
-                cancellationToken);
+        AdmissionCycle? activeCycle = null;
+
+        if (programId is { } selectedProgramId && selectedProgramId != Guid.Empty)
+        {
+            activeCycle = await _dbContext.AdmissionCycles
+                .AsNoTracking()
+                .Include(x => x.Program)
+                .Include(x => x.EligibilityRule)
+                .Include(x => x.Offerings)
+                    .ThenInclude(x => x.Track)
+                .Include(x => x.Offerings)
+                    .ThenInclude(x => x.Branch)
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.ProgramId == selectedProgramId &&
+                        x.Status == CycleStatus.Active,
+                    cancellationToken);
+        }
 
         return new AdminAdmissionDashboardDto
         {

@@ -59,6 +59,8 @@ public sealed class CreateProgramRequest
 
     [Range(1, 60)]
     public int DurationMonths { get; init; }
+
+    public string Description { get; init; } = string.Empty;
 }
 
 public sealed class UpdateProgramRequest
@@ -139,7 +141,7 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 Id = x.Id,
                 Name = x.Name,
                 Code = x.Code,
-                ProgramCount = x.Programs.Count
+                ProgramCount = x.Programs.Count,
             })
             .ToListAsync(cancellationToken);
     }
@@ -167,7 +169,9 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             cancellationToken,
             async ct =>
             {
-                if (await _dbContext.Institutions.AnyAsync(x => x.Code == code, ct))
+                if (await _dbContext.Institutions.AnyAsync(
+                        x => x.Code.ToUpper() == code,
+                        ct))
                 {
                     return Result<InstitutionDto>.Failure(
                         409,
@@ -244,7 +248,9 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 }
 
                 if (await _dbContext.Institutions.AnyAsync(
-                        x => x.Id != institutionId && x.Code == code,
+                        x =>
+                            x.Id != institutionId &&
+                            x.Code.ToUpper() == code,
                         ct))
                 {
                     return Result<InstitutionDto>.Failure(
@@ -270,21 +276,21 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
     public async Task<IReadOnlyList<ProgramDto>> GetProgramsAsync(
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.Programs
+        var programs = await _dbContext.Programs
             .AsNoTracking()
+            .Include(program => program.Institution)
+            .Include(program => program.Tracks)
+            .Include(program => program.AdmissionCycles)
             .OrderBy(x => x.Name)
-            .Select(x => new ProgramDto
-            {
-                Id = x.Id,
-                InstitutionId = x.InstitutionId,
-                InstitutionName = x.Institution.Name,
-                Name = x.Name,
-                Code = x.Code,
-                DurationMonths = x.DurationMonths,
-                TrackCount = x.Tracks.Count,
-                CycleCount = x.AdmissionCycles.Count
-            })
             .ToListAsync(cancellationToken);
+
+        return programs
+            .Select(program => MapProgram(
+                program,
+                program.Institution.Name,
+                program.Tracks.Count,
+                program.AdmissionCycles.Count))
+            .ToList();
     }
 
     public async Task<Result<ProgramDto>> CreateProgramAsync(
@@ -329,7 +335,9 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             cancellationToken,
             async ct =>
             {
-                if (await _dbContext.Programs.AnyAsync(x => x.Code == code, ct))
+                if (await _dbContext.Programs.AnyAsync(
+                        x => x.Code.ToUpper() == code,
+                        ct))
                 {
                     return Result<ProgramDto>.Failure(
                         409,
@@ -343,7 +351,8 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                     Name = name,
                     Code = code,
                     DurationMonths = request.DurationMonths,
-                    CreatedAt = UtcNow
+                    CreatedAt = UtcNow,
+                    Description = request.Description?.Trim() ?? string.Empty
                 };
 
                 _dbContext.Programs.Add(program);
@@ -410,7 +419,9 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 }
 
                 if (await _dbContext.Programs.AnyAsync(
-                        x => x.Id != programId && x.Code == code,
+                        x =>
+                            x.Id != programId &&
+                            x.Code.ToUpper() == code,
                         ct))
                 {
                     return Result<ProgramDto>.Failure(
@@ -423,9 +434,10 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
                 program.DurationMonths = request.DurationMonths;
                 await _dbContext.SaveChangesAsync(ct);
 
-                int trackCount = await _dbContext.Tracks.CountAsync(
-                    x => x.ProgramId == programId,
-                    ct);
+                var tracks = await _dbContext.Tracks
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync(ct);
+                int trackCount = tracks.Count;
                 int cycleCount = await _dbContext.AdmissionCycles.CountAsync(
                     x => x.ProgramId == programId,
                     ct);
@@ -525,7 +537,7 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             Id = institution.Id,
             Name = institution.Name,
             Code = institution.Code,
-            ProgramCount = programCount
+            ProgramCount = programCount,
         };
     }
 
@@ -544,7 +556,7 @@ internal sealed class ProgramConfigurationService : IProgramConfigurationService
             Code = program.Code,
             DurationMonths = program.DurationMonths,
             TrackCount = trackCount,
-            CycleCount = cycleCount
+            CycleCount = cycleCount,
         };
     }
 }

@@ -123,4 +123,85 @@ public class IntentClassifierParsingTests
         Assert.False(ok);
         Assert.Equal("knowledge", dto.PrimaryIntent);
     }
+
+    // The router writes the query retrieval embeds, keeping greeting text out of the vector.
+    [Fact]
+    public void SearchQuery_FromTheModel_IsParsed()
+    {
+        var raw = "{\"intents\":[{\"intent\":\"knowledge\",\"confidence\":0.9}],\"language\":\"ar\"," +
+                  "\"searchQuery\":\"tracks offered at Alexandria branch\"}";
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("tracks offered at Alexandria branch", dto.SearchQuery);
+    }
+
+    [Fact]
+    public void SearchQuery_IsTrimmed()
+    {
+        var raw = "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"searchQuery\":\"  admission dates  \"}";
+
+        IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.Equal("admission dates", dto.SearchQuery);
+    }
+
+    // Blank means no lookup is needed; an over-long value is the model rambling.
+    [Fact]
+    public void BlankOrMissingSearchQuery_IsNull()
+    {
+        IntentClassifierService.TryParseIntentResponse(
+            "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"searchQuery\":\"   \"}", out var blank);
+        IntentClassifierService.TryParseIntentResponse(
+            "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9}", out var missing);
+
+        Assert.Null(blank.SearchQuery);
+        Assert.Null(missing.SearchQuery);
+    }
+
+    [Fact]
+    public void OverlongSearchQuery_IsDropped()
+    {
+        var overlong = new string('a', 301);
+        var raw = "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"searchQuery\":\"" + overlong + "\"}";
+
+        IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.Null(dto.SearchQuery);
+    }
+
+    [Fact]
+    public void Language_FromTheModel_IsParsed()
+    {
+        var raw = "{\"intents\":[{\"intent\":\"knowledge\",\"confidence\":0.9}],\"language\":\"ar\"}";
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("ar", dto.Language);
+    }
+
+    [Fact]
+    public void Language_IsNormalizedToLowercase()
+    {
+        var raw = "{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"EN\"}";
+
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Equal("en", dto.Language);
+    }
+
+    [Theory]
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9}")]                     // no language field
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"fr\"}")]  // unsupported value
+    [InlineData("{\"primaryIntent\":\"knowledge\",\"confidence\":0.9,\"language\":\"\"}")]    // empty
+    public void UnusableLanguage_IsNull_SoTheCallerCanFallBack(string raw)
+    {
+        var ok = IntentClassifierService.TryParseIntentResponse(raw, out var dto);
+
+        Assert.True(ok);
+        Assert.Null(dto.Language);
+    }
 }

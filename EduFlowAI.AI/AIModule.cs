@@ -53,6 +53,9 @@ public static class AIModule
         services.AddOptions<IngestionOptions>()
             .BindConfiguration(IngestionOptions.SectionName);
 
+        services.AddOptions<RetrievalOptions>()
+            .BindConfiguration(RetrievalOptions.SectionName);
+
         services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
 
         // Injected so session expiry can be tested with a fake clock.
@@ -72,6 +75,9 @@ public static class AIModule
 
         // Phrases the applicant's document statuses warmly, grounded in the facts (§ document_status).
         services.AddScoped<IDocumentStatusNarrator, DocumentStatusNarrator>();
+
+        // Narrates the application status, which is otherwise internal wording (§ application_status).
+        services.AddScoped<IApplicationStatusNarrator, ApplicationStatusNarrator>();
 
         services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
 

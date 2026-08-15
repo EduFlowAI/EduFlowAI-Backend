@@ -14,6 +14,9 @@ namespace EduFlowAI.AI.Infrastructure.Persistence;
 
 public class KnowledgeRepository : IKnowledgeRepository
 {
+    // Upper bound on rows pulled back for in-memory keyword ranking.
+    private const int MaxKeywordCandidates = 200;
+
     private readonly IAIDbContext _context;
 
     public KnowledgeRepository(IAIDbContext context)
@@ -78,10 +81,42 @@ public class KnowledgeRepository : IKnowledgeRepository
             .Take(limit)
             .Select(c => new RetrievedChunkDto
             {
+                ChunkId = c.Id,
                 Content = c.Content,
                 DocumentId = c.KnowledgeBaseDocumentId,
                 SourceTitle = c.Document.FileName
             })
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<RetrievedChunkDto>> SearchChunksByKeywordAsync(
+        IReadOnlyList<string> terms,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (terms is null || terms.Count == 0 || limit <= 0)
+            return new List<RetrievedChunkDto>();
+
+        var patterns = terms.Select(term => $"%{term}%").ToList();
+
+        // Match ANY term in SQL, then rank in memory; the cap keeps it bounded.
+        var candidates = await _context.KnowledgeBaseChunks
+            .Where(c => patterns.Any(pattern => EF.Functions.ILike(c.Content, pattern)))
+            .Take(MaxKeywordCandidates)
+            .Select(c => new RetrievedChunkDto
+            {
+                ChunkId = c.Id,
+                Content = c.Content,
+                DocumentId = c.KnowledgeBaseDocumentId,
+                SourceTitle = c.Document.FileName
+            })
+            .ToListAsync(cancellationToken);
+
+        // A chunk naming several terms beats one repeating a common word.
+        return candidates
+            .OrderByDescending(c => terms.Count(term =>
+                c.Content.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            .Take(limit)
+            .ToList();
     }
 }

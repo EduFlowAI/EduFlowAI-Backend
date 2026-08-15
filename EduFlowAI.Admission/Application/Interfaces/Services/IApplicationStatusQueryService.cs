@@ -55,5 +55,14 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task<EligibilityDetailsDto?> GetEligibilityDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the enrollment checklist tasks and progress for a specific application.
+        /// </summary>
+        /// <param name="applicationId"></param>
+        /// <param name="applicantUserId"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        Task<EnrollmentChecklistDto?> GetEnrollmentChecklistAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default);
     }
 }

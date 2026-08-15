@@ -1,4 +1,4 @@
-﻿using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.DTOs;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Documents.Application.DbContextAbstraction;
@@ -13,14 +13,23 @@ namespace EduFlowAI.Documents.Application.Messaging;
 
 public sealed class ApplicantDocumentVerificationCompletedV1Handler
 {
-    [Transactional(typeof(IDocumentDbContext))]
-    public static async Task Handle(
-        ApplicantDocumentVerificationCompletedV1 message,
+    private readonly IDocumentDbContext _dbContext;
+    private readonly IStatusTransitionCoordinator _statusCoordinator;
+
+    public ApplicantDocumentVerificationCompletedV1Handler(
         IDocumentDbContext dbContext,
-        IStatusTransitionCoordinator statusCoordinator,
+        IStatusTransitionCoordinator statusCoordinator)
+    {
+        _dbContext = dbContext;
+        _statusCoordinator = statusCoordinator;
+    }
+
+    [Transactional(typeof(IDocumentDbContext))]
+    public async Task Handle(
+        ApplicantDocumentVerificationCompletedV1 message,
         CancellationToken cancellationToken)
     {
-        var document = await dbContext.ApplicantDocuments
+        var document = await _dbContext.ApplicantDocuments
             .SingleOrDefaultAsync(
                 x => x.Id == message.DocumentId,
                 cancellationToken);
@@ -61,18 +70,19 @@ public sealed class ApplicantDocumentVerificationCompletedV1Handler
             : DocumentStatus.NeedsHumanReview;
 
         var reviewResult = await DocumentPackageReviewResolver.ResolveAsync(
-            dbContext, document.ApplicationId,
+            _dbContext, document.ApplicationId,
             document.Id, document.Status,
             cancellationToken);
 
-        if(reviewResult is not null)
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (reviewResult is not null)
         {
-            var transition= await statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
+            var transition = await _statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
             if (!transition.IsSuccess)
             {
                 throw new InvalidOperationException(transition.ErrorMessage);
             }
         }
-
     }
 }

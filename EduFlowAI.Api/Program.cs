@@ -1,5 +1,6 @@
-using System.Threading.RateLimiting;
 using EduFlowAI.Admission;
+using EduFlowAI.Admission.Application.Messages;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.AI;
 using EduFlowAI.Api.Middlewares;
 using EduFlowAI.Communication;
@@ -14,7 +15,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using Serilog;
+using System.Threading.RateLimiting;
 using Wolverine;
+using Wolverine.RabbitMQ;
 
 namespace EduFlowAI.Api;
 
@@ -93,12 +96,17 @@ public class Program
         builder.Services.ConfigureWolverine(options =>
         {
             MessagingConfiguration.ConfigureApiListeners(options);
+
+            options.PublishMessage<SendAdmissionEmailCommand>()
+                .ToRabbitQueue(AdmissionQueueNames.AdmissionStatusEmails);
         });
 
         if (builder.Environment.IsDevelopment())
         {
             builder.Services.AddResourceSetupOnStartup();
         }
+
+        builder.Services.AddAdmissionDataSeeding();
 
         builder.Services.AddSwaggerGen(options =>
         {

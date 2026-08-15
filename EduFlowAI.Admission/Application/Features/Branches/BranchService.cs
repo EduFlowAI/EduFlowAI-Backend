@@ -2,6 +2,7 @@ using EduFlowAI.Admission.Application.DbContextAbstraction;
 using EduFlowAI.Admission.Application.Features.Configuration.Common;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
+using EduFlowAI.Admission.Infrastructure.Seeding;
 using EduFlowAI.Shared.Kernel.Common;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
@@ -14,6 +15,7 @@ public sealed class BranchDto
     public string Name { get; init; } = string.Empty;
     public string? Governorate { get; init; }
     public bool IsActive { get; init; }
+    public bool IsOfficialIntake47Location { get; init; }
 }
 
 public sealed class CreateBranchRequest
@@ -80,17 +82,12 @@ internal sealed class BranchService : IBranchService
     public async Task<IReadOnlyList<BranchDto>> GetBranchesAsync(
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.Branches
+        var branches = await _dbContext.Branches
             .AsNoTracking()
             .OrderBy(x => x.Name)
-            .Select(x => new BranchDto
-            {
-                Id = x.Id,
-                Name = x.Name,
-                Governorate = x.Governorate,
-                IsActive = x.IsActive
-            })
             .ToListAsync(cancellationToken);
+
+        return branches.Select(MapBranch).ToList();
     }
 
     public async Task<Result<BranchDto>> CreateBranchAsync(
@@ -119,7 +116,7 @@ internal sealed class BranchService : IBranchService
             async ct =>
             {
                 if (await _dbContext.Branches.AnyAsync(
-                        x => x.Name == name,
+                        x => x.Name.ToUpper() == name.ToUpper(),
                         ct))
                 {
                     return Result<BranchDto>.Failure(
@@ -203,7 +200,9 @@ internal sealed class BranchService : IBranchService
                 }
 
                 if (await _dbContext.Branches.AnyAsync(
-                        x => x.Id != branchId && x.Name == name,
+                        x =>
+                            x.Id != branchId &&
+                            x.Name.ToUpper() == name.ToUpper(),
                         ct))
                 {
                     return Result<BranchDto>.Failure(
@@ -234,7 +233,10 @@ internal sealed class BranchService : IBranchService
             Id = branch.Id,
             Name = branch.Name,
             Governorate = branch.Governorate,
-            IsActive = branch.IsActive
+            IsActive = branch.IsActive,
+            IsOfficialIntake47Location = AdmissionBranchSeedCatalog.Find(
+                branch.Id,
+                branch.Name) is not null
         };
     }
 }

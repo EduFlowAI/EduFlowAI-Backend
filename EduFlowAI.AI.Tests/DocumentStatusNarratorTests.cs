@@ -54,6 +54,20 @@ public class DocumentStatusNarratorTests
         Assert.Contains("Never add, change", chat.LastSystemPrompt);
     }
 
+    [Theory]
+    [InlineData("ar", "Arabic")]
+    [InlineData("en", "English")]
+    public async Task The_prompt_carries_a_strong_language_directive(string language, string expected)
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), language);
+
+        Assert.Contains("# LANGUAGE", chat.LastSystemPrompt);
+        Assert.Contains($"Write your ENTIRE reply in {expected}", chat.LastSystemPrompt);
+    }
+
     [Fact]
     public async Task Falls_back_to_the_plain_facts_when_the_model_returns_nothing()
     {
@@ -77,6 +91,30 @@ public class DocumentStatusNarratorTests
 
         Assert.Contains("Graduation Certificate: Approved", result);
         Assert.Contains("National ID: Under manual review", result);
+    }
+
+    // This narrator has its own prompt, so it used to welcome the applicant all over again.
+    [Fact]
+    public async Task Mid_conversation_the_prompt_forbids_greeting_again()
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), "en", isContinuingConversation: true);
+
+        Assert.Contains("do NOT greet", chat.LastSystemPrompt);
+    }
+
+    [Fact]
+    public async Task A_new_conversation_may_still_open_warmly()
+    {
+        var chat = new StubChat();
+        var narrator = new DocumentStatusNarrator(chat);
+
+        await narrator.NarrateAsync(Docs(), "en", isContinuingConversation: false);
+
+        Assert.DoesNotContain("do NOT greet", chat.LastSystemPrompt);
+        Assert.Contains("warm opening", chat.LastSystemPrompt);
     }
 
     private static List<ApplicantDocumentDto> Docs() => new()

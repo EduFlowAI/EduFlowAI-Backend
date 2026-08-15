@@ -48,7 +48,7 @@ public sealed class CreateAdmissionCycleRequest
 public sealed class UpdateCycleEligibilityRuleRequest
 {
     [Required, MaxLength(5)]
-    public string RequiredNationality { get; init; } = "EG";
+    public string RequiredNationality { get; init; } = "EGY";
 
     [Required, MaxLength(30)]
     public string RequiredDegreeLevel { get; init; } = "Bachelor";
@@ -394,22 +394,28 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                         x.Capacity <= 0 ||
                         !x.Track.IsActive ||
                         !x.Branch.IsActive ||
-                        x.Track.ProgramId != cycle.ProgramId))
+                        x.Track.ProgramId != cycle.ProgramId ||
+                        !OfferingService.IsAllowedByOfficialCatalog(
+                            x.Track,
+                            x.Branch,
+                            cycle.ProgramId,
+                            cycle.Program.Code)))
                 {
                     return Result<AdmissionCycleDto>.Failure(
                         400,
-                        "All offerings must use active tracks and branches, positive capacity, and tracks belonging to the cycle's program.");
+                        "All offerings must use active tracks and branches, positive capacity, tracks belonging to the cycle's program, and official Intake-47 locations for 9M tracks.");
                 }
 
                 if (await _dbContext.AdmissionCycles.AnyAsync(
                         x =>
                             x.Id != cycleId &&
+                            x.ProgramId == cycle.ProgramId &&
                             x.Status == CycleStatus.Active,
                         ct))
                 {
                     return Result<AdmissionCycleDto>.Failure(
                         409,
-                        "Another admission cycle is already active.");
+                        "Another admission cycle is already active for this program.");
                 }
 
                 cycle.Status = CycleStatus.Active;
@@ -423,8 +429,8 @@ internal sealed class AdmissionCycleService : IAdmissionCycleService
                     message: "Admission cycle activated successfully.");
             },
             (
-                "uq_cycle_active",
-                "The cycle could not be activated because another cycle became active at the same time."));
+                "uq_cycle_active_per_program",
+                "The cycle could not be activated because another cycle for this program became active at the same time."));
     }
 
     public async Task<Result<AdmissionCycleDto>> CloseCycleAsync(

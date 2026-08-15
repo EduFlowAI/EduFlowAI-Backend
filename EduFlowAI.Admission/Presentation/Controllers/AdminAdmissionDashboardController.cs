@@ -21,9 +21,11 @@ public sealed class AdminAdmissionDashboardController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<Result<AdminAdmissionDashboardDto>>> GetDashboard(
+        [FromQuery] Guid? programId,
         CancellationToken cancellationToken)
     {
         var dashboard = await _dashboardService.GetDashboardAsync(
+            programId,
             cancellationToken);
 
         return Ok(Result<AdminAdmissionDashboardDto>.Success(dashboard));
