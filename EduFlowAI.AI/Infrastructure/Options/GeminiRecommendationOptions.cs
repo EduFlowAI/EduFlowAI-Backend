@@ -1,4 +1,4 @@
-﻿namespace EduFlowAI.AI.Infrastructure.Options;
+namespace EduFlowAI.AI.Infrastructure.Options;
 
 public sealed class GeminiRecommendationOptions
 {
@@ -7,6 +7,9 @@ public sealed class GeminiRecommendationOptions
     public string ApiKey { get; init; } = string.Empty;
 
     public string Model { get; init; } = string.Empty;
+
+    // The ranking should be stable while the one-line reason still reads naturally.
+    public double Temperature { get; init; } = 0.2;
 
     public int TimeoutSeconds { get; init; } = 30;
 }

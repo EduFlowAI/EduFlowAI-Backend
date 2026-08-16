@@ -45,13 +45,13 @@ public class GeminiChatClient : IGeminiChatClient
             Contents = new[] { new GeminiContent { Parts = new[] { GeminiPart.FromText(userMessage) } } },
             GenerationConfig = new GeminiGenerationConfig
             {
-                Temperature = 0,
+                Temperature = _options.RoutingTemperature,
                 ResponseMimeType = "application/json",
                 ResponseSchema = responseSchema
             }
         };
 
-        return SendAsync(request, cancellationToken);
+        return SendAsync(request, _options.ResolvedRoutingKeys, cancellationToken);
     }
 
     public Task<string> GenerateFromDocumentAsync(string instruction, byte[] document, string mimeType, CancellationToken cancellationToken = default)
@@ -72,7 +72,7 @@ public class GeminiChatClient : IGeminiChatClient
                     }
                 }
             },
-            GenerationConfig = new GeminiGenerationConfig { Temperature = 0 }
+            GenerationConfig = new GeminiGenerationConfig { Temperature = _options.DocumentVerificationTemperature }
         };
 
         return SendAsync(request, cancellationToken);
@@ -80,10 +80,15 @@ public class GeminiChatClient : IGeminiChatClient
 
     // Walks each model, then the keys within it, until one combination succeeds. A model has its
     // own quota bucket, so switching model is the real quota lever.
-    private async Task<string> SendAsync(GeminiGenerateRequest payload, CancellationToken cancellationToken)
+    private async Task<string> SendAsync(GeminiGenerateRequest payload, CancellationToken cancellationToken) =>
+        await SendAsync(payload, _options.ResolvedKeys, cancellationToken);
+
+    private async Task<string> SendAsync(
+        GeminiGenerateRequest payload,
+        IReadOnlyList<string> keys,
+        CancellationToken cancellationToken)
     {
         var models = _options.ResolvedChatModels;
-        var keys = _options.ResolvedKeys;
         var triedModels = new List<string>();
         var lastStatus = 0;
         var lastDetail = string.Empty;

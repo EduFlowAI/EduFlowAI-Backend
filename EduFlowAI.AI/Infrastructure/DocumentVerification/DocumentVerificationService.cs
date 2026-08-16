@@ -59,6 +59,7 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
 
         GeminiVerificationResponseDto? parsed = null;
         Exception? lastError = null;
+        var modelName = string.Empty;
         var attempts = 0;
 
         for (attempts = 1; attempts <= MaxStructuredAttempts; attempts++)
@@ -66,14 +67,16 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
             // Transient/provider exceptions (HttpRequestException, timeouts, ...) are not caught
             // here - they propagate out of VerifyAsync, out of the handler, and let Wolverine's
             // retry/DLQ policy handle the whole message.
-            var rawJson = await _geminiClient.GenerateVerificationJsonAsync(
+            var generated = await _geminiClient.GenerateVerificationJsonAsync(
                 input.DocumentType,
                 input.ExpectedFields,
                 fileContent,
                 mimeType,
                 cancellationToken);
 
-            if (TryParseAndValidate(rawJson, input.ExpectedFields, out parsed, out var validationError))
+            modelName = generated.ModelName;
+
+            if (TryParseAndValidate(generated.Json, input.ExpectedFields, out parsed, out var validationError))
             {
                 break;
             }
@@ -91,7 +94,11 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
                 innerException: lastError);
         }
 
-        return new DocumentVerificationResult(parsed.Outcome, BuildDetails(parsed, input.ExpectedFields));
+        parsed = ApplyNearMatches(parsed, input.ExpectedFields);
+        parsed = ReconcileNameVariants(parsed, input.ExpectedFields);
+
+        return new DocumentVerificationResult(
+            parsed.Outcome, BuildDetails(parsed, input.ExpectedFields, modelName));
     }
 
     private bool TryParseAndValidate(
@@ -158,9 +165,119 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
         return true;
     }
 
-    private DocumentVerificationDetailsV1 BuildDetails(
+    // The model compares character by character. A value that only differs in the ways a scan or a
+    // keyboard introduces is the same value, so it is matched here instead of going to a reviewer.
+    private static GeminiVerificationResponseDto ApplyNearMatches(
         GeminiVerificationResponseDto response,
         IReadOnlyDictionary<string, string> expectedFields)
+    {
+        if (response.Outcome is DocumentVerificationOutcomeV1.UnreadableDocument
+                             or DocumentVerificationOutcomeV1.InvalidDocumentType)
+        {
+            return response;
+        }
+
+        var promoted = new List<string>();
+
+        foreach (var field in response.Fields)
+        {
+            if (field.IsMatch == true || string.IsNullOrWhiteSpace(field.FieldName))
+            {
+                continue;
+            }
+
+            if (!expectedFields.TryGetValue(field.FieldName, out var expected)
+                || !DocumentFieldComparer.AreEquivalent(field.ExtractedValue, expected, field.FieldName))
+            {
+                continue;
+            }
+
+            field.IsMatch = true;
+            promoted.Add(field.FieldName);
+        }
+
+        if (promoted.Count == 0)
+        {
+            return response;
+        }
+
+        var warnings = new List<string>(response.Warnings);
+        warnings.AddRange(promoted.Select(name =>
+            $"{name} matched after ignoring formatting differences."));
+
+        return response with
+        {
+            Outcome = RecomputeOutcome(response.Fields),
+            Warnings = warnings
+        };
+    }
+
+    // The name is one fact in two scripts. When the document carries only one of them and it matches,
+    // the other is dropped rather than failing the document for a form that was never printed on it.
+    private static GeminiVerificationResponseDto ReconcileNameVariants(
+        GeminiVerificationResponseDto response,
+        IReadOnlyDictionary<string, string> expectedFields)
+    {
+        if (!expectedFields.ContainsKey("FullNameAr") || !expectedFields.ContainsKey("FullNameEn"))
+        {
+            return response;
+        }
+
+        // Nothing was read, so there is no matching name to trust.
+        if (response.Outcome is DocumentVerificationOutcomeV1.UnreadableDocument
+                             or DocumentVerificationOutcomeV1.InvalidDocumentType)
+        {
+            return response;
+        }
+
+        var matched = response.Fields.FirstOrDefault(f => IsNameField(f.FieldName) && f.IsMatch == true);
+        if (matched is null)
+        {
+            return response;
+        }
+
+        var dropped = response.Fields.Where(f => IsNameField(f.FieldName) && f.IsMatch != true).ToList();
+        if (dropped.Count == 0)
+        {
+            return response;
+        }
+
+        var kept = response.Fields.Where(f => !dropped.Contains(f)).ToList();
+
+        var warnings = new List<string>(response.Warnings);
+        warnings.AddRange(dropped.Select(f =>
+            $"{f.FieldName} was not compared because {matched.FieldName} matched the document."));
+
+        return response with
+        {
+            Outcome = RecomputeOutcome(kept),
+            Fields = kept,
+            Warnings = warnings
+        };
+    }
+
+    private static bool IsNameField(string? fieldName) =>
+        string.Equals(fieldName, "FullNameAr", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldName, "FullNameEn", StringComparison.OrdinalIgnoreCase);
+
+    // Mirrors the outcome rules given to the model, applied to the fields that still count.
+    private static DocumentVerificationOutcomeV1 RecomputeOutcome(
+        IReadOnlyCollection<GeminiVerificationFieldRawDto> fields)
+    {
+        if (fields.Any(f => string.IsNullOrWhiteSpace(f.ExtractedValue)))
+        {
+            return DocumentVerificationOutcomeV1.MissingRequiredData;
+        }
+
+        return fields.All(f => f.IsMatch == true)
+            ? DocumentVerificationOutcomeV1.ExactMatch
+            : DocumentVerificationOutcomeV1.ValidButDifferent;
+    }
+
+    private static DocumentVerificationDetailsV1 BuildDetails(
+        GeminiVerificationResponseDto response,
+        IReadOnlyDictionary<string, string> expectedFields,
+        string modelName)
     {
         var comparisons = new List<VerificationFieldComparisonV1>();
         var missingFields = new List<string>();
@@ -189,7 +306,7 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
             MissingFields: missingFields,
             Warnings: response.Warnings,
             ConfidenceScore: response.ConfidenceScore is null ? null : (decimal)response.ConfidenceScore.Value,
-            ModelName: "gemini-document-verification");
+            ModelName: modelName);
     }
 
     private static string? MaskIfSensitive(string fieldName, string? value)

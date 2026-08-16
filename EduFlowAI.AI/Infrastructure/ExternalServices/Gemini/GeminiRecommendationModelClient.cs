@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json;
 using EduFlowAI.AI.Application.Interfaces;
 using EduFlowAI.AI.Infrastructure.ExternalServices.Gemini.DTOs;
@@ -37,7 +37,7 @@ public sealed class GeminiRecommendationModelClient(
             _options.ApiKey);
 
         message.Content = JsonContent.Create(
-            CreatePayload(request),
+            CreatePayload(request, _options.Temperature),
             options: JsonOptions);
 
         using var response = await httpClient.SendAsync(
@@ -109,7 +109,8 @@ public sealed class GeminiRecommendationModelClient(
     }
 
     private static object CreatePayload(
-        RecommendationModelRequestDto request)
+        RecommendationModelRequestDto request,
+        double temperature)
     {
         return new
         {
@@ -129,7 +130,7 @@ public sealed class GeminiRecommendationModelClient(
             },
             generationConfig = new
             {
-                temperature = 0.2,
+                temperature,
                 responseMimeType = "application/json",
                 responseSchema = new
                 {

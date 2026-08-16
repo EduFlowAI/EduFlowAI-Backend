@@ -27,19 +27,19 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public async Task<string> GenerateVerificationJsonAsync(
+    public async Task<DocumentVerificationGeminiResult> GenerateVerificationJsonAsync(
         string documentType,
         IReadOnlyDictionary<string, string> expectedFields,
         byte[] fileContent,
         string mimeType,
         CancellationToken cancellationToken)
     {
-        var models = _options.ResolvedChatModels;
-        var keys = _options.ResolvedKeys;
+        var models = _options.ResolvedDocumentVerificationModels;
+        var keys = _options.ResolvedDocumentVerificationKeys;
 
         if (models.Count == 0 || keys.Count == 0)
         {
-            throw new InvalidOperationException("Gemini is not configured (missing chat model or API key).");
+            throw new InvalidOperationException("Gemini is not configured (missing verification model or API key).");
         }
 
         var triedModels = new List<string>();
@@ -79,7 +79,7 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
                     },
                     generationConfig = new
                     {
-                        temperature = 0,
+                        temperature = _options.DocumentVerificationTemperature,
                         responseMimeType = "application/json",
                         responseSchema = DocumentVerificationPromptBuilder.BuildResponseSchema()
                     }
@@ -109,7 +109,7 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
 
                         if (!string.IsNullOrWhiteSpace(json))
                         {
-                            return json;
+                            return new DocumentVerificationGeminiResult(json, model);
                         }
                     }
 
