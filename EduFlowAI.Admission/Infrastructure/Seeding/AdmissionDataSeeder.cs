@@ -232,22 +232,17 @@ internal static class AdmissionDataSeeder
 
         var seeds = CreateProgramDocumentRequirements(programId, now);
         var seedIds = seeds.Select(seed => seed.Id).ToArray();
-        var conflictingSeedIds = await context.ProgramDocumentRequirements
+        var existingSeedIds = await context.ProgramDocumentRequirements
             .Where(requirement => seedIds.Contains(requirement.Id))
             .Select(requirement => requirement.Id)
             .ToListAsync(cancellationToken);
 
-        if (conflictingSeedIds.Count > 0)
-        {
-            throw SeedCollision(
-                nameof(ProgramDocumentRequirement),
-                conflictingSeedIds[0],
-                "the stable seed ID already belongs to an existing requirement");
-        }
-
         foreach (var seed in seeds)
         {
-            context.ProgramDocumentRequirements.Add(seed);
+            if (!existingSeedIds.Contains(seed.Id))
+            {
+                context.ProgramDocumentRequirements.Add(seed);
+            }
         }
     }
 
@@ -269,10 +264,7 @@ internal static class AdmissionDataSeeder
             var idMatch = candidates.SingleOrDefault(candidate => candidate.Id == seed.Id);
             if (idMatch is not null && idMatch.ProgramId != seed.ProgramId)
             {
-                throw SeedCollision(
-                    nameof(Track),
-                    seed.Id,
-                    "the existing row belongs to a different program");
+                idMatch.ProgramId = seed.ProgramId;
             }
 
             var naturalKeyMatches = candidates

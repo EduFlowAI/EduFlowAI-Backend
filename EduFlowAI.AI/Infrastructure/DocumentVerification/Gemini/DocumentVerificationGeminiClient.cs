@@ -34,77 +34,116 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
         string mimeType,
         CancellationToken cancellationToken)
     {
-        var model = _options.ResolvedChatModels.FirstOrDefault();
-        var apiKey = _options.ResolvedKeys.FirstOrDefault();
+        var models = _options.ResolvedChatModels;
+        var keys = _options.ResolvedKeys;
 
-        if (string.IsNullOrWhiteSpace(model) || string.IsNullOrWhiteSpace(apiKey))
+        if (models.Count == 0 || keys.Count == 0)
         {
             throw new InvalidOperationException("Gemini is not configured (missing chat model or API key).");
         }
 
-        var payload = new
+        var triedModels = new List<string>();
+        var lastStatus = 0;
+        var lastDetail = string.Empty;
+
+        foreach (var model in models)
         {
-            contents = new[]
+            triedModels.Add(model);
+            var modelUnavailable = false;
+
+            foreach (var apiKey in keys)
             {
-                new
+                var payload = new
                 {
-                    role = "user",
-                    parts = new object[]
+                    contents = new[]
                     {
                         new
                         {
-                            inline_data = new
+                            role = "user",
+                            parts = new object[]
                             {
-                                mime_type = mimeType,
-                                data = Convert.ToBase64String(fileContent)
+                                new
+                                {
+                                    inline_data = new
+                                    {
+                                        mime_type = mimeType,
+                                        data = Convert.ToBase64String(fileContent)
+                                    }
+                                },
+                                new
+                                {
+                                    text = DocumentVerificationPromptBuilder.BuildInstruction(documentType, expectedFields)
+                                }
                             }
-                        },
-                        new
+                        }
+                    },
+                    generationConfig = new
+                    {
+                        temperature = 0,
+                        responseMimeType = "application/json",
+                        responseSchema = DocumentVerificationPromptBuilder.BuildResponseSchema()
+                    }
+                };
+
+                for (var attempt = 1; attempt <= 2; attempt++)
+                {
+                    using var message = new HttpRequestMessage(
+                        HttpMethod.Post,
+                        $"models/{Uri.EscapeDataString(model)}:generateContent");
+
+                    message.Headers.Add("x-goog-api-key", apiKey);
+                    message.Content = JsonContent.Create(payload, options: JsonOptions);
+
+                    using var response = await _httpClient.SendAsync(
+                        message,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        cancellationToken);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var envelope = await response.Content.ReadFromJsonAsync<GeminiResponseEnvelope>(
+                            JsonOptions,
+                            cancellationToken);
+
+                        var json = envelope?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+
+                        if (!string.IsNullOrWhiteSpace(json))
                         {
-                            text = DocumentVerificationPromptBuilder.BuildInstruction(documentType, expectedFields)
+                            return json;
                         }
                     }
+
+                    lastStatus = (int)response.StatusCode;
+                    lastDetail = await ReadDetailAsync(response, cancellationToken);
+
+                    // 400/404 means this model name is bad/unavailable, move to next model
+                    if (lastStatus is 400 or 404)
+                    {
+                        modelUnavailable = true;
+                        break;
+                    }
+
+                    if (lastStatus == 429 || lastStatus >= 500)
+                    {
+                        if (attempt < 2)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
+                            continue;
+                        }
+                        break;
+                    }
+
+                    break;
                 }
-            },
-            generationConfig = new
-            {
-                temperature = 0,
-                responseMimeType = "application/json",
-                responseSchema = DocumentVerificationPromptBuilder.BuildResponseSchema()
+
+                if (modelUnavailable)
+                    break;
             }
-        };
-
-        using var message = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"models/{Uri.EscapeDataString(model)}:generateContent");
-
-        message.Headers.Add("x-goog-api-key", apiKey);
-        message.Content = JsonContent.Create(payload, options: JsonOptions);
-
-        using var response = await _httpClient.SendAsync(
-            message,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var detail = await ReadDetailAsync(response, cancellationToken);
-            throw new HttpRequestException(
-                $"Gemini document verification call failed with HTTP {(int)response.StatusCode}. {detail}");
         }
 
-        var envelope = await response.Content.ReadFromJsonAsync<GeminiResponseEnvelope>(
-            JsonOptions,
-            cancellationToken);
-
-        var json = envelope?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
-
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            throw new InvalidOperationException("Gemini returned an empty document verification response.");
-        }
-
-        return json;
+        throw new HttpRequestException(
+            $"Gemini document verification call failed after trying models [{string.Join(", ", triedModels)}]. " +
+            $"Last status HTTP {lastStatus}. {lastDetail}");
     }
 
     private static async Task<string> ReadDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
