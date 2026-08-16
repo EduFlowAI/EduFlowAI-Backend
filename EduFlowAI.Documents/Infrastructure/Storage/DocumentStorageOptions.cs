@@ -9,4 +9,5 @@ public class DocumentStorageOptions
     /// Both the API and Worker must point to the same bucket.
     /// </summary>
     public string BucketName { get; set; } = "eduflowai-document-storage";
+    public string Root { get; set; } = @"D:\EduFlowAI\SecureStorage";
 }
