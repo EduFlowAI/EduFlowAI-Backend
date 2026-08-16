@@ -72,12 +72,16 @@ public sealed class DocumentVerificationContextReader : IDocumentVerificationCon
                 ("FullNameAr", profile.FullNameAr),
                 ("DateOfBirth", profile.DateOfBirth?.ToString("yyyy-MM-dd"))),
 
-            "GraduationCertificate" => RequiredMap(
-                ("FullNameEn", profile.FullNameEn),
-                ("University", profile.University),
-                ("Faculty", profile.Faculty),
-                ("Major", profile.Major),
-                ("GraduationYear", profile.GraduationYear?.ToString())),
+            // Egyptian certificates often print the name in Arabic only, so both forms are sent
+            // and either one matching is enough - see ReconcileNameVariants.
+            "GraduationCertificate" => WithOptional(
+                RequiredMap(
+                    ("FullNameEn", profile.FullNameEn),
+                    ("University", profile.University),
+                    ("Faculty", profile.Faculty),
+                    ("Major", profile.Major),
+                    ("GraduationYear", profile.GraduationYear?.ToString())),
+                ("FullNameAr", profile.FullNameAr)),
 
             "MilitaryCertificate" => RequiredMap(
                 ("FullNameAr", profile.FullNameAr),
@@ -88,6 +92,25 @@ public sealed class DocumentVerificationContextReader : IDocumentVerificationCon
                 $"Document type '{documentType}' is not supported for verification.",
                 attemptCount: 1)
         };
+
+    // Added only when the profile carries a value; its absence never fails the verification.
+    private static IReadOnlyDictionary<string, string> WithOptional(
+        IReadOnlyDictionary<string, string> fields,
+        params (string name, string? value)[] optional)
+    {
+        var merged = new Dictionary<string, string>(
+            (IDictionary<string, string>)fields, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, value) in optional)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                merged[name] = value;
+            }
+        }
+
+        return merged;
+    }
 
     private static IReadOnlyDictionary<string, string> RequiredMap(params(string name, string? value)[] fields)
     {

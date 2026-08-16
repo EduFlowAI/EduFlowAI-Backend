@@ -27,7 +27,17 @@ public class GeminiOptions
     // main quota lever. Empty falls back to ChatModel; every entry must be document-capable.
     public List<string> ChatModels { get; set; } = new();
 
+    // Verification reads scanned files, so it can run on its own models. Empty falls back to ChatModels.
+    public List<string> DocumentVerificationModels { get; set; } = new();
+
+    // Grounded prose: low enough to stay on the retrieved facts, high enough to read naturally.
     public double ChatTemperature { get; set; } = 0.2;
+
+    // Intent routing is classification against a fixed enum. Any drift reroutes an identical message.
+    public double RoutingTemperature { get; set; } = 0.0;
+
+    // Reading a document is extraction, not writing. It must also be reproducible across the retry.
+    public double DocumentVerificationTemperature { get; set; } = 0.0;
 
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta/";
 
@@ -40,4 +50,9 @@ public class GeminiOptions
         ChatModels.Where(m => !string.IsNullOrWhiteSpace(m)).ToList() is { Count: > 0 } models
             ? models
             : new List<string> { ChatModel };
+
+    public IReadOnlyList<string> ResolvedDocumentVerificationModels =>
+        DocumentVerificationModels.Where(m => !string.IsNullOrWhiteSpace(m)).ToList() is { Count: > 0 } models
+            ? models
+            : ResolvedChatModels;
 }

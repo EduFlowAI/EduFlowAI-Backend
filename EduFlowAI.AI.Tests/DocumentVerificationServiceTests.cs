@@ -221,7 +221,7 @@ public class DocumentVerificationServiceTests
             _responses = new Queue<string>(responses);
         }
 
-        public Task<string> GenerateVerificationJsonAsync(
+        public Task<DocumentVerificationGeminiResult> GenerateVerificationJsonAsync(
             string documentType,
             IReadOnlyDictionary<string, string> expectedFields,
             byte[] fileContent,
@@ -234,7 +234,8 @@ public class DocumentVerificationServiceTests
                 throw new InvalidOperationException("Test did not expect another Gemini call.");
             }
 
-            return Task.FromResult(_responses.Dequeue());
+            return Task.FromResult(
+                new DocumentVerificationGeminiResult(_responses.Dequeue(), "fake-model"));
         }
     }
 }

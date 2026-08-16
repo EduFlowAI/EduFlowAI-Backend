@@ -45,7 +45,7 @@ public class GeminiChatClient : IGeminiChatClient
             Contents = new[] { new GeminiContent { Parts = new[] { GeminiPart.FromText(userMessage) } } },
             GenerationConfig = new GeminiGenerationConfig
             {
-                Temperature = 0,
+                Temperature = _options.RoutingTemperature,
                 ResponseMimeType = "application/json",
                 ResponseSchema = responseSchema
             }
@@ -72,7 +72,7 @@ public class GeminiChatClient : IGeminiChatClient
                     }
                 }
             },
-            GenerationConfig = new GeminiGenerationConfig { Temperature = 0 }
+            GenerationConfig = new GeminiGenerationConfig { Temperature = _options.DocumentVerificationTemperature }
         };
 
         return SendAsync(request, cancellationToken);
