@@ -35,7 +35,7 @@ public sealed class DocumentVerificationGeminiClient : IDocumentVerificationGemi
         CancellationToken cancellationToken)
     {
         var models = _options.ResolvedDocumentVerificationModels;
-        var keys = _options.ResolvedKeys;
+        var keys = _options.ResolvedDocumentVerificationKeys;
 
         if (models.Count == 0 || keys.Count == 0)
         {

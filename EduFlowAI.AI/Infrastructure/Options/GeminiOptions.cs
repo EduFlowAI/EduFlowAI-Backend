@@ -51,6 +51,21 @@ public class GeminiOptions
             ? models
             : new List<string> { ChatModel };
 
+    // Own quota bucket per feature, so a busy chat cannot starve verification. Empty falls back to ApiKeys.
+    public List<string> RoutingApiKeys { get; set; } = new();
+
+    public List<string> DocumentVerificationApiKeys { get; set; } = new();
+
+    public IReadOnlyList<string> ResolvedRoutingKeys =>
+        RoutingApiKeys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList() is { Count: > 0 } keys
+            ? keys
+            : ResolvedKeys;
+
+    public IReadOnlyList<string> ResolvedDocumentVerificationKeys =>
+        DocumentVerificationApiKeys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList() is { Count: > 0 } keys
+            ? keys
+            : ResolvedKeys;
+
     public IReadOnlyList<string> ResolvedDocumentVerificationModels =>
         DocumentVerificationModels.Where(m => !string.IsNullOrWhiteSpace(m)).ToList() is { Count: > 0 } models
             ? models
