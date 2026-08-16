@@ -27,7 +27,7 @@ namespace EduFlowAI.Documents
             services.AddOptions<DocumentStorageOptions>()
                 .BindConfiguration(DocumentStorageOptions.SectionName);
 
-            //services.AddAWSService<IAmazonS3>();
+            services.AddAWSService<IAmazonS3>();
 
             // Application + Infrastructure services registrations go here later
             services.AddScoped<IFileStorageService, FileStorageService>();
@@ -53,7 +53,7 @@ namespace EduFlowAI.Documents
             services.AddOptions<DocumentStorageOptions>()
                 .BindConfiguration(DocumentStorageOptions.SectionName);
 
-            //services.AddAWSService<IAmazonS3>();
+            services.AddAWSService<IAmazonS3>();
 
             services.AddScoped<IEmailTemplate, DocumentReplacementRequestEmailTemplate>();
 
