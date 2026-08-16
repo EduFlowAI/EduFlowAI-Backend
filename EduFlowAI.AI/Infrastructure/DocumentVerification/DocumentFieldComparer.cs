@@ -17,6 +17,20 @@ internal static class DocumentFieldComparer
         "GraduationYear"
     };
 
+    private static readonly HashSet<string> NameFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "FullNameAr",
+        "FullNameEn"
+    };
+
+    // A document spells these out where a form abbreviates: "جامعة جنوب الوادي" against "جنوب الوادي".
+    private static readonly HashSet<string> InstitutionFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "University",
+        "Faculty",
+        "Major"
+    };
+
     // Below this a single edit is a large part of the value, so only exact equality counts.
     private const int FuzzyMinimumLength = 8;
 
@@ -40,14 +54,89 @@ internal static class DocumentFieldComparer
             return true;
         }
 
+        // Spacing is cosmetic even on an identifier: the card prints the number as "٣٠٣ ٠٤ ٠٨ ...".
+        // Compound Arabic names are written both ways too: "عبدالرحمن" and "عبد الرحمن".
+        var leftTight = Tighten(left);
+        var rightTight = Tighten(right);
+
+        if (string.Equals(leftTight, rightTight, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         if (fieldName is not null && ExactFields.Contains(fieldName))
         {
             return false;
         }
 
+        if (fieldName is not null && NameFields.Contains(fieldName)
+            && IsSameName(left, right, leftTight, rightTight))
+        {
+            return true;
+        }
+
+        if (fieldName is not null && InstitutionFields.Contains(fieldName)
+            && SharesEveryWord(left, right))
+        {
+            return true;
+        }
+
         return Math.Min(left.Length, right.Length) >= FuzzyMinimumLength
             && EditDistanceWithin(left, right, budget: 1);
     }
+
+    // A middle or grandfather name may be missing from one side, and a birth certificate records only
+    // the child's first name. Both are anchored on the first name: the father's name is a clean suffix
+    // of the child's, so without that anchor a parent would verify as the applicant.
+    private static bool IsSameName(string left, string right, string leftTight, string rightTight)
+    {
+        if (leftTight.StartsWith(rightTight, StringComparison.Ordinal)
+            || rightTight.StartsWith(leftTight, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var leftParts = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var rightParts = right.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        var (shorter, longer) = leftParts.Length <= rightParts.Length
+            ? (leftParts, rightParts)
+            : (rightParts, leftParts);
+
+        if (shorter.Length < 2 || shorter[0] != longer[0])
+        {
+            return false;
+        }
+
+        var next = 0;
+        foreach (var part in shorter)
+        {
+            next = Array.IndexOf(longer, part, next);
+            if (next < 0)
+            {
+                return false;
+            }
+
+            next++;
+        }
+
+        return true;
+    }
+
+    private static bool SharesEveryWord(string left, string right)
+    {
+        var leftParts = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var rightParts = right.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        var (shorter, longer) = leftParts.Length <= rightParts.Length
+            ? (leftParts, rightParts)
+            : (rightParts, leftParts);
+
+        // One shared common word must never carry a match on its own.
+        return shorter.Length >= 2 && shorter.All(longer.Contains);
+    }
+
+    private static string Tighten(string value) => value.Replace(" ", string.Empty);
 
     // Strips what the eye ignores: case, punctuation, repeated spaces, Arabic diacritics and tatweel,
     // and the interchangeable letter forms. Arabic-Indic digits become their ASCII equivalents.

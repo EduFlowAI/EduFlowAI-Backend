@@ -68,9 +68,13 @@ public sealed class DocumentVerificationContextReader : IDocumentVerificationCon
                 ("NationalId", profile.NationalId),
                 ("DateOfBirth", profile.DateOfBirth?.ToString("yyyy-MM-dd"))),
 
-            "BirthCertificate" => RequiredMap(
-                ("FullNameAr", profile.FullNameAr),
-                ("DateOfBirth", profile.DateOfBirth?.ToString("yyyy-MM-dd"))),
+            // The national number is far stronger evidence than a first name, but older certificates
+            // do not carry it, so it corroborates rather than decides - see OptionalFields.
+            "BirthCertificate" => WithOptional(
+                RequiredMap(
+                    ("FullNameAr", profile.FullNameAr),
+                    ("DateOfBirth", profile.DateOfBirth?.ToString("yyyy-MM-dd"))),
+                ("NationalId", profile.NationalId)),
 
             // Egyptian certificates often print the name in Arabic only, so both forms are sent
             // and either one matching is enough - see ReconcileNameVariants.

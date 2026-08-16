@@ -94,8 +94,10 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
                 innerException: lastError);
         }
 
+        parsed = ConfirmBirthDateFromNationalId(parsed, input.ExpectedFields);
         parsed = ApplyNearMatches(parsed, input.ExpectedFields);
         parsed = ReconcileNameVariants(parsed, input.ExpectedFields);
+        parsed = DropAbsentOptionalFields(parsed, input.DocumentType);
 
         return new DocumentVerificationResult(
             parsed.Outcome, BuildDetails(parsed, input.ExpectedFields, modelName));
@@ -163,6 +165,93 @@ public sealed class DocumentVerificationService : IDocumentVerificationService
             raw.ConfidenceScore);
 
         return true;
+    }
+
+    // Corroborating fields: present on most documents of this type, but their absence must not fail one.
+    private static readonly IReadOnlyDictionary<string, string[]> OptionalFields =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["BirthCertificate"] = new[] { "NationalId" }
+        };
+
+    // A card shows the birth date beside an issue date and an expiry date, and a birth certificate
+    // spells it out in words, so it is easily misread. The national number carries it exactly.
+    private static GeminiVerificationResponseDto ConfirmBirthDateFromNationalId(
+        GeminiVerificationResponseDto response,
+        IReadOnlyDictionary<string, string> expectedFields)
+    {
+        if (response.Outcome is DocumentVerificationOutcomeV1.UnreadableDocument
+                             or DocumentVerificationOutcomeV1.InvalidDocumentType)
+        {
+            return response;
+        }
+
+        var birthDate = response.Fields.FirstOrDefault(f =>
+            string.Equals(f.FieldName, "DateOfBirth", StringComparison.OrdinalIgnoreCase));
+
+        if (birthDate is null || birthDate.IsMatch == true)
+        {
+            return response;
+        }
+
+        var nationalId = response.Fields.FirstOrDefault(f =>
+            string.Equals(f.FieldName, "NationalId", StringComparison.OrdinalIgnoreCase));
+
+        // Only a national number that is the applicant's own can vouch for anything.
+        if (nationalId?.IsMatch != true
+            || !expectedFields.TryGetValue("DateOfBirth", out var expectedBirthDate)
+            || !EgyptianNationalId.TryGetBirthDate(nationalId.ExtractedValue, out var derived)
+            || !DocumentFieldComparer.AreEquivalent(
+                derived.ToString("yyyy-MM-dd"), expectedBirthDate, "DateOfBirth"))
+        {
+            return response;
+        }
+
+        birthDate.ExtractedValue = derived.ToString("yyyy-MM-dd");
+        birthDate.IsMatch = true;
+
+        var warnings = new List<string>(response.Warnings)
+        {
+            "DateOfBirth was confirmed from the national number rather than read from the document."
+        };
+
+        return response with { Outcome = RecomputeOutcome(response.Fields), Warnings = warnings };
+    }
+
+    // A corroborating field the document simply does not carry is dropped, not held against it.
+    private static GeminiVerificationResponseDto DropAbsentOptionalFields(
+        GeminiVerificationResponseDto response,
+        string documentType)
+    {
+        if (response.Outcome is DocumentVerificationOutcomeV1.UnreadableDocument
+                             or DocumentVerificationOutcomeV1.InvalidDocumentType
+            || !OptionalFields.TryGetValue(documentType, out var optional))
+        {
+            return response;
+        }
+
+        var absent = response.Fields
+            .Where(f => optional.Contains(f.FieldName, StringComparer.OrdinalIgnoreCase)
+                     && string.IsNullOrWhiteSpace(f.ExtractedValue))
+            .ToList();
+
+        if (absent.Count == 0)
+        {
+            return response;
+        }
+
+        var kept = response.Fields.Where(f => !absent.Contains(f)).ToList();
+
+        var warnings = new List<string>(response.Warnings);
+        warnings.AddRange(absent.Select(f =>
+            $"{f.FieldName} is not printed on this document, so it was not compared."));
+
+        return response with
+        {
+            Outcome = RecomputeOutcome(kept),
+            Fields = kept,
+            Warnings = warnings
+        };
     }
 
     // The model compares character by character. A value that only differs in the ways a scan or a
