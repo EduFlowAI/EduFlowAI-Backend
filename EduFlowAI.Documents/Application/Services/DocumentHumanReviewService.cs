@@ -1,4 +1,6 @@
 ﻿using EduFlowAI.Admission.Application.DbContextAbstraction;
+using EduFlowAI.Admission.Application.DTOs;
+using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Enums;
 using EduFlowAI.Communication.Application.Interfaces;
 using EduFlowAI.Communication.Domain.Enums;
@@ -10,6 +12,7 @@ using EduFlowAI.Identity.Application.DbContextAbstraction;
 using EduFlowAI.Identity.Domain.Entities;
 using EduFlowAI.Shared.Kernel.Common;
 using EduFlowAI.Shared.Kernel.Common.Pagination;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -20,7 +23,8 @@ using System.Text;
 namespace EduFlowAI.Documents.Application.Services
 {
     public class DocumentHumanReviewService(IDocumentDbContext dbContext, IIdentityDbContext identityDbContext,
-        IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService, INotificationService notificationService)
+        IAdmissionDbContext admissionDbContext, IFileStorageService fileStorageService, 
+        INotificationService notificationService, IStatusTransitionCoordinator statusTransition)
         : IDocumentHumanReviewService
     {
         public async Task<Result<PaginatedResult<HumanReviewDto>>> GetAllDocumentsReviewsAsync(QueryParameters queryParameters)
@@ -153,7 +157,26 @@ namespace EduFlowAI.Documents.Application.Services
                 }
 
                 doc.Status = DocumentStatus.Approved;
-                await dbContext.SaveChangesAsync();
+                doc.UpdatedAt = DateTime.UtcNow;
+
+                var reviewResult = await DocumentPackageReviewResolver.ResolveAsync(
+                    dbContext,
+                    doc.ApplicationId,
+                    doc.Id,
+                    DocumentStatus.Approved,
+                    cancellationToken);
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                if (reviewResult is not null)
+                {
+                    var transition = await statusTransition.ProcessDocumentReviewAsync(doc.ApplicationId, reviewResult);
+
+                    if (!transition.IsSuccess)
+                    {
+                        throw new InvalidOperationException(transition.ErrorMessage);
+                    }
+                }
 
                 var applicantId = await GetApplicantId(doc.ApplicationId);
                 // send notification
@@ -176,18 +199,30 @@ namespace EduFlowAI.Documents.Application.Services
         {
             try
             {
-                var doc = await dbContext.ApplicantDocuments.FirstOrDefaultAsync(d => d.Id == documentId);
+                var doc = await dbContext.ApplicantDocuments.FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
                 if (doc == null)
                 {
                     return Result<string>.Failure(404, "Document not found");
                 }
 
-                var app = await admissionDbContext.Applications.FirstOrDefaultAsync(a => a.Id == doc.ApplicationId);
-
                 doc.Status = DocumentStatus.Rejected;
                 doc.RejectionReason = reason;
-                app!.Status = ApplicationStatus.DocumentRejected;
-                await dbContext.SaveChangesAsync();
+                doc.UpdatedAt = DateTimeOffset.UtcNow;
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                var reviewResult = new DocumentReviewResultDto
+                {
+                    ReviewerType = ReviewerType.Human,
+                    IsAccepted = false,
+                    IsAgentUncertain = false,
+                    RejectionReason = reason
+                };
+                var transition = await statusTransition.ProcessDocumentReviewAsync(doc.ApplicationId, reviewResult);
+                if (!transition.IsSuccess)
+                {
+                    throw new InvalidOperationException(transition.ErrorMessage);
+                }
 
                 var applicantId = await GetApplicantId(doc.ApplicationId);
                 // send notification
