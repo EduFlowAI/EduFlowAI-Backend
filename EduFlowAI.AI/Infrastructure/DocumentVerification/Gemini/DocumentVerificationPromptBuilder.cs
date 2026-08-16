@@ -27,6 +27,36 @@ internal static class DocumentVerificationPromptBuilder
               format, Arabic diacritics, tatweel, and the interchangeable forms of alef, hamza,
               taa marbuta and alef maqsura. A genuinely different name, number or year is not a match.
 
+            Whose data to read:
+            - A document often names several people. Only the subject's data counts: the card holder,
+              or the child under "بيانات المولود" on a birth certificate.
+            - Never take a name or a national number from a parent or guardian section such as
+              "بيانات الأب" or "بيانات الأم", even when it is the only full name on the page.
+
+            Reading a name:
+            - Extract only the person's own name. It often wraps across two or more lines - join them.
+            - Stop where the name stops. Never include the address, street, building, district, city
+              or governorate, and never include profession, religion, marital status, titles, dates
+              or numbers.
+
+            Comparing meaning:
+            - The expected values come from a form the applicant filled in, so they may be written in
+              a different language from the document. Egyptian documents are usually in Arabic and
+              applicants often type English.
+            - For University, Faculty, Major and MilitaryStatus, compare the MEANING, not the
+              characters. The Arabic name of the same faculty the applicant typed in English is a
+              match: "الحاسبات والمعلومات" is "Computers and Information", "علوم الحاسب" is
+              "Computer Science", and "جامعة جنوب الوادي" is "South Valley University".
+            - Ignore qualifier words a document adds and a form leaves out, such as "جامعة", "كلية",
+              "قسم", "University", "Faculty of" and "Department of".
+            - A genuinely different institution, faculty, person, number or year is never a match.
+
+            How to write extractedValue:
+            - Write every date as yyyy-MM-dd, whatever form the document uses. Dates may be spelled
+              out in words: "ثمانية من إبريل عام ألفين وثلاثة" is 2003-04-08.
+            - Write every number using ASCII digits with no spaces or separators, so
+              "٣٠٣٠٤٠٨٠٢٠٠٩٥٥" becomes 30304080200955.
+
             Rules:
             - Return exactly one result per expected field below - no more, no fewer, no duplicates,
               no extra fields.
