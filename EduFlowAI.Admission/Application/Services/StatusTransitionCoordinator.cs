@@ -131,6 +131,10 @@ namespace EduFlowAI.Admission.Application.Services
                 return (false, "Application not found.");
             }
 
+            if (application.Status == ApplicationStatus.UnderDocumentVerification)
+            {
+                return (true, string.Empty);
+            }
             if (application.Status is not (
                 ApplicationStatus.DocumentsRequired or
                 ApplicationStatus.NeedsHumanReview or
