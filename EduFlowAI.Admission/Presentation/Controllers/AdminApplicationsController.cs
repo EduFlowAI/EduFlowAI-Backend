@@ -76,22 +76,5 @@ namespace EduFlowAI.Admission.Presentation.Controllers
 
             return Ok(successResult);
         }
-
-        [HttpPost("execute-ranking")]
-        public async Task<ActionResult<Result<string>>> ExecuteRanking([FromQuery] int admittedCapacity = 20, [FromQuery] int waitlistCapacity = 20)
-        {
-            var (isSuccess, errorMessage, admitted, waitlisted) = await _finalRankingService.ExecuteRankingAsync(admittedCapacity, waitlistCapacity);
-
-            if (!isSuccess)
-            {
-                var failureResult = Result<string>.Failure(400, errorMessage!);
-                return BadRequest(failureResult);
-            }
-
-            string resultMessage = $"Ranking executed successfully. {admitted} admitted, {waitlisted} waitlisted.";
-            var successResult = Result<string>.Success(resultMessage, message: "Workflow completed.");
-
-            return Ok(successResult);
-        }
     }
 }

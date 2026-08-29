@@ -3,6 +3,7 @@ using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Identity.Domain.Entities;
+using EduFlowAI.Shared.Kernel.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Admission.Application.Services
@@ -28,7 +29,7 @@ namespace EduFlowAI.Admission.Application.Services
             var applicantProfile = await _applicantRepository.GetFirstOrDefaultAsync(p => p.Id == applicantId);
             if(applicantProfile == null)
             {
-                throw new Exception("Applicant profile not found.");
+                throw new EntityNotFoundException(nameof(ApplicantProfile), applicantId);
             }
 
             // 2. Fetch the Cycle
@@ -41,10 +42,10 @@ namespace EduFlowAI.Admission.Application.Services
 
             if (cycle == null)
             {
-                throw new Exception("Admission cycle not found.");
+                throw new EntityNotFoundException(nameof(AdmissionCycle), cycleId);
             }
 
-            // 3. Extract the rules throw new Exception("Admission cycle not found.")
+            // 3. Extract the rules
             var cycleRule = cycle.EligibilityRule;
             if (cycleRule == null)
             {
