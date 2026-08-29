@@ -619,6 +619,11 @@ public class AssistantMessageServiceTests
             return Task.FromResult<ApplicationStatusDto?>(null);
         }
 
+        public Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId, string applicantUserId)
+        {
+            return Task.FromResult<ApplicationStatusDto?>(null);
+        }
+
         public Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(
             string applicantUserId,
             CancellationToken cancellationToken = default)
@@ -629,6 +634,11 @@ public class AssistantMessageServiceTests
         public Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId)
         {
             return Task.FromResult<ApplicationDashboardSummaryDto?>(null);
+        }
+
+        public Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId, string applicantUserId)
+        {
+            throw new NotImplementedException();
         }
 
         public Task<EligibilityDetailsDto?> GetEligibilityDetailsAsync(Guid applicationId, string applicantUserId, CancellationToken cancellationToken = default)
