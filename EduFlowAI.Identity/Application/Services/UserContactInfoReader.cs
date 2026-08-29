@@ -2,6 +2,7 @@
 using EduFlowAI.Identity.Application.Interfaces;
 using EduFlowAI.Identity.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -26,6 +27,17 @@ namespace EduFlowAI.Identity.Application.Services
 
             return info;
 
+        }
+
+        public async Task<IReadOnlyList<UserContactInfo>> GetBatchContactInfoAsync(IEnumerable<string> userIds, CancellationToken cancellationToken)
+        {
+            var users = await dbContext.AppUsers
+                .AsNoTracking().Where(u => userIds.Contains(u.Id))
+                .ToListAsync(cancellationToken);
+
+            return users.Select(u => new UserContactInfo(
+                UserId: u.Id, Email: u.Email!, IsActive: u.IsActive
+            )).ToList();
         }
     }
 }

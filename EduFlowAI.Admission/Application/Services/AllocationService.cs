@@ -17,8 +17,6 @@ namespace EduFlowAI.Admission.Application.Services
         private readonly IGenericRepository<TrackBranchOffering> _offeringRepository;
         private readonly IGenericRepository<EnrollmentTaskLookup> _taskLookupRepository;
         private readonly IUserContactInfoReader _userContactInfoReader;
-        //private readonly IAdmissionEmailNotificationService _admissionEmailNotificationService;
-        //private readonly IMessageBus _messageBus;
         private readonly IOutboxPublisher _outboxPublisher;
 
         private const int MaxConcurrentEmailRequests = 8;
@@ -29,8 +27,6 @@ namespace EduFlowAI.Admission.Application.Services
             IGenericRepository<EnrollmentTaskLookup> taskLookupRepository,
             IUserContactInfoReader userContactInfoReader,
             IOutboxPublisher outboxPublisher
-            //IMessageBus messageBus
-            //IAdmissionEmailNotificationService admissionEmailNotificationService
             )
         {
             _applicationRepository = applicationRepository;
@@ -38,8 +34,6 @@ namespace EduFlowAI.Admission.Application.Services
             _taskLookupRepository = taskLookupRepository;
             _userContactInfoReader = userContactInfoReader;
             _outboxPublisher = outboxPublisher;
-            //_messageBus = messageBus;
-            //_admissionEmailNotificationService = admissionEmailNotificationService;
         }
 
         public async Task<(bool IsSuccess, string ErrorMessage)>
@@ -279,16 +273,16 @@ namespace EduFlowAI.Admission.Application.Services
         {
             var targets = new List<AdmissionEmailTarget>(applications.Count);
 
+            // Performance Fix: Batch fetch contact info to avoid N+1 queries
+            var userIds = applications.Select(a => a.ApplicantUserId).Distinct().ToList();
+            var contacts = await _userContactInfoReader.GetBatchContactInfoAsync(userIds, cancellationToken);
+            var contactsDict = contacts.ToDictionary(c => c.UserId);
+
             foreach (var application in applications)
             {
-                var contact = await _userContactInfoReader.GetContactInfoAsync(application.ApplicantUserId,
-                    cancellationToken
-                );
-
-                if (contact is null || !contact.IsActive || string.IsNullOrWhiteSpace(contact.Email))
+                if (!contactsDict.TryGetValue(application.ApplicantUserId, out var contact) || !contact.IsActive || string.IsNullOrWhiteSpace(contact.Email))
                 {
-                    throw new InvalidOperationException(
-                        $"An active email address could not be resolved for applicant '{application.ApplicantUserId}'.");
+                    throw new InvalidOperationException($"An active email address could not be resolved for applicant '{application.ApplicantUserId}'.");
                 }
 
                 var emailContent = BuildStatusEmail(application.Status);

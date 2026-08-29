@@ -30,6 +30,9 @@ namespace EduFlowAI.Admission.Application.Interfaces.Repositories
         Task<List<T>?> GetAllAsync(Expression<Func<T, bool>> predicate,
             Func<IQueryable<T>, IQueryable<T>>? include = null);
 
+        Task<(List<T> Data, int TotalCount)> GetPagedAsync(Expression<Func<T, bool>> predicate,
+            int page, int pageSize, Func<IQueryable<T>, IQueryable<T>>? include = null);
+
         /// <summary>
         /// Adds a new entity.
         /// </summary>

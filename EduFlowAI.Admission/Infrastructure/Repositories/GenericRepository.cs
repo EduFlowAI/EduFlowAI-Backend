@@ -66,6 +66,27 @@ namespace EduFlowAI.Admission.Infrastructure.Repositories
             return await query.Where(predicate).ToListAsync();
         }
 
+        public async Task<(List<T> Data, int TotalCount)> GetPagedAsync(
+            Expression<Func<T, bool>> predicate, int page,
+            int pageSize, Func<IQueryable<T>, IQueryable<T>>? include = null)
+        {
+            IQueryable<T> query = _dbSet.Where(predicate);
+
+            // Get total count before pagination
+            int totalCount = await query.CountAsync();
+
+            // Apply includes and AsNoTracking if provided
+            if (include != null)
+            {
+                query = include(query);
+            }
+
+            // Apply SQL-level pagination
+            var data = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+            return (data, totalCount);
+        }
+
         public async Task AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
