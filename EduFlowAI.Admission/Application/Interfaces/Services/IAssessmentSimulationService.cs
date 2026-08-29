@@ -25,7 +25,8 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// A helper method to fetch all simulated stages for a specific applicant.
         /// </summary>
         /// <param name="applicationId"></param>
+        /// <param name="applicantUserId"></param>
         /// <returns></returns>
-        Task<IEnumerable<SimulatedStageDto>> GetApplicantStagesAsync(Guid applicationId);
+        Task<IEnumerable<SimulatedStageDto>> GetApplicantStagesAsync(Guid applicationId, string applicantUserId);
     }
 }

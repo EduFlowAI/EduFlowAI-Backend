@@ -12,14 +12,12 @@ namespace EduFlowAI.Admission.Application.Services
     {
         private readonly IGenericRepository<SimulatedStageResult> _stageRepository;
         private readonly IApplicationRepository _applicationRepository;
-        private readonly Random _random;
 
         public AssessmentSimulationService(IGenericRepository<SimulatedStageResult> stageRepository,
             IApplicationRepository applicationRepository)
         {
             _stageRepository = stageRepository;
             _applicationRepository = applicationRepository;
-            _random = new Random();
         }
 
         public async Task<(bool isSuccess, string? ErrorMessage, SimulatedStageDto? Data)> SimulateStageAsync(Guid applicationId, SelectionStage stage, Guid? trackId = null)
@@ -47,9 +45,8 @@ namespace EduFlowAI.Admission.Application.Services
              * For simulation purposes, we generate a random score. 
              * Let's assume MaxScore is 100 for all exams for simplicity.
              */
-
             decimal maxScore = 100m;
-            decimal simulatedScore = _random.Next(61, 101);
+            decimal simulatedScore = Random.Shared.Next(61, 101);
 
             // Determine if passed (e.g., Passing score is 60)
             var stageResult = simulatedScore >= 60 ? StageResult.Passed : StageResult.NotPassed;
@@ -89,16 +86,22 @@ namespace EduFlowAI.Admission.Application.Services
             return (true, null, stageResultDto);
         }
 
-        public async Task<IEnumerable<SimulatedStageDto>> GetApplicantStagesAsync(Guid applicationId)
+        public async Task<IEnumerable<SimulatedStageDto>> GetApplicantStagesAsync(Guid applicationId, string applicantUserId)
         {
+            // Check ownership first
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: a => a.Id == applicationId && a.ApplicantUserId == applicantUserId,
+                include: q => q.AsNoTracking()
+            );
+            if (application == null)
+                return Enumerable.Empty<SimulatedStageDto>();
+
             var stages = await _stageRepository.GetAllAsync(
                 predicate: s => s.ApplicationId == applicationId,
-                include: query => query.Include(s => s.Track)
+                include: query => query.AsNoTracking().Include(s => s.Track)
             );
-            if(stages == null)
-            {
+            if (stages == null)
                 return Enumerable.Empty<SimulatedStageDto>();
-            }
 
             // Map and Order by the Stage Enum value to maintain proper timeline flow
             return stages.OrderBy(s => s.Stage).Select(s =>

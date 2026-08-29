@@ -38,7 +38,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         [HttpPost("draft")]
         public async Task<ActionResult<Result<ApplicationDto>>> CreateDraft([FromBody] ApplicationRequestDto request)
         {
-            // Retrieve user ID from claims. Using a dummy value if not authenticated for now.
+            // Retrieve user ID from claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)!.Value;
             if (string.IsNullOrEmpty(userId))
             {
@@ -47,7 +47,7 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
 
             var result = await _applicationService.CreateDraftApplicationAsync(userId, request);
-            // Use the built-in StatusCode method to return both the HTTP code and the Result object
+
             return StatusCode(result.StatusCode, result);
         }
 
@@ -69,41 +69,9 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             return Ok(result);
         }
 
-        // POST: api/modules/admission/applications/evaluate
-        [HttpPost("evaluate")]
-        public async Task<ActionResult<Result<EligibilityResult>>> EvaluateApplicant([FromBody] EvaluateEligibilityRequestDto request)
-        {
-            // 1. Basic validation to ensure required IDs are provided
-            if (request == null || request.ApplicantId == Guid.Empty || request.CycleId == Guid.Empty)
-            {
-                var failureResult = Result<EligibilityResult>.Failure(400, "Invalid request data. Please provide valid IDs.");
-                return StatusCode(failureResult.StatusCode, failureResult);
-            }
-
-            try
-            {
-                // 2. Call the application service to execute the business logic
-                var result = await _eligibilityService.EvaluateApplicantAsync(
-                    request.ApplicantId,
-                    request.CycleId,
-                    request.ApplicationId
-                );
-
-                // 3. Return the evaluation result
-                return Ok(result);
-            }
-            catch(Exception ex)
-            {
-                // General exception handling
-                var errorResult = Result<EligibilityResult>.Failure(500, $"An error occurred during evaluation: {ex.Message}");
-                return StatusCode(errorResult.StatusCode, errorResult);
-            }
-        }
-
         [HttpPost("{applicationId}/withdraw")]
         public async Task<ActionResult<Result<ApplicationStatusDto>>> WithdrawApplication(Guid applicationId)
         {
-            // Extract the user ID from the token claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
@@ -112,28 +80,19 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
 
             // Execute the business logic via the coordinator service
-            var (isSuccess, errorMessage, data) = await _statusTransitionCoordinator.WithdrawApplicationAsync(applicationId, userId);
+            var (isSuccess, error, data) = await _statusTransitionCoordinator.WithdrawApplicationAsync(applicationId, userId);
 
             if (!isSuccess)
             {
-                int statusCode = 400; // Default to bad request
-                if(errorMessage.Contains("not found"))
-                {
-                    statusCode = 404;   // Not Found
-                }
-                else if(errorMessage.Contains("authorized"))
-                {
-                    statusCode = 403;   // Forbidden
-                }
-
-                var failureResult = Result<ApplicationStatusDto>.Failure(statusCode, errorMessage);
-                return StatusCode(statusCode, failureResult);
+                var failureResult = Result<ApplicationStatusDto>.Failure(error!.StatusCode, error.Message);
+                return StatusCode(error.StatusCode, failureResult);
             }
 
             var successResult = Result<ApplicationStatusDto>.Success(data!, 200, message: "Application withdrawn successfully.");
             return Ok(successResult);
         }
 
+        [Authorize(Roles = "SuperAdmin")]
         [HttpPost("{applicationId}/process-document-review")]
         public async Task<ActionResult<Result<ApplicationStatusDto>>> ProcessDocumentReview(Guid applicationId, [FromBody] DocumentReviewResultDto reviewResult)
         {
@@ -144,23 +103,15 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             }
 
             // 2. Execute the business logic via the coordinator service
-            var (isSuccess, errorMessage, data) = await _statusTransitionCoordinator.ProcessDocumentReviewAsync(applicationId, reviewResult);
+            var (isSuccess, error, data) = await _statusTransitionCoordinator.ProcessDocumentReviewAsync(applicationId, reviewResult);
 
             // 3. Handle failure scenarios and map to appropriate HTTP Status Codes
             if (!isSuccess)
             {
-                int statusCode = 400;
-                if (errorMessage.Contains("not found"))
-                {
-                    statusCode = 404;   // Not Found
-
-                }
-                
-                var failureResult = Result<ApplicationStatusDto>.Failure(statusCode, errorMessage);
-                return StatusCode(statusCode, failureResult);
+                var failureResult = Result<ApplicationStatusDto>.Failure(error!.StatusCode, error.Message);
+                return StatusCode(error.StatusCode, failureResult);
             }
 
-            // 4. Construct the Result object for a successful operation and return 200 OK
             var successResult = Result<ApplicationStatusDto>.Success(data!, 200, message: "Document review processed successfully.");
             return Ok(successResult);
         }
@@ -171,7 +122,6 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             [FromBody] UpdateApplicationPreferencesDto request,
             CancellationToken cancellationToken)
         {
-            // Extract the user ID from the token claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
@@ -187,10 +137,14 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         [HttpGet("{applicationId}/status")]
         public async Task<ActionResult<ApplicationStatusDto>> GetApplicationStatus(Guid applicationId)
         {
-            var statusDto = await _statusQueryService.GetApplicationStatusAsync(applicationId);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) 
+                return Unauthorized();
+
+            var statusDto = await _statusQueryService.GetApplicationStatusAsync(applicationId, userId);
             if (statusDto == null)
             {
-                var error = Result<ApplicationStatusDto>.Failure(400, "Invalid application ID!");
+                var error = Result<ApplicationStatusDto>.Failure(400, "Application not found or unauthorized.");
                 return StatusCode(error.StatusCode, error);
             }
 
@@ -202,7 +156,11 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         [HttpGet("{applicationId}/stages")]
         public async Task<ActionResult<Result<List<SimulatedStageDto>>>> GetStagesResults(Guid applicationId)
         {
-            var stagesResultDto = await _simulationService.GetApplicantStagesAsync(applicationId);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) 
+                return Unauthorized();
+
+            var stagesResultDto = await _simulationService.GetApplicantStagesAsync(applicationId, userId);
 
             // Return OK 200
             var res = Result<IEnumerable<SimulatedStageDto>>.Success(stagesResultDto, message: "Applicant stages results are retreived successfully");
@@ -212,7 +170,11 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         [HttpGet("{applicationId}/dashboard-summary")]
         public async Task<ActionResult<Result<ApplicationDashboardSummaryDto>>> GetDashboardSummary(Guid applicationId)
         {
-            var summaryDto = await _statusQueryService.GetDashboardSummaryAsync(applicationId);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) 
+                return Unauthorized();
+
+            var summaryDto = await _statusQueryService.GetDashboardSummaryAsync(applicationId, userId);
             if (summaryDto == null)
             {
                 var error = Result<ApplicationDashboardSummaryDto>.Failure(404, "Application not found!");
@@ -230,7 +192,6 @@ namespace EduFlowAI.Admission.Presentation.Controllers
         [HttpGet("{applicationId}")]
         public async Task<ActionResult<Result<ApplicationDetailsDto>>> GetApplicationDetails(Guid applicationId, CancellationToken cancellationToken)
         {
-            // Extract the user ID from the token claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
@@ -254,7 +215,6 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             [FromQuery] QueryParameters queryParameters,
             CancellationToken cancellationToken = default)
         {
-            // Extract the user ID from the token claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
@@ -302,7 +262,6 @@ namespace EduFlowAI.Admission.Presentation.Controllers
             Guid applicationId,
             CancellationToken cancellationToken = default)
         {
-            // Extract the user ID from the token claims
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {

@@ -13,7 +13,7 @@ namespace EduFlowAI.Admission.Application.Services
     public class ApplicationStatusQueryService : IApplicationStatusQueryService
     {
         private readonly IApplicationRepository _applicationRepository;
-        private readonly IGenericRepository<SimulatedStageResult> _stageRepository;
+        //private readonly IGenericRepository<SimulatedStageResult> _stageRepository;
         private readonly ITimelineCalculator _timelineCalculator;
 
         public ApplicationStatusQueryService(IApplicationRepository applicationRepository,
@@ -21,14 +21,17 @@ namespace EduFlowAI.Admission.Application.Services
             ITimelineCalculator timelineCalculator)
         {
             _applicationRepository = applicationRepository;
-            _stageRepository = stageRepository;
+            //_stageRepository = stageRepository;
             _timelineCalculator = timelineCalculator;
         }
 
-        public async Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId)
+        public async Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId, string applicantUserId)
         {
-            var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
-            if(application == null)
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
+                predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
+                include: query => query.AsNoTracking()
+            );
+            if (application == null)
             {
                 return null;
             }
@@ -45,19 +48,16 @@ namespace EduFlowAI.Admission.Application.Services
         public async Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default)
         {
             // Newest live application; a withdrawn one only when there is nothing else.
-            var application =
-                await _applicationRepository.GetFirstOrDefaultAsync(
+            var application = await _applicationRepository.GetFirstOrDefaultAsync(
                     predicate: app => app.ApplicantUserId == applicantUserId
                                    && app.Status != ApplicationStatus.Withdrawn,
-                    include: query => query.OrderByDescending(app => app.CreatedAt))
+                    include: query => query.AsNoTracking().OrderByDescending(app => app.CreatedAt))
                 ?? await _applicationRepository.GetFirstOrDefaultAsync(
                     predicate: app => app.ApplicantUserId == applicantUserId,
-                    include: query => query.OrderByDescending(app => app.CreatedAt));
+                    include: query => query.AsNoTracking().OrderByDescending(app => app.CreatedAt));
 
-            if(application == null)
-            {
+            if (application == null)
                 return null;
-            }
 
             return new ApplicationStatusDto
             {
@@ -68,12 +68,13 @@ namespace EduFlowAI.Admission.Application.Services
             };
         }
 
-        public async Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId)
+        public async Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId, string applicantUserId)
         {
             // 1. Fetch the application with its related Cycle and EligibilityResult using the generic repository's include parameter
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
-                predicate: app => app.Id == applicationId,
-                include: query => query.Include(a => a.Cycle)
+                predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
+                include: query => query.AsNoTracking()
+                                 .Include(a => a.Cycle)
                                  .Include(a => a.EligibilityResult)
                                  .Include(a => a.AcceptedTrackBranchOffering)
                                     .ThenInclude(tbo => tbo!.Track)
@@ -88,9 +89,7 @@ namespace EduFlowAI.Admission.Application.Services
                                  .Include(a => a.SimulatedStageResults)
             );
             if (application == null)
-            {
                 return null;
-            }
 
             // Determine eligibility text based on the Passed boolean
             string eligibilityText = application.EligibilityResult != null
@@ -98,7 +97,6 @@ namespace EduFlowAI.Admission.Application.Services
                 : "Pending";
 
             // Fetch all simulated stages for this application from the database
-            //var stages = await _stageRepository.GetAllAsync(s => s.ApplicationId == applicationId) ?? new List<SimulatedStageResult>();
             var stages = application.SimulatedStageResults?.ToList() ?? new List<SimulatedStageResult>();
 
             // Map the domain status to the frontend timeline stages dynamically
@@ -130,7 +128,7 @@ namespace EduFlowAI.Admission.Application.Services
                     // Fetch all waitlisted apps for the same cycle
                     var allWaitlisted = await _applicationRepository.GetAllAsync(
                         a => a.CycleId == application.CycleId && a.Status == ApplicationStatus.Waitlisted,
-                        include: q => q.Include(a => a.Preferences).Include(a => a.SimulatedStageResults)
+                        include: q => q.AsNoTracking().Include(a => a.Preferences).Include(a => a.SimulatedStageResults)
                     );
 
                     int higherScoringApplicants = 0;
@@ -166,7 +164,6 @@ namespace EduFlowAI.Admission.Application.Services
                 BranchName = branchName,
                 WaitlistPosition = waitlistPosition,
 
-                // Bind the newly calculated timeline fields
                 TimelineProgressPercentage = timeline.Percentage,
                 ApplicationPhaseStatus = timeline.AppStatus,
                 EligibilityPhaseStatus = timeline.EligStatus,
@@ -183,9 +180,10 @@ namespace EduFlowAI.Admission.Application.Services
             // Fetch application with its related preferences, ensuring the user owns it
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
-                include: query => query.Include(a => a.Cycle)   // Required to fetch Cycle Label and Deadline
+                include: query => query.AsNoTracking()
+                                       .Include(a => a.Cycle)
                                        .Include(a => a.Preferences)
-                                       .ThenInclude(p => p.TrackBranchOffering)     // Required to extract TrackId and BranchId
+                                       .ThenInclude(p => p.TrackBranchOffering)
             );
 
             if (application == null)
@@ -195,8 +193,7 @@ namespace EduFlowAI.Admission.Application.Services
             var preferencesDto = application.Preferences?
                 .OrderBy(p => p.Rank)
                 .Select(p => new PreferenceDto(p.TrackBranchOffering.TrackId,
-                p.TrackBranchOffering.BranchId,
-                p.Rank))
+                    p.TrackBranchOffering.BranchId, p.Rank))
                 .ToList() ?? new List<PreferenceDto>();
 
             return new ApplicationDetailsDto(
@@ -215,28 +212,20 @@ namespace EduFlowAI.Admission.Application.Services
         public async Task<PaginatedResult<ApplicationListDto>> GetMyApplicationsAsync(string applicantUserId,
             QueryParameters queryParams, CancellationToken cancellationToken = default)
         {
-            // 1. Fetch all applications for the specific user and include the Cycle to retrieve the IntakeName
-            var applications = await _applicationRepository.GetAllAsync(
+            // 1. Fetch paginated applications for the user, including related Cycle and Program data
+            var (paginatedApps, totalCount) = await _applicationRepository.GetPagedAsync(
                 predicate: a => a.ApplicantUserId == applicantUserId,
-                include: query => query.Include(a => a.Cycle)
-                                       .ThenInclude(c => c.Program)
+                page: queryParams.Page,
+                pageSize: queryParams.PageSize,
+                include: query => query.AsNoTracking().Include(a => a.Cycle).ThenInclude(c => c.Program)
             );
 
-            applications ??= new List<Domain.Entities.Application>();
-
-            // 2. Calculate pagination metrics
-            var totalCount = applications.Count;
             var totalPages = (int)Math.Ceiling(totalCount / (double)queryParams.PageSize);
 
-            // 3. Apply sorting and pagination in-memory
-            var paginatedApps = applications
-                .OrderByDescending(a => a.CreatedAt)
-                .Skip((queryParams.Page - 1) * queryParams.PageSize)
-                .Take(queryParams.PageSize)
-                .ToList();
+            // Sort the paginated items
+            var sortedApps = paginatedApps.OrderByDescending(a => a.CreatedAt).ToList();
 
-            // 4. Map the paginated entities to the lightweight DTO
-            var data = paginatedApps.Select(a => new ApplicationListDto
+            var data = sortedApps.Select(a => new ApplicationListDto
             {
                 Id = a.Id,
                 ProgramName = a.Cycle?.Program?.Name ?? string.Empty,
@@ -245,7 +234,6 @@ namespace EduFlowAI.Admission.Application.Services
                 SubmittedAt = a.SubmittedAt
             }).ToList();
 
-            // 5. Construct and return the unified paginated result
             return new PaginatedResult<ApplicationListDto>
             {
                 Data = data,
@@ -262,7 +250,7 @@ namespace EduFlowAI.Admission.Application.Services
             // 1. Fetch the application to verify ownership and include the eligibility result
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: a => a.Id == applicationId && a.ApplicantUserId == applicantUserId,
-                include: q => q.Include(a => a.EligibilityResult)
+                include: q => q.AsNoTracking().Include(a => a.EligibilityResult)
             );
             // 2. Return null if application is not found, unauthorized, or has no eligibility result
             if (application == null || application.EligibilityResult == null)
@@ -306,7 +294,7 @@ namespace EduFlowAI.Admission.Application.Services
             // 1. Fetch application, ensuring it belongs to the user, and include checklist data
             var application = await _applicationRepository.GetFirstOrDefaultAsync(
                 predicate: app => app.Id == applicationId && app.ApplicantUserId == applicantUserId,
-                include: query => query.Include(a => a.EnrollmentTasks)
+                include: query => query.AsNoTracking().Include(a => a.EnrollmentTasks)
                                        .ThenInclude(t => t.TaskLookup)
             );
             if (application == null)
@@ -333,7 +321,7 @@ namespace EduFlowAI.Admission.Application.Services
 
             // 4. Calculate progress metrics based on the Completed status
             int totalTasks = taskDtos.Count;
-            int completedTasks = enrollmentTasks.Count(t => t.Status == Domain.Enums.EnrollmentTaskStatus.Completed);
+            int completedTasks = enrollmentTasks.Count(t => t.Status == EnrollmentTaskStatus.Completed);
 
             // 5. Return the constructed DTO wrapper
             return new EnrollmentChecklistDto
@@ -377,7 +365,6 @@ namespace EduFlowAI.Admission.Application.Services
             if (otherTotal != currTotal) return otherTotal > currTotal;
             if (otherProg != currProg) return otherProg > currProg;
             if (otherTech != currTech) return otherTech > currTech;
-
             // Smaller rank number is better (Preference 1 beats Preference 2)
             if (otherPrefRank != currPrefRank) return otherPrefRank < currPrefRank;
 

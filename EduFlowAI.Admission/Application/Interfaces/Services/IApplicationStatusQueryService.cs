@@ -6,11 +6,12 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
     public interface IApplicationStatusQueryService
     {
         /// <summary>
-        /// Retrieves the current status of an application by its ID
+        /// Retrieves the current status of an application by its ID and the applicant's user ID.
         /// </summary>
         /// <param name="applicationId"></param>
+        /// <param name="applicantUserId"></param>
         /// <returns></returns>
-        Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId);
+        Task<ApplicationStatusDto?> GetApplicationStatusAsync(Guid applicationId, string applicantUserId);
 
         /// <summary>
         /// Retrieves the current status of an application for a given applicant user ID.
@@ -21,11 +22,12 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         Task<ApplicationStatusDto?> GetCurrentApplicationStatusForApplicantAsync(string applicantUserId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Retrieves a summary of the application dashboard for a given application ID.
+        /// Retrieves a summary of the application dashboard for a given application ID and applicant user ID.
         /// </summary>
         /// <param name="applicationId"></param>
+        /// <param name="applicantUserId"></param>
         /// <returns></returns>
-        Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId);
+        Task<ApplicationDashboardSummaryDto?> GetDashboardSummaryAsync(Guid applicationId, string applicantUserId);
 
         /// <summary>
         /// Retrieves full application details including preferences for the edit page
