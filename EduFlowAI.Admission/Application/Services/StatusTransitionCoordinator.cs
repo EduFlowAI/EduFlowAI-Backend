@@ -3,45 +3,44 @@ using EduFlowAI.Admission.Application.Interfaces.Repositories;
 using EduFlowAI.Admission.Application.Interfaces.Services;
 using EduFlowAI.Admission.Domain.Entities;
 using EduFlowAI.Admission.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 
 namespace EduFlowAI.Admission.Application.Services
 {
     public class StatusTransitionCoordinator : IStatusTransitionCoordinator
     {
         private readonly IApplicationRepository _applicationRepository;
-        private readonly IGenericRepository<EnrollmentTaskLookup> _taskLookupRepository;
+        //private readonly IGenericRepository<EnrollmentTaskLookup> _taskLookupRepository;
 
         public StatusTransitionCoordinator(IApplicationRepository applicationRepository,
            IGenericRepository<EnrollmentTaskLookup> taskLookupRepository)
         {
             _applicationRepository = applicationRepository;
-            _taskLookupRepository = taskLookupRepository;
+            //_taskLookupRepository = taskLookupRepository;
         }
 
-        public async Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> WithdrawApplicationAsync(Guid applicationId, string applicantUserId)
+        public async Task<(bool IsSuccess, ServiceError? Error, ApplicationStatusDto? Data)> WithdrawApplicationAsync(Guid applicationId, string applicantUserId)
         {
             // 1. Fetch the application from the database
             var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
             if (application == null)
             {
-                return (false, "Application not found.", null);
+                return (false, new ServiceError(404, "Application not found."), null);
             }
 
             // 2. Authorization check: Ensure the user owns this application
-            if(application.ApplicantUserId != applicantUserId)
+            if (application.ApplicantUserId != applicantUserId)
             {
-                return (false, "You are not authorized to withdraw this application.", null);
+                return (false, new ServiceError(403, "You are not authorized to withdraw this application."), null);
             }
 
             // 3. State Validation: Prevent withdrawing if it's already in an invalid state
-            if(application.Status == ApplicationStatus.Withdrawn)
+            if (application.Status == ApplicationStatus.Withdrawn)
             {
-                return (false, "Application is already withdrawn.", null);
+                return (false, new ServiceError(400, "Application is already withdrawn."), null);
             }
             else if(application.Status == ApplicationStatus.NotSelected)
             {
-                return (false, $"Cannot withdraw an application that is already {application.Status}.", null);
+                return (false, new ServiceError(400, $"Cannot withdraw an application that is already {application.Status}."), null);
             }
 
             // 4. Update the state
@@ -61,27 +60,27 @@ namespace EduFlowAI.Admission.Application.Services
                 StatusMessage = "You have successfully withdrawn your application."
             };
 
-            return (true, string.Empty, statusDto);
+            return (true, null, statusDto);
         }
 
-        public async Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult)
+        public async Task<(bool IsSuccess, ServiceError? Error, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult)
         {
             //1. Fetch the application
             var application = await _applicationRepository.GetFirstOrDefaultAsync(app => app.Id == applicationId);
             if(application == null)
             {
-                return (false, "Application is not found", null);
+                return (false, new ServiceError(404, "Application is not found"), null);
             }
 
             // 2. State Validation: Check if the application is in a valid state for document review
-            if(application.Status != ApplicationStatus.UnderDocumentVerification &&
+            if (application.Status != ApplicationStatus.UnderDocumentVerification &&
                 application.Status != ApplicationStatus.NeedsHumanReview)
             {
-                return (false, $"Cannot process document review. Current status is {application.Status}.", null);
+                return (false, new ServiceError(400, $"Cannot process document review. Current status is {application.Status}."), null);
             }
 
             // 3. Apply the Business Rules based on the Reviewer Type and Decision
-            if(reviewResult.ReviewerType == ReviewerType.AI && reviewResult.IsAgentUncertain)
+            if (reviewResult.ReviewerType == ReviewerType.AI && reviewResult.IsAgentUncertain)
             {
                 // The AI Agent is not confident enough, escalate to a human reviewer
                 application.Status = ApplicationStatus.NeedsHumanReview;
@@ -96,9 +95,8 @@ namespace EduFlowAI.Admission.Application.Services
                 // The documents were rejected
                 if (string.IsNullOrWhiteSpace(reviewResult.RejectionReason))
                 {
-                    return (false, "A rejection reason must be provided when rejecting documents.", null);
+                    return (false, new ServiceError(400, "A rejection reason must be provided when rejecting documents."), null);
                 }
-
                 application.Status = ApplicationStatus.DocumentRejected;
             }
 
@@ -118,7 +116,7 @@ namespace EduFlowAI.Admission.Application.Services
                 StatusMessage = $"Document review processed successfully. New Status: {application.Status}"
             };
 
-            return (true, string.Empty, statusDto);
+            return (true, null, statusDto);
         }
 
         public async Task<(bool IsSuccess, string ErrorMessage)> MarkDocumentVerificationStartedAsync(Guid applicationId)
@@ -154,76 +152,6 @@ namespace EduFlowAI.Admission.Application.Services
             _applicationRepository.Update(application);
 
             return (true, string.Empty);
-        }
-
-        public async Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> AdmitApplicantAsync(Guid applicationId)
-        {
-            // 1. Fetch the application and strictly include the EnrollmentTasks collection
-            var application = await _applicationRepository.GetFirstOrDefaultAsync(
-                predicate: app => app.Id == applicationId,
-                include: query => query.Include(a => a.EnrollmentTasks)
-            );
-
-            if (application == null)
-            {
-                return (false, "Application not found.", null);
-            }
-
-            // 2. State Validation: Ensure we are not re-admitting or admitting from an invalid state
-            if (application.Status == ApplicationStatus.Admitted)
-            {
-                return (false, "Applicant is already admitted.", null);
-            }
-
-            if (application.Status != ApplicationStatus.AssessmentInProgress)
-            {
-                return (false, $"Cannot admit applicant. Current status is {application.Status}.", null);
-            }
-
-            // 3. Update the Application Status
-            application.Status = ApplicationStatus.Admitted;
-            application.UpdatedAt = DateTimeOffset.UtcNow;
-
-            // 4. Fetch all active task templates from the lookup table
-            var taskTemplates = await _taskLookupRepository.GetAllAsync(t => t.IsActive);
-
-            // 5. Generate and attach the enrollment tasks for this specific application
-            if (taskTemplates != null && taskTemplates.Any())
-            {
-                // Ensure the collection is initialized
-                application.EnrollmentTasks ??= new List<ApplicationEnrollmentTask>();
-
-                foreach (var template in taskTemplates)
-                {
-                    // Defensive programming: Prevent duplicate task creation just in case
-                    if (!application.EnrollmentTasks.Any(t => t.TaskId == template.Id))
-                    {
-                        application.EnrollmentTasks.Add(new ApplicationEnrollmentTask
-                        {
-                            // We don't set the Id manually, EF Core will generate the Guid
-                            TaskId = template.Id,
-                            Status = EnrollmentTaskStatus.Pending,
-                            CreatedAt = DateTimeOffset.UtcNow,
-                            UpdatedAt = DateTimeOffset.UtcNow
-                        });
-                    }
-                }
-            }
-
-            // 6. Save changes to the database as a single atomic transaction
-            _applicationRepository.Update(application);
-            await _applicationRepository.SaveChangesAsync();
-
-            // 7. Construct and return the DTO
-            var statusDto = new ApplicationStatusDto
-            {
-                ApplicationId = application.Id,
-                CurrentStatus = application.Status.ToString(),
-                LastUpdatedAt = application.UpdatedAt,
-                StatusMessage = "Applicant has been admitted and enrollment tasks have been generated successfully."
-            };
-
-            return (true, string.Empty, statusDto);
         }
     }
 }

@@ -81,7 +81,7 @@ public sealed class ApplicantDocumentVerificationCompletedV1Handler
             var transition = await _statusCoordinator.ProcessDocumentReviewAsync(document.ApplicationId, reviewResult);
             if (!transition.IsSuccess)
             {
-                throw new InvalidOperationException(transition.ErrorMessage);
+                throw new InvalidOperationException(transition.Error?.Message ?? "Unknown error occurred during document review processing.");
             }
         }
     }

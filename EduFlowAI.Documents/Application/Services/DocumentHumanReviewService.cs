@@ -174,7 +174,7 @@ namespace EduFlowAI.Documents.Application.Services
 
                     if (!transition.IsSuccess)
                     {
-                        throw new InvalidOperationException(transition.ErrorMessage);
+                        throw new InvalidOperationException(transition.Error?.Message ?? "Unknown error occurred during approval transition.");
                     }
                 }
 
@@ -221,7 +221,7 @@ namespace EduFlowAI.Documents.Application.Services
                 var transition = await statusTransition.ProcessDocumentReviewAsync(doc.ApplicationId, reviewResult);
                 if (!transition.IsSuccess)
                 {
-                    throw new InvalidOperationException(transition.ErrorMessage);
+                    throw new InvalidOperationException(transition.Error?.Message ?? "Unknown error occurred during rejection transition.");
                 }
 
                 var applicantId = await GetApplicantId(doc.ApplicationId);

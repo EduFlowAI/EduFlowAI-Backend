@@ -2,6 +2,8 @@
 
 namespace EduFlowAI.Admission.Application.Interfaces.Services
 {
+    public record ServiceError(int StatusCode, string Message);
+
     public interface IStatusTransitionCoordinator
     {
         /// <summary>
@@ -10,7 +12,7 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="applicationId"></param>
         /// <param name="applicantUserId"></param>
         /// <returns></returns>
-        Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> WithdrawApplicationAsync(Guid applicationId, string applicantUserId);
+        Task<(bool IsSuccess, ServiceError? Error, ApplicationStatusDto? Data)> WithdrawApplicationAsync(Guid applicationId, string applicantUserId);
 
         /// <summary>
         /// Handles the state transition based on the document review outcome from the Document Module.
@@ -18,7 +20,7 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="applicationId"></param>
         /// <param name="reviewResult"></param>
         /// <returns></returns>
-        Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult);
+        Task<(bool IsSuccess, ServiceError? Error, ApplicationStatusDto? Data)> ProcessDocumentReviewAsync(Guid applicationId, DocumentReviewResultDto reviewResult);
         // Note: We will add more methods here later for document verification transitions, etc.
 
         /// <summary>
@@ -27,12 +29,5 @@ namespace EduFlowAI.Admission.Application.Interfaces.Services
         /// <param name="applicationId"></param>
         /// <returns></returns>
         Task<(bool IsSuccess, string ErrorMessage)> MarkDocumentVerificationStartedAsync(Guid applicationId);
-
-        /// <summary>
-        /// Transitions the application to the Admitted state and automatically generates the required enrollment checklist tasks.
-        /// </summary>
-        /// <param name="applicationId"></param>
-        /// <returns></returns>
-        Task<(bool IsSuccess, string ErrorMessage, ApplicationStatusDto? Data)> AdmitApplicantAsync(Guid applicationId);
     }
 }
